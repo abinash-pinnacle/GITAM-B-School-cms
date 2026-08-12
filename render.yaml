@@ -1,28 +1,50 @@
 # Render.com blueprint — deploys the NMIET CMS using the Dockerfile.
 # Render sets the PORT env var; Apache is configured to listen on it.
+#
+# The free plan has no persistent disk, so SQLite would be wiped on every
+# redeploy. Render provisions the Postgres below and injects its credentials
+# into the web service, so nothing has to be typed into the dashboard.
+databases:
+  - name: nmiet-db
+    databaseName: nmiet
+    user: nmiet
+    plan: free
+    # same region as the web service — /api/bootstrap makes a lot of round
+    # trips, and a cross-region hop shows up as a slow first paint
+    region: singapore
+
 services:
   - type: web
     name: nmiet-cms
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    # must match the Neon region — /api/bootstrap makes a lot of round trips
     region: singapore
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
-      # The free plan has no persistent disk, so SQLite would be wiped on every
-      # redeploy — point the app at a hosted Postgres instead. The connection
-      # details are marked sync:false and are filled in from the dashboard.
       - key: DB_BACKEND
         value: pgsql
       - key: PGSSLMODE
         value: require
+      # filled in by Render from the database above
       - key: PGHOST
-        sync: false
+        fromDatabase:
+          name: nmiet-db
+          property: host
+      - key: PGPORT
+        fromDatabase:
+          name: nmiet-db
+          property: port
       - key: PGDATABASE
-        sync: false
+        fromDatabase:
+          name: nmiet-db
+          property: database
       - key: PGUSER
-        sync: false
+        fromDatabase:
+          name: nmiet-db
+          property: user
       - key: PGPASSWORD
-        sync: false
+        fromDatabase:
+          name: nmiet-db
+          property: password
