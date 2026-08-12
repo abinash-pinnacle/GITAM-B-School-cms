@@ -1,0 +1,533 @@
+/* ===== NMIET College Management System — Styles ===== */
+:root{
+  --primary:#123f8c;       /* NMIET navy (logo) */
+  --primary-dark:#0d2f6b;
+  --primary-light:#e8eefb;
+  --accent:#f5a623;        /* gold accent */
+  --green:#2e9e5b;
+  --red:#e0414f;
+  --amber:#e8a13a;
+  --blue:#2f6fed;
+  --purple:#8b5cf6;
+  --ink:#1f2a37;
+  --muted:#6b7280;
+  --line:#e5e9f0;
+  --bg:#f4f6fb;
+  --white:#ffffff;
+  --radius:12px;
+  --shadow:0 4px 20px rgba(0,40,90,.08);
+  --shadow-lg:0 10px 40px rgba(0,40,90,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* text-size-adjust: iOS Safari inflates body text on its own once a page is
+   rotated or reflowed, which throws every fixed size in this file off */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:'Poppins',system-ui,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+.hidden{display:none !important}
+button{font-family:inherit;cursor:pointer;border:none}
+input,select,textarea{font-family:inherit;font-size:14px}
+/* iOS Safari zooms the whole page in when you focus a field smaller than
+   16px, and it never zooms back out — the rest of the app then renders
+   oversized and scrolls sideways. 16px on touch devices avoids the zoom. */
+@media (hover:none) and (pointer:coarse){
+  input,select,textarea{font-size:16px}
+}
+a{color:var(--primary);text-decoration:none}
+
+/* ---- Buttons ---- */
+.btn-primary{background:var(--primary);color:#fff;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;transition:.15s}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:9px 16px;border-radius:8px;font-weight:500;transition:.15s}
+.btn-ghost:hover{background:rgba(255,255,255,.12)}
+.btn-block{width:100%;display:block}
+.btn-edit{background:var(--primary-light);color:var(--primary)}
+.btn-edit:hover{background:#d6e6f7}
+.btn-del{background:#fde8ea;color:var(--red)}
+.btn-del:hover{background:#fbd5d9}
+.btn-outline{background:#fff;border:1px solid var(--line);color:var(--ink);padding:9px 16px;border-radius:8px;font-weight:500}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+/* AFTER the other button classes on purpose. It used to sit above
+   .btn-outline, which meant .btn-outline.btn-sm kept the full 9px padding and
+   stood 38px tall next to a 28px .btn-primary.btn-sm — so every Print/PDF/CSV/
+   Excel row was 10px out of line with the button beside it. */
+.btn-sm{padding:5px 12px;font-size:12.5px;border-radius:6px;font-weight:500}
+/* .btn-outline carries a 1px border, so it needs 1px less padding to stand
+   exactly as tall as a .btn-primary beside it. The full-size buttons already
+   balance this way (10px padding vs 9px + border); .btn-sm sets one padding
+   for both, so the outline variant has to give the pixel back. */
+.btn-outline.btn-sm{padding:4px 11px}
+
+/* ===== LOGIN ===== */
+/* dvh after vh: on iOS 100vh is the viewport *without* the address bar, so a
+   full-height box is always taller than what you can see. dvh is the real
+   height; the vh line stays as the fallback for older browsers. */
+.login-wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,var(--primary-dark),var(--primary) 60%,#28a05a);padding:20px}
+.login-split{display:flex;width:100%;max-width:900px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
+.login-hero{position:relative;flex:1;min-width:0;display:flex}
+.login-hero-img{width:100%;height:100%;object-fit:cover;display:block}
+/* Overlay upar halka, neeche gehra — campus photo dikhe aur neeche ka
+   logo/text bhi padha ja sake */
+.login-hero-overlay{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(17,89,42,.18) 0%,rgba(17,89,42,.42) 45%,rgba(17,89,42,.86) 100%);
+  color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:34px}
+.login-hero-overlay h2{font-size:21px;line-height:1.25;margin-bottom:6px}
+.login-hero-overlay p{font-size:13px;opacity:.9}
+.hero-logo{width:128px;height:74px;background:#fff;border-radius:14px;padding:6px;margin-bottom:18px;object-fit:contain}
+.login-card{background:#fff;padding:38px 34px;width:430px;max-width:100%;flex-shrink:0}
+.brand-logo{width:104px;height:60px;object-fit:contain;background:#fff;border-radius:10px;flex-shrink:0}
+.login-brand{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+.login-brand h1{font-size:21px;color:var(--primary-dark);letter-spacing:.3px;line-height:1.25;white-space:nowrap}
+.login-brand p{font-size:13px;color:var(--muted)}
+.logo-circle{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;flex-shrink:0}
+#loginForm label{display:block;font-size:13px;font-weight:500;margin:14px 0 6px}
+#loginForm input,#loginForm select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#fbfcfe}
+#loginForm input:focus,#loginForm select:focus{outline:none;border-color:var(--primary);background:#fff}
+#loginForm .btn-primary{margin-top:22px}
+.login-error{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;text-align:center}
+.login-hint{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.login-hint strong{color:var(--ink)}
+.login-footer{color:rgba(255,255,255,.8);font-size:12.5px;margin-top:22px}
+
+/* ===== APP LAYOUT ===== */
+.app-wrap{display:flex;min-height:100vh;min-height:100dvh}
+.sidebar{width:256px;background:linear-gradient(180deg,var(--primary-dark),var(--primary) 85%,#0f4f26);color:#fff;
+  display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:30;box-shadow:2px 0 18px rgba(0,40,20,.18);
+  transition:width .22s ease, transform .25s ease}
+.lo-ico{font-size:16px} .lo-txt{margin-left:6px}
+
+/* ===== COLLAPSED (icon-only) sidebar — desktop only ===== */
+@media(min-width:861px){
+  .sidebar-collapsed .sidebar{width:74px}
+  .sidebar-collapsed .content{margin-left:74px}
+  .sidebar-collapsed .sidebar-brand{justify-content:center;padding:20px 0 18px}
+  .sidebar-collapsed .sidebar-brand > div,
+  .sidebar-collapsed .nav-item > span:last-child,
+  .sidebar-collapsed .nav-section,
+  .sidebar-collapsed .su-meta,
+  .sidebar-collapsed .lo-txt{display:none}
+  /* an external link carries a trailing ↗, so hiding only :last-child would
+     leave its label showing — hide every span except the icon */
+  .sidebar-collapsed .nav-link > span:not(.ico){display:none}
+  .sidebar-collapsed .side-logo{width:43px;height:25px}
+  .sidebar-collapsed .nav-item{justify-content:center;padding:10px 0}
+  .sidebar-collapsed .nav-item.active::before{display:none}
+  .sidebar-collapsed .side-user{justify-content:center;margin-bottom:10px}
+  .sidebar-collapsed .lo-ico{margin:0}
+}
+.sidebar-brand{display:flex;align-items:center;gap:12px;padding:20px 18px 18px;
+  border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.12)}
+/* content-box + the logo's own 289:167 ratio — otherwise `contain` leaves
+   white bands around the image */
+.side-logo{box-sizing:content-box;width:52px;height:30px;background:#fff;border-radius:8px;padding:3px;
+  object-fit:contain;flex-shrink:0;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+/* min-width:0 so the text column may shrink, and ellipsis as the backstop:
+   "NMIET" is nowrap, and a nowrap flex item refuses to shrink below
+   its content, so at 15px beside a 68px logo it punched 12px straight out
+   through the side of the sidebar and got sliced off. */
+.sidebar-brand > div{min-width:0}
+.sidebar-brand strong{display:block;font-size:14px;letter-spacing:.2px;line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-brand small{display:block;font-size:10px;opacity:.75;letter-spacing:1px;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-menu{flex:1;overflow-y:auto;padding:14px 12px}
+.nav-section{font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;opacity:.5;
+  padding:4px 14px 8px;font-weight:600}
+.nav-item{position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:11px;
+  color:rgba(255,255,255,.82);font-size:14px;font-weight:500;cursor:pointer;margin-bottom:4px;
+  transition:background .18s,color .18s,transform .12s}
+.nav-item .ico{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;
+  background:rgba(255,255,255,.1);font-size:17px;flex-shrink:0;transition:.18s}
+.nav-item:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateX(3px)}
+.nav-item:hover .ico{background:rgba(255,255,255,.2)}
+.nav-item.active{background:#fff;color:var(--primary-dark);font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.nav-item.active .ico{background:var(--primary-light)}
+.nav-item.active::before{content:"";position:absolute;left:-12px;top:50%;transform:translateY(-50%);
+  width:4px;height:62%;background:var(--accent);border-radius:0 4px 4px 0}
+.sidebar-footer{padding:14px;border-top:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.12)}
+.side-user{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+.side-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff8a3d);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0;
+  border:2px solid rgba(255,255,255,.35)}
+.side-user .su-meta{min-width:0}
+.side-user strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-user small{font-size:11.5px;opacity:.8;display:flex;align-items:center;gap:5px}
+.side-user small::before{content:"";width:7px;height:7px;border-radius:50%;background:#46d680;display:inline-block;
+  box-shadow:0 0 0 2px rgba(70,214,128,.25)}
+
+/* min-width:0 — without it a flex item refuses to shrink, so a wide table
+   (the timetable) stretches the whole page instead of scrolling inside itself */
+.content{flex:1;min-width:0;margin-left:256px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;transition:margin-left .22s ease}
+.topbar{background:#fff;border-bottom:1px solid var(--line);padding:16px 28px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:20}
+.topbar h2{font-size:20px;color:var(--primary-dark);flex:1}
+.topbar-right{display:flex;align-items:center;gap:12px;font-size:14px}
+.menu-toggle{display:block;font-size:22px;background:none;color:var(--primary-dark);cursor:pointer;
+  width:38px;height:38px;border-radius:9px;transition:.15s}
+.menu-toggle:hover{background:var(--primary-light)}
+.role-badge{background:var(--primary-light);color:var(--primary);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;text-transform:capitalize}
+.view{padding:26px 28px;flex:1;min-width:0}
+.app-footer{background:#fff;border-top:1px solid var(--line);padding:14px 28px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+
+/* ===== CARDS / STATS ===== */
+/* Cards are capped, not stretched: with minmax(...,1fr) a four-card row on a
+   wide screen blew each card up to ~400px while a seven-card row stayed at
+   ~210px, so the same dashboard showed three different card sizes. */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,260px));
+  justify-content:start;gap:16px;margin-bottom:22px}
+.stat-card{background:#fff;border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;border-left:4px solid var(--primary);min-width:0}
+.stat-card .s-ico{width:42px;height:42px;border-radius:11px;background:var(--primary-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}
+.stat-card > div{min-width:0}
+/* long money values (₹10,70,000) must shrink rather than overflow the card */
+.stat-card .s-val{font-size:22px;font-weight:700;color:var(--ink);line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat-card .s-lbl{font-size:12.5px;color:var(--muted);line-height:1.35}
+.stat-card.c2{border-left-color:var(--accent)} .stat-card.c2 .s-ico{background:#fef3e0;color:var(--accent)}
+.stat-card.c3{border-left-color:var(--green)} .stat-card.c3 .s-ico{background:#e4f6ec;color:var(--green)}
+.stat-card.c4{border-left-color:var(--red)} .stat-card.c4 .s-ico{background:#fde8ea;color:var(--red)}
+
+/* ===== DASHBOARD: welcome banner ===== */
+.welcome-banner{background:linear-gradient(120deg,var(--primary-dark),var(--primary) 70%,#28a05a);
+  color:#fff;border-radius:16px;padding:24px 26px;margin-bottom:22px;box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:space-between;gap:18px;position:relative;overflow:hidden}
+.welcome-banner::after{content:"";position:absolute;right:-40px;top:-40px;width:200px;height:200px;
+  background:radial-gradient(circle,rgba(255,255,255,.14),transparent 70%);pointer-events:none}
+.wb-text h2{font-size:23px;margin-bottom:4px}
+.wb-text p{font-size:13.5px;opacity:.9}
+.wb-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.wb-chips span{background:rgba(255,255,255,.18);padding:6px 13px;border-radius:20px;font-size:12.5px;font-weight:500;backdrop-filter:blur(2px)}
+.wb-logo img{box-sizing:content-box;width:76px;height:44px;background:#fff;border-radius:12px;padding:5px;object-fit:contain}
+
+/* ===== DASHBOARD: 2-column grid ===== */
+.dash-2col{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+/* min-width:0 — a grid item defaults to min-width:auto, so a wide table inside
+   would stretch the column instead of letting .tbl-wrap scroll inside it */
+.dash-2col .panel{margin-bottom:22px;min-width:0}
+
+/* branch distribution bars */
+/* The label and value are sized by a minimum, not a fixed width: these rows
+   carry "CSE / 4" on one dashboard and "Semester 5 / ₹2,45,000" on another,
+   and a fixed 64px/30px made the long ones wrap mid-number. */
+.dist-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.dist-label{flex:0 0 auto;min-width:64px;max-width:150px;font-size:13px;font-weight:600;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist-bar{flex:1;min-width:50px;height:14px;background:var(--primary-light);border-radius:8px;overflow:hidden}
+.dist-bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),#36b06a);border-radius:8px;transition:width .5s}
+.dist-val{flex:0 0 auto;min-width:30px;text-align:right;font-weight:700;color:var(--primary-dark);
+  font-size:14px;white-space:nowrap;line-height:1.25}
+/* the qualifier ("of ₹3,30,000", "80% att") sits under the figure, not beside it */
+.dist-val small{display:block;font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.3}
+
+/* fee donut */
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.donut{width:150px;height:150px;flex-shrink:0}
+.donut circle{transition:stroke-dashoffset .6s ease}
+.donut-legend{font-size:14px;line-height:1.9}
+.donut-legend b{color:var(--primary-dark)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.dot.green{background:var(--primary)} .dot.line{background:var(--line)}
+
+/* top performers / rank rows */
+.rank-row{display:flex;align-items:center;gap:13px;padding:10px 0;border-bottom:1px solid var(--line)}
+.rank-row:last-child{border-bottom:none}
+.rank{width:30px;height:30px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.rank.gold{background:#ffd86b;color:#7a5a00} .rank.silver{background:#dfe5ea;color:#566} .rank.bronze{background:#f0c08a;color:#7a4a10}
+.rank-info{flex:1}
+.rank-info strong{display:block;font-size:14px}
+.rank-info small{color:var(--muted);font-size:12px}
+
+.panel{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:22px;min-width:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+.panel-head h3{font-size:17px;color:var(--primary-dark)}
+.panel-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search-box{padding:9px 13px;border:1px solid var(--line);border-radius:8px;min-width:200px;background:#fbfcfe}
+.search-box:focus{outline:none;border-color:var(--primary)}
+/* on/off switch used in panel headers (e.g. "Show fees to students") */
+.switch-label{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);
+  padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;cursor:pointer;user-select:none}
+.switch-label input{width:15px;height:15px;accent-color:var(--primary);cursor:pointer}
+.switch-label:hover{border-color:var(--primary)}
+.filter-sel{padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}
+.days-field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+.days-field input{width:78px}
+
+/* ===== TABLES ===== */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{text-align:left;padding:12px 14px;background:var(--primary-light);color:var(--primary-dark);font-weight:600;white-space:nowrap}
+thead th:first-child{border-radius:8px 0 0 8px} thead th:last-child{border-radius:0 8px 8px 0}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:hover{background:#fafcff}
+.row-actions{display:flex;gap:7px}
+.empty{text-align:center;color:var(--muted);padding:34px;font-size:14px}
+.pill{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block}
+.pill.green{background:#e4f6ec;color:var(--green)} .pill.red{background:#fde8ea;color:var(--red)}
+.pill.amber{background:#fef3e0;color:var(--amber)} .pill.blue{background:var(--primary-light);color:var(--primary)}
+
+/* user ids / passwords read better in a fixed-width face */
+td.mono{font-family:"Consolas","Courier New",monospace;font-size:13px;letter-spacing:.4px}
+
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:14px;flex-wrap:wrap}
+.pager-info{font-size:12.5px;color:var(--muted)}
+.pager button[disabled]{opacity:.4;cursor:not-allowed}
+
+/* ===== FORMS (modal) ===== */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid.one{grid-template-columns:1fr}
+.field{display:flex;flex-direction:column;gap:5px}
+.field.full{grid-column:1/-1}
+.field label{font-size:13px;font-weight:500;color:var(--ink)}
+.field input,.field select,.field textarea{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);background:#fff}
+.field input:not(:placeholder-shown):invalid{border-color:#d33;background:#fff5f5}
+.form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+
+/* ===== MODAL ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,30,55,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:560px;max-height:90vh;max-height:90dvh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal.modal-wide{max-width:860px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+.modal-head h3{font-size:17px;color:var(--primary-dark)}
+.modal-close{font-size:26px;background:none;color:var(--muted);line-height:1}
+.modal-body{padding:22px}
+
+/* ===== TOAST ===== */
+.toast{position:fixed;bottom:26px;right:26px;background:var(--ink);color:#fff;padding:13px 20px;border-radius:9px;
+  font-size:14px;box-shadow:var(--shadow-lg);z-index:60;animation:slideIn .25s}
+.toast.ok{background:var(--green)} .toast.err{background:var(--red)}
+@keyframes slideIn{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ===== ATTENDANCE / MARKS specific ===== */
+.att-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.att-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--line);border-radius:9px}
+.att-row .who strong{display:block;font-size:14px}
+.att-row .who small{color:var(--muted);font-size:12px}
+/* tickable list (assign several classes to one faculty at once) */
+.chk-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:260px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:9px;padding:8px}
+.chk-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid transparent;
+  border-radius:8px;cursor:pointer}
+.chk-row:hover{background:var(--primary-light);border-color:var(--line)}
+.chk-row input{margin-top:2px;width:16px;height:16px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+.chk-text strong{display:block;font-size:14px}
+.chk-text small{color:var(--muted);font-size:12px}
+.chk-bar{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+
+.att-toggle{display:flex;gap:8px}
+.toggle-btn{padding:6px 16px;border-radius:7px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:13px}
+.toggle-btn.p.on{background:var(--green);color:#fff;border-color:var(--green)}
+.toggle-btn.a.on{background:var(--red);color:#fff;border-color:var(--red)}
+
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;width:120px;display:inline-block;vertical-align:middle}
+.bar > i{display:block;height:100%;background:var(--green)}
+.bar.low > i{background:var(--red)} .bar.mid > i{background:var(--amber)}
+
+/* ===== TIMETABLE ===== */
+.tt-grid{overflow-x:auto}
+.tt-table{border-collapse:collapse;width:100%;min-width:880px;table-layout:fixed}
+/* overflow:hidden keeps a long subject name inside its own day column */
+.tt-table th,.tt-table td{border:1px solid #b8b8b8;padding:5px 7px;vertical-align:top;overflow:hidden}
+.tt-table thead th{text-align:center;background:#ececec;font-size:13px;font-weight:700;color:var(--ink)}
+.tt-table thead th:first-child,.tt-table .tt-time{width:132px}
+.tt-table .tt-time{background:#ececec;font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;text-align:left}
+.tt-table td{height:32px}
+.tt-busy{background:#fff}
+.tt-cell{font-size:12px;line-height:1.3;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+.tt-cell+.tt-cell{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.tt-cell b{display:block;color:var(--primary-dark);font-weight:700;font-size:13.5px;letter-spacing:.3px;margin-bottom:1px;cursor:help}
+.tt-cell small{display:block;color:var(--muted);font-size:11px}
+.tt-cell.lab b{color:var(--purple)}
+
+/* report card */
+.report-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:14px}
+.report-head .gpa-box{text-align:center;background:var(--primary-light);padding:14px 22px;border-radius:12px}
+.report-head .gpa-box .v{font-size:30px;font-weight:700;color:var(--primary-dark)}
+.report-head .gpa-box .l{font-size:12px;color:var(--muted)}
+
+/* ===== LIBRARIAN DASHBOARD ===== */
+.lib-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-bottom:22px}
+.lib-stat-card{background:#fff;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:14px}
+.lib-stat-ico{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:24px;flex-shrink:0;color:#fff}
+.lib-stat-ico.green{background:var(--primary)}
+.lib-stat-ico.blue{background:var(--blue)}
+.lib-stat-ico.amber{background:var(--accent)}
+.lib-stat-ico.purple{background:var(--purple)}
+.lib-stat-lbl{font-size:12.5px;color:var(--muted)}
+.lib-stat-val{font-size:24px;font-weight:700;color:var(--ink);line-height:1.2}
+.lib-stat-sub{font-size:11.5px;color:var(--muted)}
+
+.lib-row{display:grid;grid-template-columns:1.1fr 1fr;gap:22px}
+.lib-row3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:22px}
+
+.lib-donut-wrap{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.lib-donut{width:180px;height:180px;border-radius:50%;position:relative;flex-shrink:0}
+.lib-donut-center{position:absolute;inset:28px;background:#fff;border-radius:50%;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--line)}
+.lib-donut-center strong{font-size:24px;color:var(--primary-dark)}
+.lib-donut-center span{font-size:11.5px;color:var(--muted)}
+.lib-legend{flex:1;min-width:180px;font-size:13.5px}
+.lib-legend-head{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px;margin-bottom:8px;padding:0 2px}
+.lib-legend-row{display:flex;align-items:center;justify-content:space-between;padding:7px 2px;border-bottom:1px solid var(--line)}
+.lib-legend-row:last-child{border-bottom:none}
+.lib-legend-row .dotlbl{display:flex;align-items:center;gap:8px}
+.lib-legend-row .ldot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+.lib-events-list{display:flex;flex-direction:column;gap:12px}
+.lib-event{display:flex;gap:12px;align-items:flex-start}
+.lib-event-badge{background:var(--primary-light);color:var(--primary-dark);border-radius:10px;
+  padding:6px 10px;text-align:center;font-weight:700;min-width:52px;flex-shrink:0}
+.lib-event-badge .mon{display:block;font-size:10px;letter-spacing:.5px}
+.lib-event-badge .day{display:block;font-size:16px}
+.lib-event-title{font-size:13.5px;font-weight:600;color:var(--ink)}
+.lib-event-meta{font-size:11.5px;color:var(--muted)}
+
+.lib-qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lib-qa-btn{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px 10px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
+  color:var(--ink);cursor:pointer;transition:.15s}
+.lib-qa-btn:hover{border-color:var(--primary);background:#fff}
+.lib-qa-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:#fff}
+
+@media(max-width:860px){
+  .lib-row,.lib-row3{grid-template-columns:1fr}
+}
+
+/* ===== FINANCE / ACCOUNTS ===== */
+/* a sub-heading inside the sidebar, e.g. the admin's "Finance" group */
+.nav-section-mid{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.14)}
+
+/* sidebar entry that leaves the CMS for an external service (opens a new tab).
+   The ↗ is taken out of the flex flow — in the row it cost the label ~21px and
+   pushed "Employee Attendance" onto a second line, making the item taller than
+   every other nav entry. */
+.nav-item.nav-link{text-decoration:none;color:inherit}
+.nav-item.nav-link:visited{color:inherit}
+.nav-item.nav-link > span:not(.ico){white-space:nowrap}
+.nav-ext{position:absolute;right:9px;top:7px;font-size:11px;opacity:.55;pointer-events:none}
+.nav-item.nav-link:hover .nav-ext{opacity:1}
+body.sidebar-collapsed .nav-section-mid{font-size:0;padding-top:12px;margin-top:12px}
+
+/* filter rows wrap instead of overflowing on small screens */
+.fin-filters{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.fin-filters .filter-sel,.fin-filters .search-box{max-width:100%}
+
+/* report selector */
+.fin-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.fin-tab{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:20px;
+  padding:8px 16px;font-size:13px;font-weight:500;transition:.15s}
+.fin-tab:hover{border-color:var(--primary);color:var(--primary)}
+.fin-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+
+/* ===== READ-ONLY ROLE (Center Head) =====
+   A monitoring session is signposted everywhere: the role chip in the top bar,
+   a banner on each page, and section headings that group the overview. */
+.role-badge.role-readonly{background:#fef3e0;color:var(--amber);text-transform:none}
+.ro-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:#fffaf0;border:1px solid #f3dcb4;border-left:4px solid var(--amber);
+  border-radius:10px;padding:12px 16px;margin-bottom:18px;
+  font-size:13px;color:#7a5a1e;line-height:1.6}
+.ro-badge{flex-shrink:0;background:var(--amber);color:#fff;border-radius:20px;
+  padding:4px 12px;font-size:11.5px;font-weight:700;letter-spacing:.04em}
+.ro-section{font-size:15px;color:var(--primary-dark);font-weight:600;
+  margin:26px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--primary-light)}
+.ro-section:first-child{margin-top:0}
+.ro-sub{font-size:13px;color:var(--primary-dark);font-weight:600;margin:18px 0 8px;
+  text-transform:uppercase;letter-spacing:.03em}
+
+/* ===== INSTALL APP button (PWA) — only visible when installable ===== */
+.install-btn{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;
+  border-style:dashed;font-weight:600;text-decoration:none}
+.install-btn.hidden{display:none}
+a.install-btn{color:var(--primary);box-sizing:border-box}
+a.install-btn:hover{background:var(--primary-light)}
+
+/* ===== CHECKBOX GRID (drive eligibility: branches / courses) ===== */
+.chk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px 14px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.chk{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer}
+.chk input{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;margin:0}
+
+/* ===== SUBJECTS BY SEMESTER ===== */
+.syl-branch{margin-bottom:26px}
+.syl-branch:last-child{margin-bottom:0}
+.syl-branch-head{font-size:15px;color:var(--primary-dark);padding-bottom:8px;margin-bottom:12px;
+  border-bottom:2px solid var(--primary-light);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.syl-branch-head small{font-size:12px;font-weight:500;color:var(--muted)}
+.syl-sem{border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-bottom:12px}
+/* the signed-in student's own semester, so they find it without reading */
+.syl-sem-mine{border-color:var(--primary);box-shadow:0 0 0 2px rgba(28,124,60,.12)}
+.syl-sem-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:9px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
+.syl-sem-head strong{font-size:13.5px;color:var(--ink)}
+.syl-sem-meta{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+.syl-sem .tbl-wrap{border:none;border-radius:0}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:860px){
+  .fin-filters{flex-direction:column;align-items:stretch}
+  .fin-filters .search-box,.fin-filters .filter-sel,.fin-filters .days-field{width:100%;min-width:0}
+  .fin-filters .days-field input{flex:1}
+  .panel-head .panel-tools{width:100%}
+  /* 230px could not hold the logo and the wordmark side by side */
+  .sidebar{transform:translateX(-100%);transition:.25s;width:250px}
+  .sidebar.open{transform:translateX(0)}
+  .content{margin-left:0}
+  .menu-toggle{display:block}
+  .form-grid{grid-template-columns:1fr}
+  .login-hero{display:none}
+  .login-card{width:100%}
+  .dash-2col{grid-template-columns:1fr}
+  .welcome-banner{flex-direction:column;align-items:flex-start}
+  /* the 260px desktop cap stops the cards short of the panels above and
+     below them, leaving a dead gutter down the right — fill the row instead */
+  .stat-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+}
+
+/* ===== PHONE =====
+   Three things made these pages look misaligned on a handset:
+   28px of side padding on the view *plus* 22px inside every panel ate a
+   quarter of a 390px screen; the stat cards stopped 74px short of the panel
+   edge; and the panel toolbars wrapped a 229px search, a 144px select and a
+   137px button into ragged rows that lined up with nothing. */
+@media(max-width:600px){
+  .view{padding:16px 14px}
+  .panel{padding:16px 14px;margin-bottom:16px}
+  .app-footer{padding:12px 14px;flex-direction:column;gap:4px;align-items:flex-start}
+
+  .topbar{padding:12px 14px;gap:10px}
+  .topbar h2{font-size:17px}
+  /* the signed-in name wraps onto two lines here and squeezes the title;
+     it is already shown in full in the sidebar footer */
+  #topUserName{display:none}
+
+  /* one predictable grid instead of a ragged wrap: inputs and selects take
+     the full width, buttons pair up evenly two to a row */
+  .panel-head{align-items:stretch}
+  /* stretch, not center: .btn-primary has no border and .btn-outline does, so
+     centring leaves two buttons on the same row sitting 5px apart */
+  .panel-tools{width:100%;gap:8px;align-items:stretch}
+  .panel-tools > *{flex:1 1 calc(50% - 4px);min-width:0}
+  .panel-tools > .search-box,
+  .panel-tools > .filter-sel,
+  .panel-tools > .days-field,
+  .panel-tools > .switch-label{flex:1 1 100%;width:100%}
+  .search-box{min-width:0}
+
+  .stat-grid{grid-template-columns:1fr;gap:12px;margin-bottom:18px}
+  .stat-card{padding:14px}
+
+  .syl-sem-head{padding:9px 12px}
+  .syl-sem-meta{margin-left:0;width:100%;white-space:normal}
+  .modal-overlay{padding:12px}
+  .modal-head{padding:14px 16px}
+  .modal-body{padding:16px}
+  /* Cancel/Save side by side rather than crowded into the right corner */
+  .form-actions > *{flex:1}
+}

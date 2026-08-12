@@ -1,0 +1,14 @@
+{
+  "name": "nmiet/cms",
+  "description": "NMIET College Management System — PHP + PDO backend with a vanilla JS frontend (educational demo project).",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": ">=8.0",
+    "ext-pdo": "*",
+    "ext-json": "*"
+  },
+  "scripts": {
+    "start": "php -S localhost:5500 router.php"
+  }
+}

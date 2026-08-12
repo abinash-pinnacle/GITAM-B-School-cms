@@ -1,0 +1,10 @@
+# Keep the image small and the DB out of the image (it lives in a volume)
+nmiet.db
+*.db
+__pycache__/
+*.pyc
+.claude/
+.git/
+.gitignore
+README.md
+*.md

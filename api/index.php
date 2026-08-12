@@ -1,0 +1,384 @@
+<?php
+/**
+ * NMIET College Management System — REST API (PHP).
+ *
+ * Routes
+ *   GET    /api/health              -> { ok: true }
+ *   GET    /api/bootstrap           -> every collection in one payload
+ *   GET    /api/{collection}        -> rows of one collection
+ *   POST   /api/login               -> { username, password, role } -> user row
+ *   POST   /api/{collection}        -> create/replace a row (id generated if absent)
+ *   PUT    /api/{collection}/{id}   -> patch the given fields
+ *   DELETE /api/{collection}/{id}   -> remove a row
+ */
+require_once __DIR__ . '/db.php';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+function send_json($data, int $status = 200): void
+{
+    http_response_code($status);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function body(): array
+{
+    $raw = file_get_contents('php://input');
+    if ($raw === '' || $raw === false) {
+        return [];
+    }
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
+}
+
+/**
+ * The caller's user row, identified by the X-User-Id header the frontend sends
+ * after login, or null when the request is anonymous.
+ */
+function current_user(): ?array
+{
+    static $cached = false;
+    static $user = null;
+    if ($cached) {
+        return $user;
+    }
+    $cached = true;
+    $id = $_SERVER['HTTP_X_USER_ID'] ?? '';
+    if ($id === '') {
+        return $user = null;
+    }
+    $row = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    return $user = $row ?: null;
+}
+
+/** the caller's role, or '' when the request is anonymous */
+function current_role(): string
+{
+    $u = current_user();
+    return $u === null ? '' : (string) ($u['role'] ?? '');
+}
+
+/** admin and accountant are the only roles allowed to change financial data */
+function may_touch_finance(): bool
+{
+    return in_array(current_role(), FINANCE_ROLES, true);
+}
+
+/** the center head reads the same financial data without being able to change it */
+function may_read_finance(): bool
+{
+    return in_array(current_role(), FINANCE_VIEW_ROLES, true);
+}
+
+/** requisitions are staff-only — every role except student */
+function may_touch_staff(): bool
+{
+    return in_array(current_role(), STAFF_ROLES, true);
+}
+
+/** CENTER_HEAD: view / search / filter / report / export only */
+function is_read_only_role(): bool
+{
+    return in_array(current_role(), READ_ONLY_ROLES, true);
+}
+
+/**
+ * The single carve-out in the read-only rule: the center head signs off on
+ * requisitions. It is a PUT on one collection, and api_update further narrows
+ * it to the review columns — no creating, no deleting, nothing else.
+ */
+function read_only_write_allowed(string $resource, string $method): bool
+{
+    $allowed = READ_ONLY_WRITE_EXCEPTIONS[current_role()][$resource] ?? null;
+    return $allowed !== null && $method === 'PUT';
+}
+
+/** the columns the caller may change on this collection (null = all of them) */
+function writable_fields(string $resource): ?array
+{
+    return READ_ONLY_WRITE_EXCEPTIONS[current_role()][$resource] ?? null;
+}
+
+/**
+ * The accounts office picks a requisition up only after the center head has
+ * approved it — a hand-made PUT on a still-Pending row is refused.
+ */
+function guard_requisition_stage(string $id): void
+{
+    if (!in_array(current_role(), REQ_AFTER_APPROVAL_ROLES, true)) {
+        return;
+    }
+    $row = fetch_one('SELECT * FROM ' . qi('requisitions') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    if ($row && ($row['status'] ?? REQ_PENDING_STATUS) === REQ_PENDING_STATUS) {
+        send_json([
+            'error'   => 'awaiting-approval',
+            'message' => 'This request is still with the center head for approval.',
+        ], 403);
+    }
+}
+
+/** admin and placement officer may create/edit/delete placement records */
+function may_touch_placement(): bool
+{
+    return in_array(current_role(), PLACEMENT_ROLES, true);
+}
+
+/** the same two plus the center head, which monitors placement without touching it */
+function may_read_placement(): bool
+{
+    return in_array(current_role(), PLACEMENT_VIEW_ROLES, true);
+}
+
+function is_placement_officer(): bool
+{
+    return current_role() === 'placement_officer';
+}
+
+/**
+ * A placement officer sees its own modules plus the handful of collections it
+ * recruits from (PLACEMENT_READABLE). Everything else — fees, payments, assets,
+ * library, requisitions, timetable — is refused, not merely hidden.
+ */
+function placement_officer_may_read(string $col): bool
+{
+    return in_array($col, PLACEMENT_COLLECTIONS, true)
+        || in_array($col, PLACEMENT_READABLE, true);
+}
+
+/**
+ * Guard for one request — the real permission gate, independent of the UI.
+ *
+ *  1. a read-only role (center head) is refused every write, on every
+ *     collection, however the request was made;
+ *  2. financial collections are readable by the finance + view roles and
+ *     writable only by the finance roles; `fees` stays readable to everyone
+ *     (a student sees their own record) but only the accounts office edits it;
+ *  3. requisitions are staff-only;
+ *  4. placement collections belong to the placement cell, and the placement
+ *     officer in turn may not step outside them.
+ */
+function guard_request(string $resource, string $method): void
+{
+    $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
+
+    if ($isWrite && $resource !== 'login' && is_read_only_role()
+        && !read_only_write_allowed($resource, $method)) {
+        send_json([
+            'error'   => 'read-only',
+            'message' => 'Your role has view-only access and cannot change data.',
+        ], 403);
+    }
+
+    if ($resource === 'syllabus') {
+        $role = current_user()['role'] ?? '';
+        if (in_array($role, SYLLABUS_HIDDEN_ROLES, true)) {
+            send_json(['error' => 'forbidden',
+                       'message' => 'The curriculum is not part of the accounts office.'], 403);
+        }
+        if ($isWrite && !in_array($role, SYLLABUS_WRITE_ROLES, true)) {
+            send_json(['error' => 'forbidden',
+                       'message' => 'Only the admin can change the curriculum.'], 403);
+        }
+    }
+
+    if (in_array($resource, FINANCE_COLLECTIONS, true)) {
+        if ($isWrite ? !may_touch_finance() : !may_read_finance()) {
+            send_json(['error' => 'forbidden'], 403);
+        }
+    }
+    if ($isWrite && in_array($resource, FINANCE_WRITE_ONLY, true) && !may_touch_finance()) {
+        send_json(['error' => 'forbidden'], 403);
+    }
+    if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff()) {
+        send_json(['error' => 'forbidden'], 403);
+    }
+
+    if (in_array($resource, PLACEMENT_COLLECTIONS, true)) {
+        if ($isWrite ? !may_touch_placement() : !may_read_placement()) {
+            send_json(['error' => 'forbidden'], 403);
+        }
+    }
+    // the placement officer stays inside the placement cell
+    if (is_placement_officer() && $resource !== '' && isset(COLLECTIONS[$resource])) {
+        if (!placement_officer_may_read($resource)) {
+            send_json(['error' => 'forbidden'], 403);
+        }
+        if ($isWrite && !in_array($resource, PLACEMENT_COLLECTIONS, true)) {
+            send_json([
+                'error'   => 'forbidden',
+                'message' => 'A placement officer can only change placement records.',
+            ], 403);
+        }
+    }
+}
+
+/** path segments after /api, e.g. ['students', 'S01'] */
+function segments(): array
+{
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+    $path = rawurldecode($path);
+    if (preg_match('#/api(/.*)?$#', $path, $m)) {
+        $path = $m[1] ?? '';
+    }
+    return array_values(array_filter(explode('/', $path), fn($s) => $s !== '' && $s !== 'index.php'));
+}
+
+// ---------------------------------------------------------------- handlers
+function api_bootstrap(): void
+{
+    $finance = may_read_finance();
+    $staff = may_touch_staff();
+    $placement = may_read_placement();
+    $isPo = is_placement_officer();
+    $out = [];
+    foreach (COLLECTIONS as $col => $_) {
+        // a student/faculty/librarian session gets the financial tables as empty
+        // lists rather than a 403, so the rest of their bootstrap still works
+        if ($isPo && !placement_officer_may_read($col)) {
+            $out[$col] = [];
+            continue;
+        }
+        if ($col === 'syllabus' && in_array(current_user()['role'] ?? '', SYLLABUS_HIDDEN_ROLES, true)) {
+            $out[$col] = [];
+            continue;
+        }
+        if (!$placement && in_array($col, PLACEMENT_COLLECTIONS, true)) {
+            $out[$col] = [];
+            continue;
+        }
+        if (!$finance && in_array($col, FINANCE_COLLECTIONS, true)) {
+            $out[$col] = [];
+            continue;
+        }
+        if (!$staff && in_array($col, STAFF_COLLECTIONS, true)) {
+            $out[$col] = [];
+            continue;
+        }
+        $out[$col] = array_map(fn($r) => row_out($col, $r), fetch_all('SELECT * FROM ' . qi($col)));
+    }
+    send_json($out);
+}
+
+function api_list(string $col): void
+{
+    send_json(array_map(fn($r) => row_out($col, $r), fetch_all('SELECT * FROM ' . qi($col))));
+}
+
+/**
+ * The role is not part of the credentials. Whichever account the username and
+ * password belong to decides the role, so a user cannot pick the wrong one and
+ * cannot try to sign in as a role they do not hold.
+ */
+function api_login(): void
+{
+    $d = body();
+    $rows = fetch_all(
+        'SELECT * FROM ' . qi('users') . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)
+         AND ' . qi('password') . ' = ?',
+        [$d['username'] ?? '', $d['password'] ?? '']
+    );
+    if (!$rows) {
+        send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
+    }
+    if (count($rows) > 1) {
+        // The UI rejects a duplicate username, but nothing in the schema
+        // enforces it. Refuse rather than silently granting whichever role
+        // happened to come back first.
+        send_json([
+            'error'   => 'ambiguous',
+            'message' => 'More than one account uses this username. Contact the administrator.',
+        ], 409);
+    }
+    send_json(row_out('users', $rows[0]));
+}
+
+function api_create(string $col): void
+{
+    $d = body();
+    if (empty($d['id'])) {
+        $d['id'] = next_id($col);
+    }
+    upsert($col, $d);
+    send_json($d, 201);
+}
+
+function api_update(string $col, string $id): void
+{
+    $d = body();
+    // a role with a column allowlist gets everything else in the body dropped,
+    // so a crafted payload cannot ride along with a legitimate one
+    $allowed = writable_fields($col);
+    $fields = array_values(array_filter(
+        COLLECTIONS[$col],
+        fn($f) => $f !== 'id' && array_key_exists($f, $d)
+            && ($allowed === null || in_array($f, $allowed, true))
+    ));
+    if (!$fields) {
+        send_json(['error' => 'no fields'], 400);
+    }
+    $sets = [];
+    $values = [];
+    foreach ($fields as $f) {
+        $sets[] = qi($f) . ' = ?';
+        $values[] = serialize_value($col, $f, $d[$f]);
+    }
+    $values[] = $id;
+    run_sql('UPDATE ' . qi($col) . ' SET ' . implode(', ', $sets) . ' WHERE ' . qi('id') . ' = ?', $values);
+    send_json(['ok' => true, 'id' => $id]);
+}
+
+function api_delete(string $col, string $id): void
+{
+    run_sql('DELETE FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    send_json(['ok' => true]);
+}
+
+// ---------------------------------------------------------------- routing
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$seg = segments();
+$resource = $seg[0] ?? '';
+$id = $seg[1] ?? null;
+$isCollection = isset(COLLECTIONS[$resource]) && $resource !== '';
+
+try {
+    if ($method === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
+
+    if ($method === 'GET' && $resource === 'health') {
+        send_json(['ok' => true]);
+    }
+
+    ensure_schema();
+    guard_request($resource, $method);
+
+    if ($method === 'GET' && $resource === 'bootstrap') {
+        api_bootstrap();
+    }
+    if ($method === 'GET' && $isCollection && $id === null) {
+        api_list($resource);
+    }
+    if ($method === 'POST' && $resource === 'login') {
+        api_login();
+    }
+    if ($method === 'POST' && $isCollection) {
+        api_create($resource);
+    }
+    if ($method === 'PUT' && $isCollection && $id !== null) {
+        if ($resource === 'requisitions') {
+            guard_requisition_stage($id);
+        }
+        api_update($resource, $id);
+    }
+    if ($method === 'DELETE' && $isCollection && $id !== null) {
+        api_delete($resource, $id);
+    }
+
+    send_json(['error' => 'not found'], 404);
+} catch (Throwable $e) {
+    error_log('[nmiet-api] ' . $e->getMessage());
+    send_json(['error' => 'server error'], 500);
+}

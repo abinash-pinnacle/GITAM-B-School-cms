@@ -1,0 +1,36 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nmiet-cms",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "0.0.0.0:5500", "router.php"],
+      "port": 5500,
+      "autoPort": true
+    },
+    {
+      "name": "nmiet-cms-python",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server.py"],
+      "port": 5500,
+      "autoPort": true
+    },
+    {
+      "name": "nmiet-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5502"],
+      "port": 5502,
+      "autoPort": true
+    },
+    {
+      "name": "nmiet-cms-docker",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": [
+        "run", "--rm", "-p", "5501:5501",
+        "-v", "${PWD}:/app", "-w", "/app",
+        "php:8.3-cli", "php", "-S", "0.0.0.0:5501", "router.php"
+      ],
+      "port": 5501
+    }
+  ]
+}

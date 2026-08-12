@@ -1,0 +1,372 @@
+<?php
+/**
+ * PDO database layer — works with SQLite (default), MySQL and PostgreSQL.
+ * Tables are created and demo-seeded on first use, and new columns added to
+ * COLLECTIONS are migrated in automatically.
+ */
+require_once __DIR__ . '/config.php';
+
+function db(): PDO
+{
+    static $pdo = null;
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+
+    $cfg = db_config();
+    if (!in_array($cfg['driver'], PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException(
+            "PHP extension pdo_{$cfg['driver']} is not enabled — turn it on in php.ini "
+            . '(available: ' . implode(', ', PDO::getAvailableDrivers()) . ')'
+        );
+    }
+    $opts = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ];
+
+    if ($cfg['driver'] === 'sqlite') {
+        $dir = dirname($cfg['path']);
+        if ($dir && !is_dir($dir)) {
+            mkdir($dir, 0777, true);
+        }
+        $pdo = new PDO('sqlite:' . $cfg['path'], null, null, $opts);
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+        try {
+            // better concurrency; not supported on some network/shared mounts
+            $pdo->exec('PRAGMA journal_mode = WAL');
+        } catch (PDOException $e) {
+            // keep the default rollback journal
+        }
+        return $pdo;
+    }
+
+    // MySQL / PostgreSQL may still be starting up (container boot), so retry.
+    $lastError = null;
+    for ($attempt = 0; $attempt < 30; $attempt++) {
+        try {
+            if ($cfg['driver'] === 'mysql') {
+                $dsn = "mysql:host={$cfg['host']};port={$cfg['port']};charset=utf8mb4";
+                try {
+                    // convenience for XAMPP-style root access; a restricted user
+                    // may not be allowed to do this, and that is fine
+                    (new PDO($dsn, $cfg['user'], $cfg['pass'], $opts))
+                        ->exec("CREATE DATABASE IF NOT EXISTS `{$cfg['name']}`
+                                CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                } catch (PDOException $e) {
+                    // database must already exist — the next line will tell us
+                }
+                $pdo = new PDO("$dsn;dbname={$cfg['name']}", $cfg['user'], $cfg['pass'], $opts);
+            } else {
+                $dsn = "pgsql:host={$cfg['host']};port={$cfg['port']};dbname={$cfg['name']}";
+                if (!empty($cfg['sslmode'])) {
+                    $dsn .= ";sslmode={$cfg['sslmode']}";
+                }
+                $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], $opts);
+            }
+            return $pdo;
+        } catch (PDOException $e) {
+            $lastError = $e;
+            sleep(2);
+        }
+    }
+    throw new RuntimeException('Could not connect to the database: ' . $lastError->getMessage());
+}
+
+function driver(): string
+{
+    return db()->getAttribute(PDO::ATTR_DRIVER_NAME);
+}
+
+function fetch_all(string $sql, array $params = []): array
+{
+    $st = db()->prepare($sql);
+    $st->execute($params);
+    return $st->fetchAll();
+}
+
+function fetch_one(string $sql, array $params = []): ?array
+{
+    $rows = fetch_all($sql, $params);
+    return $rows[0] ?? null;
+}
+
+function run_sql(string $sql, array $params = []): void
+{
+    $st = db()->prepare($sql);
+    $st->execute($params);
+}
+
+/** quote an identifier for the active driver */
+function qi(string $name): string
+{
+    return driver() === 'mysql' ? "`$name`" : "\"$name\"";
+}
+
+function column_type(string $col, string $field): string
+{
+    if ($field === 'id') {
+        return driver() === 'mysql' ? 'VARCHAR(64)' : 'TEXT';
+    }
+    if (in_array($field, JSON_FIELDS[$col] ?? [], true) || in_array($field, LONGTEXT_FIELDS[$col] ?? [], true)) {
+        return driver() === 'mysql' ? 'LONGTEXT' : 'TEXT';
+    }
+    return driver() === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
+}
+
+function existing_columns(string $col): array
+{
+    if (driver() === 'sqlite') {
+        return array_column(fetch_all("PRAGMA table_info($col)"), 'name');
+    }
+    // MySQL labels information_schema columns in upper case, PostgreSQL in lower
+    // case, so read the first value of each row instead of a fixed key.
+    $scope = driver() === 'mysql' ? 'DATABASE()' : 'current_schema()';
+    $rows = fetch_all(
+        "SELECT column_name FROM information_schema.columns
+         WHERE table_schema = $scope AND table_name = ?",
+        [$col]
+    );
+    return array_map(fn($r) => reset($r), $rows);
+}
+
+function table_exists(string $col): bool
+{
+    try {
+        fetch_all("SELECT 1 FROM " . qi($col) . " LIMIT 1");
+        return true;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+/** Create/migrate tables and insert demo data. Safe to call repeatedly. */
+function init_db(): void
+{
+    foreach (COLLECTIONS as $col => $fields) {
+        $defs = [];
+        foreach ($fields as $i => $f) {
+            $defs[] = qi($f) . ' ' . column_type($col, $f) . ($i === 0 ? ' PRIMARY KEY' : '');
+        }
+        db()->exec('CREATE TABLE IF NOT EXISTS ' . qi($col) . ' (' . implode(', ', $defs) . ')');
+
+        // add any column that exists in COLLECTIONS but not yet in the table
+        $existing = existing_columns($col);
+        foreach ($fields as $f) {
+            if (!in_array($f, $existing, true)) {
+                db()->exec('ALTER TABLE ' . qi($col) . ' ADD COLUMN ' . qi($f) . ' ' . column_type($col, $f));
+            }
+        }
+    }
+
+    // seed each table only when it is empty
+    foreach (seed_data() as $col => $rows) {
+        $count = (int) fetch_one('SELECT COUNT(*) AS c FROM ' . qi($col))['c'];
+        if ($count > 0) {
+            continue;
+        }
+        $width = count(COLLECTIONS[$col]);
+        $cols = implode(', ', array_map('qi', COLLECTIONS[$col]));
+        $ph = implode(', ', array_fill(0, $width, '?'));
+        foreach ($rows as $row) {
+            // tolerate seed rows written before a column was added
+            $row = array_slice(array_pad($row, $width, null), 0, $width);
+            run_sql('INSERT INTO ' . qi($col) . " ($cols) VALUES ($ph)", $row);
+        }
+    }
+
+    // course sections: backfill blanks and make sure the demo Section-B class exists
+    db()->exec('UPDATE ' . qi('courses') . ' SET ' . qi('section') . "='A'
+                WHERE " . qi('section') . ' IS NULL OR ' . qi('section') . "=''");
+    upsert('courses', [
+        'id' => 'C06', 'code' => 'CS501', 'name' => 'Data Structures & Algorithms',
+        'branch' => 'CSE', 'semester' => 5, 'credits' => 4, 'facultyId' => 'F02', 'section' => 'B',
+    ]);
+
+    seed_accountant_login();
+    seed_center_head_login();
+    seed_staff_login('placement_officer', 'placementofficers', 'placement');
+    mark_schema_ready();
+}
+
+/**
+ * The accountant role was added after the first release, so a database that
+ * already has users never re-runs the `users` seed. Give such a database one
+ * accountant login to start from — but only when it has none at all, so an
+ * account the admin renamed or removed is never resurrected.
+ */
+function seed_accountant_login(): void
+{
+    $has = fetch_one('SELECT 1 AS x FROM ' . qi('users') . ' WHERE ' . qi('role') . " = 'accountant'");
+    if ($has) {
+        return;
+    }
+    $staff = fetch_one('SELECT * FROM ' . qi('accountants') . ' ORDER BY ' . qi('id') . ' LIMIT 1');
+    if (!$staff) {
+        return;
+    }
+    upsert('users', [
+        'id' => next_id('users'), 'username' => 'accounts', 'password' => 'pass123',
+        'role' => 'accountant', 'refId' => $staff['id'], 'name' => $staff['name'],
+    ]);
+}
+
+/**
+ * Same story for the center head, which was added later still: an existing
+ * database never re-runs the `users` seed, so give it one center-head login to
+ * start from — only when it has none, so a removed account is never restored.
+ */
+function seed_center_head_login(): void
+{
+    $has = fetch_one('SELECT 1 AS x FROM ' . qi('users') . ' WHERE ' . qi('role') . " = 'center_head'");
+    if ($has) {
+        return;
+    }
+    $staff = fetch_one('SELECT * FROM ' . qi('centerheads') . ' ORDER BY ' . qi('id') . ' LIMIT 1');
+    if (!$staff) {
+        return;
+    }
+    upsert('users', [
+        'id' => next_id('users'), 'username' => 'centerhead', 'password' => 'pass123',
+        'role' => 'center_head', 'refId' => $staff['id'], 'name' => $staff['name'],
+    ]);
+}
+
+/**
+ * Same story for any staff role added after the first release: an existing
+ * database never re-runs the `users` seed, so give the role one login to start
+ * from — but only when it has none at all, so an account the admin renamed or
+ * removed is never resurrected.
+ */
+function seed_staff_login(string $role, string $table, string $username): void
+{
+    $has = fetch_one('SELECT 1 AS x FROM ' . qi('users') . ' WHERE ' . qi('role') . ' = ?', [$role]);
+    if ($has) {
+        return;
+    }
+    $staff = fetch_one('SELECT * FROM ' . qi($table) . ' ORDER BY ' . qi('id') . ' LIMIT 1');
+    if (!$staff) {
+        return;
+    }
+    upsert('users', [
+        'id' => next_id('users'), 'username' => $username, 'password' => 'pass123',
+        'role' => $role, 'refId' => $staff['id'], 'name' => $staff['name'],
+    ]);
+}
+
+function schema_signature(): string
+{
+    return substr(md5(json_encode(COLLECTIONS)), 0, 16);
+}
+
+function mark_schema_ready(): void
+{
+    $t = qi('_meta');
+    $kType = driver() === 'mysql' ? 'VARCHAR(64)' : 'TEXT';
+    $vType = driver() === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('k') . " $kType PRIMARY KEY, " . qi('v') . " $vType)");
+    run_sql('DELETE FROM ' . $t . ' WHERE ' . qi('k') . " = 'schema'");
+    run_sql('INSERT INTO ' . $t . ' (' . qi('k') . ', ' . qi('v') . ") VALUES ('schema', ?)", [schema_signature()]);
+}
+
+/**
+ * One cheap query per request: if the schema marker is missing or stale
+ * (COLLECTIONS changed), run the full create/migrate/seed pass.
+ */
+function ensure_schema(): void
+{
+    try {
+        $row = fetch_one('SELECT ' . qi('v') . ' AS v FROM ' . qi('_meta') . ' WHERE ' . qi('k') . " = 'schema'");
+        if ($row && $row['v'] === schema_signature()) {
+            return;
+        }
+    } catch (PDOException $e) {
+        // _meta missing -> first run
+    }
+    init_db();
+}
+
+/** INSERT-or-REPLACE, written per driver */
+function upsert(string $col, array $data): void
+{
+    $fields = COLLECTIONS[$col];
+    $cols = implode(', ', array_map('qi', $fields));
+    $ph = implode(', ', array_fill(0, count($fields), '?'));
+    $values = [];
+    foreach ($fields as $f) {
+        $values[] = serialize_value($col, $f, $data[$f] ?? null);
+    }
+
+    switch (driver()) {
+        case 'sqlite':
+            $sql = 'INSERT OR REPLACE INTO ' . qi($col) . " ($cols) VALUES ($ph)";
+            break;
+        case 'mysql':
+            $sets = [];
+            foreach ($fields as $f) {
+                if ($f !== 'id') {
+                    $sets[] = qi($f) . ' = VALUES(' . qi($f) . ')';
+                }
+            }
+            $sql = 'INSERT INTO ' . qi($col) . " ($cols) VALUES ($ph) ON DUPLICATE KEY UPDATE " . implode(', ', $sets);
+            break;
+        default: // pgsql
+            $sets = [];
+            foreach ($fields as $f) {
+                if ($f !== 'id') {
+                    $sets[] = qi($f) . ' = EXCLUDED.' . qi($f);
+                }
+            }
+            $sql = 'INSERT INTO ' . qi($col) . " ($cols) VALUES ($ph) ON CONFLICT (" . qi('id')
+                . ') DO UPDATE SET ' . implode(', ', $sets);
+    }
+    run_sql($sql, $values);
+}
+
+/** JSON columns are stored as text */
+function serialize_value(string $col, string $field, $value)
+{
+    if (in_array($field, JSON_FIELDS[$col] ?? [], true) && !is_string($value) && $value !== null) {
+        return json_encode($value);
+    }
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+    return $value;
+}
+
+/** DB row -> the shape the frontend expects (JSON objects, numeric fields as numbers) */
+function row_out(string $col, array $row): array
+{
+    foreach (JSON_FIELDS[$col] ?? [] as $f) {
+        if (!empty($row[$f]) && is_string($row[$f])) {
+            $decoded = json_decode($row[$f], true);
+            $row[$f] = is_array($decoded) ? $decoded : [];
+        } elseif (array_key_exists($f, $row) && !is_array($row[$f])) {
+            $row[$f] = new stdClass();
+        }
+    }
+    foreach (INT_FIELDS as $f) {
+        if (isset($row[$f]) && $row[$f] !== '') {
+            $int = filter_var($row[$f], FILTER_VALIDATE_INT);
+            if ($int !== false) {
+                $row[$f] = $int;
+            }
+        }
+    }
+    return $row;
+}
+
+/** next free id for a collection, e.g. S07 / FE03 */
+function next_id(string $col): string
+{
+    $prefix = ID_PREFIX[$col] ?? 'X';
+    for ($n = 1; $n < 100000; $n++) {
+        $id = $prefix . str_pad((string) $n, 2, '0', STR_PAD_LEFT);
+        if (!fetch_one('SELECT 1 AS x FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id])) {
+            return $id;
+        }
+    }
+    throw new RuntimeException("Ran out of ids for $col");
+}

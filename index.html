@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NMIET B-SCHOOL — Demo / Educational Project</title>
+  <meta name="description" content="A student educational demo of a college management web app, built as an authorized academic project. This is a learning/demo project and not intended to collect real personal data." />
+  <meta name="robots" content="noindex" />
+
+  <!-- installable app (PWA): icons, colours and the manifest an APK builder reads -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#123f8c" />
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <!-- NOT black-translucent: that draws the page *under* the iPhone status
+       bar, so in the installed app the topbar and the ☰ button end up beneath
+       the clock. `default` makes iOS reserve that strip. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="NMIET B-SCHOOL" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- ?b=<build> busts every browser and service-worker cache in one shot.
+       Bump this stamp whenever css/js changes, otherwise a phone that cached
+       the old files (iOS Safari caches JS for days when no Cache-Control is
+       sent) keeps running yesterday's app against today's API. -->
+  <link rel="stylesheet" href="css/styles.css?b=20260812c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ============ LOGIN SCREEN ============ -->
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-split">
+      <!-- left: campus hero -->
+      <div class="login-hero">
+        <img src="assets/campus-building.webp" alt="NMIET B-SCHOOL Campus Building" class="login-hero-img" />
+        <div class="login-hero-overlay">
+          <img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL" class="hero-logo" />
+          <h2>NMIET B-SCHOOL</h2>
+          <p>Bhubaneswar · College Management System</p>
+        </div>
+      </div>
+
+      <!-- right: login form -->
+      <div class="login-card">
+      <div class="login-brand">
+        <img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL" class="brand-logo" />
+        <div>
+          <h1>NMIET B-SCHOOL</h1>
+          <p>College Management System</p>
+        </div>
+      </div>
+
+      <form id="loginForm" autocomplete="off">
+        <label>Username</label>
+        <input type="text" id="loginUser" placeholder="e.g. admin" required />
+
+        <label>Password</label>
+        <input type="password" id="loginPass" placeholder="Enter password" required />
+
+        <!-- No role picker: the account behind these credentials decides the
+             role, so nobody has to know which one to choose and nobody can
+             try to sign in as a role they do not hold. -->
+        <button type="submit" class="btn-primary btn-block">Sign In</button>
+        <p id="loginError" class="login-error"></p>
+      </form>
+
+      <!-- shown only when the browser says the app can be installed -->
+      <button id="installBtn" class="btn-outline btn-block install-btn hidden">
+        <span>📲</span><span>Install NMIET B-SCHOOL app</span>
+      </button>
+
+      </div><!-- /login-card -->
+    </div><!-- /login-split -->
+    <div class="login-footer">© <span id="year"></span> NMIET B-SCHOOL · Bhubaneswar. All rights reserved.</div>
+  </div>
+
+  <!-- ============ MAIN APP ============ -->
+  <div id="appScreen" class="app-wrap hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL" class="side-logo" />
+        <div>
+          <strong>NMIET B-SCHOOL</strong>
+          <small>CMS · Bhubaneswar</small>
+        </div>
+      </div>
+      <nav id="navMenu" class="nav-menu"></nav>
+      <div class="sidebar-footer">
+        <div id="sideUser" class="side-user"></div>
+        <button id="logoutBtn" class="btn-ghost btn-block"><span class="lo-ico">⎋</span><span class="lo-txt">Logout</span></button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+      <header class="topbar">
+        <button id="menuToggle" class="menu-toggle">☰</button>
+        <h2 id="pageTitle">Dashboard</h2>
+        <div class="topbar-right">
+          <span id="topUserName"></span>
+          <span id="topUserRole" class="role-badge"></span>
+        </div>
+      </header>
+      <div id="view" class="view"></div>
+      <footer class="app-footer">
+        <span>© <span id="appYear"></span> NMIET B-SCHOOL · Bhubaneswar. All rights reserved.</span>
+        <span>Version 1.0.0</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modalTitle">Title</h3>
+        <button id="modalClose" class="modal-close">&times;</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/xlsx.js?b=20260812c"></script>
+  <script src="js/store.js?b=20260812c"></script>
+  <script src="js/app.js?b=20260812c"></script>
+
+  <!-- PWA: register the shell cache and wire the install button.
+       Kept inline and defensive so an unsupported browser is a no-op. -->
+  <script>
+    (function () {
+      if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+        // A worker that already controls the page keeps serving the shell it
+        // cached. When a deploy installs a newer one it claims the page, and
+        // reloading once is what actually swaps in the new css/js — without
+        // this an installed app can sit on an old build for days.
+        var hadController = !!navigator.serviceWorker.controller, reloading = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (!hadController || reloading) return;
+          reloading = true;
+          location.reload();
+        });
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js')
+            .then(function (reg) { reg.update(); })
+            .catch(function () { /* offline support is optional */ });
+        });
+      }
+      var deferred = null;
+      var btn = document.getElementById('installBtn');
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        if (btn) btn.classList.remove('hidden');
+      });
+      if (btn) btn.addEventListener('click', function () {
+        if (!deferred) return;
+        deferred.prompt();
+        deferred.userChoice.then(function () { deferred = null; btn.classList.add('hidden'); });
+      });
+      window.addEventListener('appinstalled', function () {
+        deferred = null;
+        if (btn) btn.classList.add('hidden');
+      });
+    })();
+  </script>
+</body>
+</html>

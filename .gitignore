@@ -1,0 +1,25 @@
+# SQLite database (auto-created on first run / lives in a volume in production)
+nmiet.db
+*.db
+*.sqlite3
+
+# PHP
+vendor/
+composer.lock
+
+# Python (legacy server.py)
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# APK signing key — never commit this
+android.keystore
+*.jks
+
+# local backups of replaced assets
+*.old.png
+*.old.webp

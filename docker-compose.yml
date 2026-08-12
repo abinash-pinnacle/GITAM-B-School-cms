@@ -1,0 +1,91 @@
+# NMIET CMS — 4-container setup
+#   frontend (Nginx)  ->  backend (PHP API)  ->  db (MySQL)
+#                                              phpmyadmin (DB ka UI)
+#
+#   docker compose -p nmiet up -d --build   # sab build + start
+#   open http://localhost:5510              # app
+#   open http://localhost:8081              # phpMyAdmin
+#   docker compose -p nmiet down            # stop (database volume is kept)
+#
+# Ports 5500/8080 par doosra project (gclone) chalta hai, isliye ye stack
+# 5510/8081 use karta hai — dono saath chal sakte hain.
+#
+# Demo project hai, isliye passwords plain rakhe hain — production me badalna.
+
+# Project ka naam pin — warna Compose folder ka naam ("nmiet clone") use karta
+# hai aur Docker Desktop me group ka naam badal jata hai.
+name: nmiet
+
+services:
+  # 🟨 Database — MySQL (phpMyAdmin isi ko dikhata hai)
+  db:
+    image: mysql:8
+    container_name: nmiet-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: nmiet
+      MYSQL_USER: nmiet
+      MYSQL_PASSWORD: nmiet
+    volumes:
+      - nmiet-mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # 🟩 Backend — PHP REST API
+  backend:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    container_name: nmiet-backend
+    environment:
+      DB_BACKEND: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: nmiet
+      DB_USER: nmiet
+      DB_PASS: nmiet
+      PORT: "5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "5000"
+    restart: unless-stopped
+
+  # 🟦 Frontend — Nginx (static UI + /api proxy)
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: nmiet-frontend
+    ports:
+      - "5510:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # 🟧 phpMyAdmin — database ka web UI (http://localhost:8081)
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: nmiet-phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_PORT: "3306"
+      PMA_USER: root          # seedha login ho jata hai
+      PMA_PASSWORD: root
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "8081:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  nmiet-mysqldata:
+  # purana PostgreSQL volume (gclone_nmiet-pgdata) disk pe bacha hua hai —
+  # zaroorat na ho to: docker volume rm gclone_nmiet-pgdata
