@@ -497,6 +497,17 @@ a.install-btn:hover{background:var(--primary-light)}
    edge; and the panel toolbars wrapped a 229px search, a 144px select and a
    137px button into ragged rows that lined up with nothing. */
 @media(max-width:600px){
+  /* The login card was built for a 430px column: 34px of side padding plus a
+     104px logo left ~130px for a wordmark that is nowrap and needs 185px, so
+     "NMIET B-SCHOOL" ran past the card and .login-split clipped it. Give the
+     text room, and let it wrap instead of running off the edge. */
+  .login-card{padding:26px 20px}
+  .login-brand{gap:11px;margin-bottom:20px}
+  .brand-logo{width:76px;height:44px}
+  .login-brand h1{font-size:19px;white-space:normal;overflow-wrap:anywhere}
+  .login-brand p{font-size:12px}
+  .install-btn{font-size:14px}
+
   .view{padding:16px 14px}
   .panel{padding:16px 14px;margin-bottom:16px}
   .app-footer{padding:12px 14px;flex-direction:column;gap:4px;align-items:flex-start}
