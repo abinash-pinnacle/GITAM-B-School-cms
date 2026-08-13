@@ -61,7 +61,16 @@ const Store = {
       body: JSON.stringify({ username, password }),
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok) return { error: (data && data.message) || 'Invalid username or password.' };
+    if (!res.ok) {
+      // Only 401 means the credentials were wrong. A 5xx is the server or its
+      // database failing, and showing that as "invalid password" sends people
+      // off retyping a password that was right all along.
+      if (res.status >= 500) {
+        const detail = data && data.detail ? ` (${data.detail})` : '';
+        return { error: `Server error — the database is unreachable.${detail}` };
+      }
+      return { error: (data && data.message) || 'Invalid username or password.' };
+    }
     return data;
   },
 

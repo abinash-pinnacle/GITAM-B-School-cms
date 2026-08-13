@@ -19,6 +19,18 @@ function env(string $key, ?string $default = null): ?string
     return ($v === null || $v === '') ? $default : (string) $v;
 }
 
+/**
+ * The exception message, but only when APP_DEBUG is switched on. Database
+ * errors name the host and the user, so they stay out of the response until
+ * someone deliberately asks for them while chasing a deploy problem.
+ */
+function debug_detail(Throwable $e): array
+{
+    return in_array(strtolower((string) env('APP_DEBUG', '')), ['1', 'true', 'yes', 'on'], true)
+        ? ['detail' => $e->getMessage()]
+        : [];
+}
+
 /** sqlite | mysql | pgsql */
 function db_driver(): string
 {

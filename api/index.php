@@ -348,8 +348,21 @@ try {
         exit;
     }
 
+    // Plain /api/health is a liveness check and must not touch the database —
+    // the platform restarts the container when it fails, and a database
+    // outage is not something a restart fixes. /api/health?db=1 is the
+    // deliberate deep check: it reports whether the database is reachable.
     if ($method === 'GET' && $resource === 'health') {
-        send_json(['ok' => true]);
+        if (!isset($_GET['db'])) {
+            send_json(['ok' => true]);
+        }
+        try {
+            db()->query('SELECT 1');
+            send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()]);
+        } catch (Throwable $e) {
+            error_log('[nmiet-api] health db: ' . $e->getMessage());
+            send_json(['ok' => false, 'db' => 'error'] + debug_detail($e), 503);
+        }
     }
 
     ensure_schema();
@@ -380,5 +393,6 @@ try {
     send_json(['error' => 'not found'], 404);
 } catch (Throwable $e) {
     error_log('[nmiet-api] ' . $e->getMessage());
-    send_json(['error' => 'server error'], 500);
+    send_json(['error' => 'server error', 'message' => 'Server error — please try again.']
+        + debug_detail($e), 500);
 }

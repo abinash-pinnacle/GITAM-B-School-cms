@@ -6,6 +6,36 @@
  */
 require_once __DIR__ . '/config.php';
 
+/** how many times a *transient* connection failure is retried, 1s apart */
+const DB_CONNECT_ATTEMPTS = 6;
+
+/**
+ * True when the driver says the server is not accepting connections yet —
+ * a container still booting, or a serverless Postgres (Neon, Supabase) waking
+ * from idle. Anything else (bad password, unknown database, unknown host) is
+ * a configuration error and is reported immediately.
+ */
+function connect_error_is_transient(PDOException $e): bool
+{
+    $m = $e->getMessage();
+    foreach ([
+        'Connection refused',           // nothing listening yet
+        'could not connect to server',
+        'the database system is starting up',
+        'server closed the connection unexpectedly',
+        'Connection timed out',
+        'timeout expired',
+        'MySQL server has gone away',
+        'No connection could be made',  // Windows wording
+        '2002',                         // MySQL: can't connect
+    ] as $needle) {
+        if (stripos($m, $needle) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function db(): PDO
 {
     static $pdo = null;
@@ -42,9 +72,13 @@ function db(): PDO
         return $pdo;
     }
 
-    // MySQL / PostgreSQL may still be starting up (container boot), so retry.
+    // MySQL / PostgreSQL may still be starting up (container boot), so retry —
+    // but only while the error says the server is not up *yet*. A rejected
+    // password or a missing database never fixes itself, and retrying those
+    // 30 times turned a one-second config mistake into a 60-second wait that
+    // the browser could only report as a failed login.
     $lastError = null;
-    for ($attempt = 0; $attempt < 30; $attempt++) {
+    for ($attempt = 0; $attempt < DB_CONNECT_ATTEMPTS; $attempt++) {
         try {
             if ($cfg['driver'] === 'mysql') {
                 $dsn = "mysql:host={$cfg['host']};port={$cfg['port']};charset=utf8mb4";
@@ -68,7 +102,10 @@ function db(): PDO
             return $pdo;
         } catch (PDOException $e) {
             $lastError = $e;
-            sleep(2);
+            if (!connect_error_is_transient($e)) {
+                break;
+            }
+            sleep(1);
         }
     }
     throw new RuntimeException('Could not connect to the database: ' . $lastError->getMessage());
