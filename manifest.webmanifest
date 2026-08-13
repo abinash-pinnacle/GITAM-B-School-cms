@@ -13,16 +13,16 @@
   "dir": "ltr",
   "categories": ["education", "productivity", "business"],
   "icons": [
-    { "src": "assets/icons/icon-48.png",  "sizes": "48x48",   "type": "image/png" },
-    { "src": "assets/icons/icon-72.png",  "sizes": "72x72",   "type": "image/png" },
-    { "src": "assets/icons/icon-96.png",  "sizes": "96x96",   "type": "image/png" },
-    { "src": "assets/icons/icon-144.png", "sizes": "144x144", "type": "image/png" },
-    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "assets/icons/icon-256.png", "sizes": "256x256", "type": "image/png" },
-    { "src": "assets/icons/icon-384.png", "sizes": "384x384", "type": "image/png" },
-    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "assets/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "assets/icons/icon-48.png?b=20260813a",  "sizes": "48x48",   "type": "image/png" },
+    { "src": "assets/icons/icon-72.png?b=20260813a",  "sizes": "72x72",   "type": "image/png" },
+    { "src": "assets/icons/icon-96.png?b=20260813a",  "sizes": "96x96",   "type": "image/png" },
+    { "src": "assets/icons/icon-144.png?b=20260813a", "sizes": "144x144", "type": "image/png" },
+    { "src": "assets/icons/icon-192.png?b=20260813a", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-256.png?b=20260813a", "sizes": "256x256", "type": "image/png" },
+    { "src": "assets/icons/icon-384.png?b=20260813a", "sizes": "384x384", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png?b=20260813a", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/maskable-192.png?b=20260813a", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/maskable-512.png?b=20260813a", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     {
@@ -30,7 +30,7 @@
       "short_name": "Attendance",
       "description": "Mark your attendance on the Pinnacle portal",
       "url": "https://pinnacle.myattendance.co.in/emp/add_attendance",
-      "icons": [{ "src": "assets/icons/icon-96.png", "sizes": "96x96" }]
+      "icons": [{ "src": "assets/icons/icon-96.png?b=20260813a", "sizes": "96x96" }]
     }
   ]
 }
