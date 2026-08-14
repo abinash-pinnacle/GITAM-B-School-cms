@@ -1372,7 +1372,9 @@
       // employee id or their name. A manager listed further down the same
       // sheet does not exist yet, so those are linked after the import.
       if (spec.collection === 'faculty' && raw.reportingTo) {
-        data.reportingTo = facultyIdByRef(raw.reportingTo) || '';
+        // a name that is nobody in the faculty table is kept as text — plenty
+        // of people report to a director or a registrar who is not on it
+        data.reportingTo = facultyIdByRef(raw.reportingTo) || raw.reportingTo;
       }
       spec.columns.forEach((c) => {
         if (c.store === false || data[c.key] !== undefined) return;
@@ -1496,9 +1498,12 @@
       if (spec.collection === 'faculty') {
         created.forEach((row, i) => {
           const ref = ok[i].raw.reportingTo;
-          if (!ref || row.reportingTo) return;
+          if (!ref || Store.find('faculty', row.reportingTo)) return;   // already linked
           const bossId = facultyIdByRef(ref);
-          if (bossId && bossId !== row.id) Store.update('faculty', row.id, { reportingTo: bossId });
+          if (bossId && bossId !== row.id) {
+            row.reportingTo = bossId;
+            Store.update('faculty', row.id, { reportingTo: bossId });
+          }
         });
       }
 
@@ -1765,21 +1770,78 @@
   }
 
   /* ---------- read-only faculty profile (center head) ---------- */
-  /* Everyone except the person being edited — nobody reports to themselves,
-     and a chain that loops has no top. */
+  /* Faculty (stored by id) plus any non-faculty names the admin has added
+     (stored as the name itself). The person being edited is left out — nobody
+     reports to themselves, and a chain that loops has no top. */
   function reportingToOptions(selected, excludeId) {
-    const list = Store.all('faculty')
+    const faculty = Store.all('faculty')
       .filter(f => f.id !== excludeId)
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    return `<option value="">— None —</option>` + list.map(f =>
-      `<option value="${esc(f.id)}" ${f.id === selected ? 'selected' : ''}>${esc(f.name)}${
-        f.designation ? ' · ' + esc(f.designation) : ''}</option>`).join('');
+    const others = listValues('reportingTo');
+    return `<option value="">— None —</option>`
+      + (faculty.length ? `<optgroup label="Faculty">` + faculty.map(f =>
+          `<option value="${esc(f.id)}" ${f.id === selected ? 'selected' : ''}>${esc(f.name)}${
+            f.designation ? ' · ' + esc(f.designation) : ''}</option>`).join('') + `</optgroup>` : '')
+      + (others.length ? `<optgroup label="Other">` + others.map(n =>
+          `<option value="${esc(n)}" ${n === selected ? 'selected' : ''}>${esc(n)}</option>`).join('')
+          + `</optgroup>` : '')
+      + listExtraOpts('Add someone not in the faculty list...');
   }
 
-  /** Name of the person a faculty member reports to, for display. */
+  /**
+   * Add and remove entries on the Reporting To dropdown. Removal only ever
+   * touches the added names — a faculty member is deleted from the Faculty
+   * page, never as a side effect of editing somebody else's record.
+   */
+  function bindReportingTo(select, excludeId) {
+    if (!select) return;
+    let prev = select.value;
+    const rebuild = (val) => { select.innerHTML = reportingToOptions(val, excludeId); select.value = val; prev = val; };
+
+    select.onchange = () => {
+      const v = select.value;
+      if (v === ADD_NEW) {
+        const name = (window.prompt(LIST_DEFS.reportingTo.prompt) || '').trim();
+        if (!name) { select.value = prev; return; }
+        if (Store.all('faculty').some(f => (f.name || '').toLowerCase() === name.toLowerCase())) {
+          toast(`"${name}" is already in the faculty list.`, 'err');
+          select.value = prev; return;
+        }
+        const list = listValues('reportingTo');
+        if (!list.includes(name)) { list.push(name); saveList('reportingTo'); }
+        rebuild(name);
+        return;
+      }
+      if (v === REMOVE_OPT) {
+        const list = listValues('reportingTo');
+        if (!list.length) {
+          toast('Nothing to remove — faculty are removed from the Faculty page.', 'err');
+          select.value = prev; return;
+        }
+        const raw = (window.prompt('Remove which name?\n(' + list.join(', ') + ')') || '').trim();
+        if (!raw) { select.value = prev; return; }
+        const idx = list.findIndex(n => n.toLowerCase() === raw.toLowerCase());
+        if (idx === -1) { toast(`"${raw}" is not one of the added names.`, 'err'); select.value = prev; return; }
+        const inUse = Store.all('faculty').filter(f => f.reportingTo === list[idx]).length;
+        if (inUse) {
+          toast(`"${list[idx]}" is used by ${inUse} record(s) — change those first.`, 'err');
+          select.value = prev; return;
+        }
+        const removed = list.splice(idx, 1)[0];
+        saveList('reportingTo');
+        rebuild(prev === removed ? '' : prev);
+        toast(`"${removed}" removed.`);
+        return;
+      }
+      prev = v;
+    };
+  }
+
+  /** Who a faculty member reports to: a linked faculty name, or a plain name. */
   function reportingToName(f) {
-    const boss = f && f.reportingTo ? Store.find('faculty', f.reportingTo) : null;
-    return boss ? boss.name : '';
+    if (!f || !f.reportingTo) return '';
+    const boss = Store.find('faculty', f.reportingTo);
+    return boss ? boss.name : f.reportingTo;
   }
 
   function facultyProfileModal(fid) {
@@ -1929,6 +1991,7 @@
         <button type="submit" class="btn-primary">Save</button></div></form>`);
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#facPhoneInput'));
+    bindReportingTo($('select[name="reportingTo"]'), id);
     bindPhotoField();
     $('#f').onsubmit = (e) => {
       e.preventDefault();
@@ -7157,6 +7220,15 @@
       prompt: 'New book category (e.g. Biotechnology):',
       used: () => Store.all('books').map(b => b.category)
         .concat(Store.all('requisitions').filter(r => r.type === 'Book').map(r => r.category)),
+    },
+    // People a faculty member reports to who are not faculty themselves — a
+    // director, a registrar, the HR head. Faculty come from the faculty table
+    // and are stored by id; these are stored as the plain name.
+    reportingTo: {
+      setting: 'reportingToList', defaults: [],
+      prompt: 'Name of the person reported to (e.g. Director — Dr. S. Rath):',
+      used: () => Store.all('faculty').map(f => f.reportingTo)
+        .filter(v => v && !Store.find('faculty', v)),
     },
   };
   // one live array per list — bindListAddNew keeps a reference, so rebuild in place
