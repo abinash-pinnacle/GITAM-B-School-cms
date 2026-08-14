@@ -8634,8 +8634,21 @@
     const open = openDrives().slice()
       .sort((a, b) => String(a.appEndDate || a.driveDate || '').localeCompare(String(b.appEndDate || b.driveDate || '')));
 
+    const appliedTo = new Set(apps.map(a => a.driveId));
     const driveRows = open.length ? open.map(d => {
       const el = driveEligibility(s, d);
+      const closed = d.appEndDate && d.appEndDate < today();
+      let action;
+      if (appliedTo.has(d.id)) {
+        const mine = apps.find(a => a.driveId === d.id);
+        action = `<span class="pill ${APP_PILL[mine.status] || 'blue'}">${esc(mine.status || 'Applied')}</span>`;
+      } else if (!el.ok) {
+        action = `<span class="pl-why">Not eligible</span>`;
+      } else if (closed) {
+        action = `<span class="pl-why">Closed</span>`;
+      } else {
+        action = `<button class="btn-sm btn-primary" data-apply="${d.id}">Apply</button>`;
+      }
       return `<tr>
         <td>${esc(companyName(d.companyId))}</td>
         <td>${esc(d.jobRole || '—')}</td>
@@ -8645,8 +8658,9 @@
         <td>${el.ok ? `<span class="pill green">Eligible</span>`
           : `<span class="pill red">Not eligible</span>
              <div class="pl-why">${esc(el.reasons.join(' · '))}</div>`}</td>
+        <td>${action}</td>
       </tr>`;
-    }).join('') : `<tr><td colspan="6" class="empty">No drives are open right now.</td></tr>`;
+    }).join('') : `<tr><td colspan="7" class="empty">No drives are open right now.</td></tr>`;
 
     const appRows = apps.length ? apps.map(a => `<tr>
       <td>${esc(driveLabel(a.driveId))}</td>
@@ -8696,7 +8710,8 @@
 
     <div class="panel"><div class="panel-head"><h3>Open Drives</h3></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Company</th><th>Role</th><th>Package</th><th>Location</th><th>Apply By</th><th>Eligibility</th>
+        <th>Company</th><th>Role</th><th>Package</th><th>Location</th><th>Apply By</th>
+        <th>Eligibility</th><th>Apply</th>
       </tr></thead><tbody>${driveRows}</tbody></table></div></div>
 
     <div class="panel"><div class="panel-head"><h3>Your Applications</h3></div>
@@ -8714,6 +8729,37 @@
         <th>Company</th><th>Role</th><th>Package</th><th>Offered On</th><th>Joining</th><th>Status</th>
       </tr></thead><tbody>${offerRows}</tbody></table></div></div>`;
   }
+
+  /* Applying is a real write, so it is confirmed first and the server has the
+     final say — the button only appears when the page thinks you qualify, but
+     the refusal that matters comes back from api_create. */
+  viewMyPlacement.after = () => {
+    $('#view').querySelectorAll('[data-apply]').forEach(btn => {
+      btn.onclick = () => {
+        const d = Store.find('drives', btn.dataset.apply);
+        if (!d) return;
+        openModal('Apply to this drive', `
+          <p>Apply to <b>${esc(d.jobRole || 'this role')}</b> at
+             <b>${esc(companyName(d.companyId))}</b>?</p>
+          <p class="pl-detail">The placement cell takes it from here — you cannot
+             withdraw an application yourself.</p>
+          <div class="form-actions">
+            <button class="btn-outline" id="cx">Cancel</button>
+            <button class="btn-primary" id="ok">Apply</button>
+          </div>`);
+        $('#cx').onclick = closeModal;
+        $('#ok').onclick = async () => {
+          const ok = $('#ok');
+          ok.disabled = true; ok.textContent = 'Applying...';
+          const res = await Store.createOne('applications', { driveId: d.id });
+          closeModal();
+          if (res && res.error) { toast(res.error, 'err'); return; }
+          toast('Applied. The placement cell will be in touch.');
+          render();
+        };
+      };
+    });
+  };
 
   /* ---------- one place every placement number comes from ---------- */
   function placementStats() {

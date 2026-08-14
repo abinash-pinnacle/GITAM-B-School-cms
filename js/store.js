@@ -120,6 +120,28 @@ const Store = {
     return rows;
   },
 
+  // Create one row and wait for the server's answer, rather than the optimistic
+  // add() above. Used where the server decides what the row actually contains
+  // (a student applying to a drive) and where its refusal carries a message
+  // the person needs to read.
+  async createOne(col, obj) {
+    try {
+      const res = await fetch(`${API}/${col}`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify(obj),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        return { error: (data && data.message) || 'That could not be saved.' };
+      }
+      this.data[col].push(data);
+      return data;
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
+
   update(col, id, patch) {
     if (this._blocked(col, 'update')) return null;
     const item = this.find(col, id);

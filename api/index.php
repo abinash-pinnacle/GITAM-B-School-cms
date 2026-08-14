@@ -196,9 +196,13 @@ function guard_request(string $resource, string $method): void
     }
 
     if (in_array($resource, PLACEMENT_COLLECTIONS, true)) {
-        $studentMayRead = !$isWrite && current_role() === 'student'
+        $isStudent = current_role() === 'student';
+        $studentMayRead = !$isWrite && $isStudent
             && in_array($resource, array_merge(PLACEMENT_STUDENT_OPEN, PLACEMENT_STUDENT_OWN), true);
-        if (!$studentMayRead && ($isWrite ? !may_touch_placement() : !may_read_placement())) {
+        // the one write a student has: applying to a drive, vetted in api_create
+        $studentMayApply = $isStudent && $method === 'POST' && $resource === 'applications';
+        if (!$studentMayRead && !$studentMayApply
+            && ($isWrite ? !may_touch_placement() : !may_read_placement())) {
             send_json(['error' => 'forbidden'], 403);
         }
     }
@@ -269,6 +273,115 @@ function api_bootstrap(): void
     send_json($out);
 }
 
+/* ---------------- a student applying to a drive ----------------
+   Mirrors the eligibility the page shows, on the server, because the page is
+   only a suggestion. Same rule as driveEligibility() in app.js, including the
+   fallback to the average of internal marks when no CGPA has been entered. */
+
+/** The student's CGPA, or the GPA implied by their internal marks, or null. */
+function student_cgpa(array $s): ?float
+{
+    $raw = trim((string) ($s['cgpa'] ?? ''));
+    if ($raw !== '' && is_numeric($raw)) {
+        return (float) $raw;
+    }
+    $marks = fetch_all('SELECT * FROM ' . qi('marks') . ' WHERE ' . qi('studentId') . ' = ?', [$s['id']]);
+    if (!$marks) {
+        return null;
+    }
+    $points = 0.0;
+    $credits = 0.0;
+    foreach ($marks as $m) {
+        if (($m['internal'] ?? '') === '' || $m['internal'] === null) {
+            continue;
+        }
+        $course = fetch_one('SELECT * FROM ' . qi('courses') . ' WHERE ' . qi('id') . ' = ?', [$m['courseId']]);
+        $credit = (float) ($course['credits'] ?? 0);
+        $pct = round(((float) $m['internal'] / INTERNAL_MAX) * 100);
+        $grade = $pct >= 90 ? 10 : ($pct >= 80 ? 9 : ($pct >= 70 ? 8 :
+                 ($pct >= 60 ? 7 : ($pct >= 50 ? 6 : ($pct >= 40 ? 5 : 0)))));
+        $points += $grade * $credit;
+        $credits += $credit;
+    }
+    return $credits > 0 ? round($points / $credits, 2) : null;
+}
+
+/** Reasons this student does not qualify for this drive; empty means they do. */
+function drive_blockers(array $s, array $d): array
+{
+    $out = [];
+    $min = trim((string) ($d['minCgpa'] ?? ''));
+    if ($min !== '' && is_numeric($min) && (float) $min > 0) {
+        $cg = student_cgpa($s);
+        if ($cg === null) {
+            $out[] = 'no CGPA on record';
+        } elseif ($cg < (float) $min) {
+            $out[] = "CGPA $cg is below $min";
+        }
+    }
+    $maxB = $d['maxBacklogs'] ?? '';
+    if ($maxB !== '' && $maxB !== null && is_numeric($maxB)
+        && (int) ($s['backlogs'] ?? 0) > (int) $maxB) {
+        $out[] = 'too many backlogs';
+    }
+    foreach ([['eligibleBranches', 'branch', 'branch'], ['eligibleCourses', 'course', 'course']] as [$f, $sf, $label]) {
+        $list = array_filter(array_map('trim', explode(',', (string) ($d[$f] ?? ''))));
+        if ($list && !in_array((string) ($s[$sf] ?? ''), $list, true)) {
+            $out[] = "this drive is not open to your $label";
+        }
+    }
+    return $out;
+}
+
+/**
+ * The only write a student is allowed to make. Returns the row to store —
+ * built here rather than taken from the request, so a hand-made payload
+ * cannot set a status, backdate itself or belong to somebody else.
+ */
+function guard_student_application(array $d): array
+{
+    $sid = current_user()['refId'] ?? null;
+    $student = $sid ? fetch_one('SELECT * FROM ' . qi('students') . ' WHERE ' . qi('id') . ' = ?', [$sid]) : null;
+    if (!$student) {
+        send_json(['error' => 'forbidden', 'message' => 'This login is not linked to a student record.'], 403);
+    }
+
+    $drive = fetch_one('SELECT * FROM ' . qi('drives') . ' WHERE ' . qi('id') . ' = ?', [$d['driveId'] ?? '']);
+    if (!$drive) {
+        send_json(['error' => 'not found', 'message' => 'That drive no longer exists.'], 404);
+    }
+    if (!in_array((string) ($drive['status'] ?? ''), DRIVE_OPEN_STATUS, true)) {
+        send_json(['error' => 'closed', 'message' => 'Applications for this drive are closed.'], 403);
+    }
+    $end = trim((string) ($drive['appEndDate'] ?? ''));
+    if ($end !== '' && $end < date('Y-m-d')) {
+        send_json(['error' => 'closed', 'message' => 'The last date to apply for this drive has passed.'], 403);
+    }
+
+    $already = fetch_one(
+        'SELECT * FROM ' . qi('applications') . ' WHERE ' . qi('studentId') . ' = ? AND ' . qi('driveId') . ' = ?',
+        [$sid, $drive['id']]
+    );
+    if ($already) {
+        send_json(['error' => 'duplicate', 'message' => 'You have already applied to this drive.'], 409);
+    }
+
+    $blockers = drive_blockers($student, $drive);
+    if ($blockers) {
+        send_json(['error' => 'not-eligible',
+                   'message' => 'You do not meet this drive\'s requirements: ' . implode('; ', $blockers) . '.'], 403);
+    }
+
+    return [
+        'studentId' => $sid,
+        'driveId'   => $drive['id'],
+        'appliedOn' => date('Y-m-d'),
+        'status'    => 'Applied',
+        'updatedBy' => current_user()['id'] ?? null,
+        'updatedOn' => date('Y-m-d'),
+    ];
+}
+
 /**
  * Rows the caller is allowed to see. A student reading their own placement
  * records gets exactly theirs — the filter lives here so it applies to
@@ -320,6 +433,15 @@ function api_login(): void
 function api_create(string $col): void
 {
     $d = body();
+
+    // A student posting to `applications` gets the row rebuilt from scratch:
+    // only the drive is taken from the request, everything else is decided here.
+    if ($col === 'applications' && current_role() === 'student') {
+        $row = guard_student_application(is_array($d) && !array_is_list($d) ? $d : []);
+        $row['id'] = next_id($col);
+        upsert($col, $row);
+        send_json($row, 201);
+    }
 
     // A bulk upload posts the whole spreadsheet as an array. One request beats
     // one-per-row over a hosted database, and one transaction means a failure

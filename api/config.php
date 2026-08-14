@@ -267,6 +267,13 @@ const PLACEMENT_READABLE = ['students', 'courses', 'marks', 'events', 'users', '
 const PLACEMENT_STUDENT_OPEN = ['companies', 'drives', 'placementevents'];
 const PLACEMENT_STUDENT_OWN  = ['applications', 'interviews', 'offers'];
 
+/* A student may create exactly one thing: their own application to a drive
+   that is open and that they qualify for. Every part of that is checked in
+   guard_student_application(), because a button on a page is not a rule. */
+const DRIVE_OPEN_STATUS = ['Published', 'Ongoing'];
+/** internal marks are out of this, and the GPA fallback is derived from them */
+const INTERNAL_MAX = 40;
+
 /* ---------------- curriculum ----------------
    The syllabus is a teaching document, so the accounts office has no business
    in it and everyone else does. Reads are refused for the roles below rather
