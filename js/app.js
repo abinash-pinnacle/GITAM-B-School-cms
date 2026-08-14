@@ -1294,17 +1294,28 @@
         { key:'qualification', header:'Qualification' },
         { key:'expertise', header:'Areas of Expertise', aliases:['expertise'] },
         { key:'publications', header:'Publications' },
+        { key:'reportingTo', header:'Reporting To', store:false,
+          aliases:['reports to','reporting','manager','hod','supervisor'] },
         { key:'username', header:'Username', store:false },
         { key:'password', header:'Password', store:false },
       ],
       sample: ['NM-F-1010','Dr. Meena Sahu','Computer Science','Assistant Professor','meena@nmiet.edu',
-               '9876500010','Ph.D. (CSE)','Machine Learning','4 journal papers','meena','pass123'],
+               '9876500010','Ph.D. (CSE)','Machine Learning','4 journal papers','NM-F-1001','meena','pass123'],
       login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
                          role: 'faculty', name: row.name }),
     },
   };
 
   const normHeader = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  /** Find a faculty member by employee id or by name, for "Reporting To". */
+  function facultyIdByRef(ref) {
+    const r = String(ref || '').trim().toLowerCase();
+    if (!r) return '';
+    const match = Store.all('faculty').find(f =>
+      String(f.empId || '').toLowerCase() === r || String(f.name || '').toLowerCase() === r);
+    return match ? match.id : '';
+  }
 
   /** Match the sheet's header row to our columns, by header text or alias. */
   function mapColumns(spec, headerRow) {
@@ -1353,8 +1364,14 @@
       }
 
       const data = {};
+      // "Reporting To" names a person, not an id — accept either their
+      // employee id or their name. A manager listed further down the same
+      // sheet does not exist yet, so those are linked after the import.
+      if (spec.collection === 'faculty' && raw.reportingTo) {
+        data.reportingTo = facultyIdByRef(raw.reportingTo) || '';
+      }
       spec.columns.forEach((c) => {
-        if (c.store === false) return;
+        if (c.store === false || data[c.key] !== undefined) return;
         let v = raw[c.key];
         if (c.number) v = v === '' ? (c.def ?? 0) : +v;
         else if (v === '' && c.def !== undefined) v = c.def;
@@ -1470,6 +1487,17 @@
         btn.disabled = false; btn.textContent = 'Import';
         return;
       }
+      // A sheet often lists a head of department and the people under them
+      // together. Those managers only exist now, so link them on a second pass.
+      if (spec.collection === 'faculty') {
+        created.forEach((row, i) => {
+          const ref = ok[i].raw.reportingTo;
+          if (!ref || row.reportingTo) return;
+          const bossId = facultyIdByRef(ref);
+          if (bossId && bossId !== row.id) Store.update('faculty', row.id, { reportingTo: bossId });
+        });
+      }
+
       // logins carry the id the rows were actually written with
       const logins = created.map((row, i) => Object.assign(ok[i].login, { refId: row.id }));
       const users = await Store.addMany('users', logins);
@@ -1676,7 +1704,7 @@
           <button class="btn-primary btn-sm" id="facXls">⬇ Excel</button>`}
       </div></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th></th><th>Emp ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Email</th><th>Phone</th><th>Actions</th>
+        <th></th><th>Emp ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
       </tr></thead><tbody id="facBody"></tbody></table></div><div id="facPager"></div></div>`;
     viewFaculty.after = () => {
       let page = 1;
@@ -1694,7 +1722,8 @@
         $('#facBody').innerHTML = pageRows.length ? pageRows.map(f => `<tr>
           <td>${avatarHtml(f.photo, f.name)}</td>
           <td>${esc(f.empId)}</td><td>${esc(f.name)}</td><td>${esc(f.department)}</td>
-          <td>${esc(f.designation)}</td><td>${esc(f.email)}</td><td>${esc(f.phone)}</td>
+          <td>${esc(f.designation)}</td><td>${esc(reportingToName(f) || '—')}</td>
+          <td>${esc(f.email)}</td><td>${esc(f.phone)}</td>
           <td><div class="row-actions">
             ${canEdit
               ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>`
@@ -1702,7 +1731,7 @@
             <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${f.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${f.id}">Delete</button>` : ''}</div></td></tr>`).join('')
-          : `<tr><td colspan="8" class="empty">No faculty found.</td></tr>`;
+          : `<tr><td colspan="9" class="empty">No faculty found.</td></tr>`;
         $('#facBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printFacultyIdCard(b.dataset.id));
         if (canEdit) {
           $('#facBody').querySelectorAll('[data-classes]').forEach(b => b.onclick = () => facultyClassesModal(b.dataset.classes, draw));
@@ -1732,6 +1761,23 @@
   }
 
   /* ---------- read-only faculty profile (center head) ---------- */
+  /* Everyone except the person being edited — nobody reports to themselves,
+     and a chain that loops has no top. */
+  function reportingToOptions(selected, excludeId) {
+    const list = Store.all('faculty')
+      .filter(f => f.id !== excludeId)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return `<option value="">— None —</option>` + list.map(f =>
+      `<option value="${esc(f.id)}" ${f.id === selected ? 'selected' : ''}>${esc(f.name)}${
+        f.designation ? ' · ' + esc(f.designation) : ''}</option>`).join('');
+  }
+
+  /** Name of the person a faculty member reports to, for display. */
+  function reportingToName(f) {
+    const boss = f && f.reportingTo ? Store.find('faculty', f.reportingTo) : null;
+    return boss ? boss.name : '';
+  }
+
   function facultyProfileModal(fid) {
     const f = Store.find('faculty', fid);
     if (!f) return;
@@ -1775,6 +1821,7 @@
         ${row('Employee ID', f.empId)}
         ${row('Department', f.department)}
         ${row('Designation', f.designation)}
+        ${row('Reporting To', reportingToName(f))}
         ${row('Qualification', f.qualification)}
         ${row('Areas of Expertise', f.expertise)}
         ${row('Publications', f.publications)}
@@ -1809,6 +1856,7 @@
         { header: 'Name', key: 'name', width: 26 },
         { header: 'Department', key: 'department', width: 20 },
         { header: 'Designation', key: 'designation', width: 20 },
+        { header: 'Reporting To', key: 'reportingToName', width: 22 },
         { header: 'Qualification', key: 'qualification', width: 24 },
         { header: 'Expertise', key: 'expertise', width: 28 },
         { header: 'Email', key: 'email', width: 26 },
@@ -1820,6 +1868,7 @@
       rows: rows.map(f => {
         const load = facultyTeachingLoad(f.id);
         return Object.assign({}, f, {
+          reportingToName: reportingToName(f) || '—',
           classes: load.classes, students: load.students, sessions: load.sessions,
         });
       }),
@@ -1858,6 +1907,8 @@
         <div class="field"><label>Full Name</label><input name="name" value="${esc(f.name||'')}" required></div>
         <div class="field"><label>Department</label><input name="department" value="${esc(f.department||'')}"></div>
         <div class="field"><label>Designation</label><input name="designation" value="${esc(f.designation||'')}"></div>
+        <div class="field"><label>Reporting To</label>
+          <select name="reportingTo">${reportingToOptions(f.reportingTo, id)}</select></div>
         <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(f.email||'')}"></div>
         <div class="field"><label>Phone</label><input name="phone" id="facPhoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(f.phone||'')}"></div>
         <div class="field full"><label>Qualification</label><input name="qualification" placeholder="e.g. Ph.D. (Computer Science)" value="${esc(f.qualification||'')}"></div>

@@ -76,8 +76,10 @@ const COLLECTIONS = [
     // cgpa/backlogs/batch drive placement eligibility (cgpa falls back to the marks average)
     'students'   => ['id', 'roll', 'name', 'email', 'phone', 'branch', 'year', 'semester', 'section', 'photo',
                      'course', 'academicYear', 'cgpa', 'backlogs', 'batch'],
+    // reportingTo holds the id of another faculty row — the person this one
+    // reports to. Blank for the top of the tree.
     'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
-                     'qualification', 'expertise', 'publications'],
+                     'qualification', 'expertise', 'publications', 'reportingTo'],
     // accounts-office staff record; the login lives in `users` with role = accountant
     'accountants' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
     // centre-monitoring staff record; the login lives in `users` with role = center_head
