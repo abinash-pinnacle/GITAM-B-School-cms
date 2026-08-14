@@ -297,6 +297,29 @@ function api_login(): void
 function api_create(string $col): void
 {
     $d = body();
+
+    // A bulk upload posts the whole spreadsheet as an array. One request beats
+    // one-per-row over a hosted database, and one transaction means a failure
+    // half way through does not leave half a class imported.
+    if (is_array($d) && array_is_list($d) && $d !== [] && is_array($d[0])) {
+        $rows = [];
+        db()->beginTransaction();
+        try {
+            foreach ($d as $row) {
+                if (empty($row['id'])) {
+                    $row['id'] = next_id($col);
+                }
+                upsert($col, $row);
+                $rows[] = $row;
+            }
+            db()->commit();
+        } catch (Throwable $e) {
+            db()->rollBack();
+            throw $e;
+        }
+        send_json($rows, 201);
+    }
+
     if (empty($d['id'])) {
         $d['id'] = next_id($col);
     }

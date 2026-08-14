@@ -968,7 +968,8 @@
         ${deptBranch ? '' : `<select class="filter-sel" id="stuBranch">
           <option value="">All Branches</option>${branchOptions()}
         </select>`}
-        ${canEdit ? `<button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
+        ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
+        <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
         ${readOnly() ? `<button class="btn-outline btn-sm" id="stuPrint">🖨 Print</button>
           <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
           <button class="btn-primary btn-sm" id="stuXls">⬇ Excel</button>` : ''}
@@ -1018,7 +1019,10 @@
       };
       $('#stuSearch').oninput = () => { page = 1; draw(); };
       if ($('#stuBranch')) $('#stuBranch').onchange = () => { page = 1; draw(); };
-      if (canEdit) $('#addStu').onclick = () => studentForm();
+      if (canEdit) {
+        $('#addStu').onclick = () => studentForm();
+        $('#impStu').onclick = () => bulkImportModal('students');
+      }
       if (readOnly()) {
         const report = () => {
           const q = ($('#stuSearch').value || '').toLowerCase();
@@ -1242,6 +1246,242 @@
     Store.add('users', { username: s.roll, password: 'pass123', role: 'student', refId: s.id, name: s.name });
   }
 
+  /* ==================== BULK UPLOAD (Excel / CSV) ====================
+     Adding a whole intake one modal at a time is the slowest thing in this
+     app. The spreadsheet the office already keeps is uploaded instead, and
+     nothing is written until the admin has seen, row by row, what will be
+     created and what will be skipped and why. */
+  const DEFAULT_IMPORT_PASSWORD = 'pass123';
+
+  const IMPORT_SPECS = {
+    students: {
+      title: 'Students',
+      collection: 'students',
+      keyField: 'roll',
+      fileBase: 'NMIET-BSCHOOL-Students-Template',
+      columns: [
+        { key:'roll', header:'Registration Number', required:true,
+          aliases:['reg no','regno','reg. no','roll','roll no','registration','registration no'] },
+        { key:'name', header:'Full Name', required:true, aliases:['name','student name'] },
+        { key:'email', header:'Email', aliases:['e-mail','email id'] },
+        { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
+        { key:'course', header:'Course' },
+        { key:'branch', header:'Branch', aliases:['department','dept'] },
+        { key:'year', header:'Year', number:true, def:1 },
+        { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
+        { key:'section', header:'Section', def:'A', aliases:['sec'] },
+        { key:'academicYear', header:'Academic Year', aliases:['session'] },
+        { key:'cgpa', header:'CGPA', aliases:['gpa'] },
+        { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
+        { key:'batch', header:'Batch' },
+      ],
+      sample: ['21CS010','Rahul Das','rahul@nmiet.in','9810000010','B.Tech','CSE',3,5,'A','2026-27','8.2',0,'2021-2025'],
+      // students sign in with their registration number, same as the form does
+      login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
+    },
+    faculty: {
+      title: 'Faculty',
+      collection: 'faculty',
+      keyField: 'empId',
+      fileBase: 'NMIET-BSCHOOL-Faculty-Template',
+      columns: [
+        { key:'empId', header:'Employee ID', required:true, aliases:['emp id','employee no','staff id'] },
+        { key:'name', header:'Full Name', required:true, aliases:['name','faculty name'] },
+        { key:'department', header:'Department', aliases:['dept'] },
+        { key:'designation', header:'Designation' },
+        { key:'email', header:'Email', aliases:['e-mail','email id'] },
+        { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
+        { key:'qualification', header:'Qualification' },
+        { key:'expertise', header:'Areas of Expertise', aliases:['expertise'] },
+        { key:'publications', header:'Publications' },
+        { key:'username', header:'Username', store:false },
+        { key:'password', header:'Password', store:false },
+      ],
+      sample: ['NM-F-1010','Dr. Meena Sahu','Computer Science','Assistant Professor','meena@nmiet.edu',
+               '9876500010','Ph.D. (CSE)','Machine Learning','4 journal papers','meena','pass123'],
+      login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
+                         role: 'faculty', name: row.name }),
+    },
+  };
+
+  const normHeader = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  /** Match the sheet's header row to our columns, by header text or alias. */
+  function mapColumns(spec, headerRow) {
+    const map = {};
+    headerRow.forEach((cell, i) => {
+      const h = normHeader(cell);
+      if (!h) return;
+      const col = spec.columns.find((c) =>
+        normHeader(c.header) === h || (c.aliases || []).some((a) => normHeader(a) === h));
+      if (col && map[col.key] === undefined) map[col.key] = i;
+    });
+    return map;
+  }
+
+  /** Turn sheet rows into { data, login, error } — one entry per input row. */
+  function validateRows(spec, rows, map) {
+    const seen = new Set();
+    const existingKeys = new Set(Store.all(spec.collection)
+      .map((x) => String(x[spec.keyField] || '').toLowerCase()));
+    const existingUsers = new Set(Store.all('users').map((u) => String(u.username || '').toLowerCase()));
+    const usedUsers = new Set();
+
+    return rows.map((cells) => {
+      const raw = {};
+      spec.columns.forEach((c) => {
+        const i = map[c.key];
+        raw[c.key] = i === undefined ? '' : String(cells[i] ?? '').trim();
+      });
+
+      const missing = spec.columns.filter((c) => c.required && !raw[c.key]).map((c) => c.header);
+      if (missing.length) return { raw, error: 'Missing ' + missing.join(', ') };
+
+      const key = raw[spec.keyField].toLowerCase();
+      if (existingKeys.has(key)) return { raw, error: 'Already exists' };
+      if (seen.has(key)) return { raw, error: 'Duplicate in this file' };
+
+      if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
+      if (raw.cgpa && (isNaN(+raw.cgpa) || +raw.cgpa < 0 || +raw.cgpa > 10)) {
+        return { raw, error: 'CGPA must be 0-10' };
+      }
+
+      const login = spec.login(raw);
+      const uname = String(login.username || '').toLowerCase();
+      if (existingUsers.has(uname) || usedUsers.has(uname)) {
+        return { raw, error: `Username "${login.username}" already taken` };
+      }
+
+      const data = {};
+      spec.columns.forEach((c) => {
+        if (c.store === false) return;
+        let v = raw[c.key];
+        if (c.number) v = v === '' ? (c.def ?? 0) : +v;
+        else if (v === '' && c.def !== undefined) v = c.def;
+        data[c.key] = v;
+      });
+
+      seen.add(key);
+      usedUsers.add(uname);
+      return { raw, data, login };
+    });
+  }
+
+  function downloadImportTemplate(spec) {
+    XLSXLite.download(spec.fileBase, [{
+      name: spec.title,
+      columns: spec.columns.map((c) => ({ header: c.header, key: c.key, width: 20 })),
+      rows: [Object.fromEntries(spec.columns.map((c, i) => [c.key, spec.sample[i]]))],
+    }]);
+    toast('Template downloaded — fill it in and upload it back.');
+  }
+
+  function bulkImportModal(kind) {
+    const spec = IMPORT_SPECS[kind];
+    let checked = [];
+
+    openModal(`Bulk Upload · ${spec.title}`, `
+      <div class="imp-intro">
+        <p>Upload an <b>.xlsx</b> or <b>.csv</b> file. The first row must be the column
+           headings — order does not matter, and extra columns are ignored.</p>
+        <p class="imp-cols"><b>Columns:</b> ${spec.columns.map((c) =>
+            c.required ? `<b>${c.header} *</b>` : c.header).join(' · ')}</p>
+        <p class="imp-note">Every new account gets the password
+           <code>${DEFAULT_IMPORT_PASSWORD}</code>${kind === 'faculty'
+             ? ' unless a Password column says otherwise' : ''}.</p>
+      </div>
+      <div class="imp-actions">
+        <button type="button" class="btn-outline" id="impTpl">⬇ Download template</button>
+        <label class="btn-primary imp-pick">📂 Choose file
+          <input type="file" id="impFile" accept=".xlsx,.csv,.txt" hidden></label>
+        <span id="impName" class="imp-file"></span>
+      </div>
+      <div id="impResult"></div>
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="cx">Close</button>
+        <button type="button" class="btn-primary" id="impGo" disabled>Import</button>
+      </div>`, true);
+
+    $('#cx').onclick = closeModal;
+    $('#impTpl').onclick = () => downloadImportTemplate(spec);
+
+    $('#impFile').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      $('#impName').textContent = file.name;
+      $('#impResult').innerHTML = '<p class="imp-note">Reading…</p>';
+      let rows;
+      try {
+        rows = await XLSXLite.read(file);
+      } catch (err) {
+        $('#impResult').innerHTML = `<p class="imp-bad">${esc(err.message || 'Could not read that file.')}</p>`;
+        return;
+      }
+      if (rows.length < 2) {
+        $('#impResult').innerHTML = '<p class="imp-bad">That file has no data rows under the headings.</p>';
+        return;
+      }
+
+      const map = mapColumns(spec, rows[0]);
+      const unmatched = spec.columns.filter((c) => c.required && map[c.key] === undefined);
+      if (unmatched.length) {
+        $('#impResult').innerHTML = `<p class="imp-bad">Could not find the
+          ${unmatched.map((c) => `<b>${c.header}</b>`).join(' and ')} column in the heading row.
+          Download the template to see the expected headings.</p>`;
+        $('#impGo').disabled = true;
+        return;
+      }
+
+      checked = validateRows(spec, rows.slice(1).filter((r) => r.some((c) => c)), map);
+      const ok = checked.filter((r) => !r.error);
+      const bad = checked.filter((r) => r.error);
+      const shown = checked.slice(0, 60);
+
+      $('#impResult').innerHTML = `
+        <div class="imp-summary">
+          <span class="imp-ok">${ok.length} ready</span>
+          ${bad.length ? `<span class="imp-bad">${bad.length} skipped</span>` : ''}
+        </div>
+        <div class="tbl-wrap imp-table"><table><thead><tr>
+          <th>#</th><th>${spec.columns[0].header}</th><th>${spec.columns[1].header}</th><th>Status</th>
+        </tr></thead><tbody>
+          ${shown.map((r, i) => `<tr>
+            <td>${i + 2}</td>
+            <td>${esc(r.raw[spec.columns[0].key] || '—')}</td>
+            <td>${esc(r.raw[spec.columns[1].key] || '—')}</td>
+            <td>${r.error ? `<span class="imp-bad">✗ ${esc(r.error)}</span>`
+                           : '<span class="imp-ok">✓ Ready</span>'}</td>
+          </tr>`).join('')}
+        </tbody></table></div>
+        ${checked.length > shown.length
+          ? `<p class="imp-note">Showing first ${shown.length} of ${checked.length} rows.</p>` : ''}`;
+      $('#impGo').disabled = ok.length === 0;
+    };
+
+    $('#impGo').onclick = async () => {
+      const ok = checked.filter((r) => !r.error);
+      if (!ok.length) return;
+      const btn = $('#impGo');
+      btn.disabled = true; btn.textContent = `Importing ${ok.length}…`;
+
+      const created = await Store.addMany(spec.collection, ok.map((r) => r.data));
+      if (created.error) {
+        toast(created.error, 'err');
+        btn.disabled = false; btn.textContent = 'Import';
+        return;
+      }
+      // logins carry the id the rows were actually written with
+      const logins = created.map((row, i) => Object.assign(ok[i].login, { refId: row.id }));
+      const users = await Store.addMany('users', logins);
+
+      closeModal();
+      toast(users.error
+        ? `${created.length} ${spec.title.toLowerCase()} imported, but their logins could not be created.`
+        : `${created.length} ${spec.title.toLowerCase()} imported.`, users.error ? 'err' : '');
+      render();
+    };
+  }
+
   /* ---------- BATCH SEMESTER UPDATE (admin) ----------
      Move a whole batch up (or back) a semester in one go, instead of opening
      every student record. Nothing is written until the admin sees exactly which
@@ -1427,7 +1667,8 @@
       <h3>Faculty Members</h3>
       <div class="panel-tools">
         <input class="search-box" id="facSearch" placeholder="Search name / dept...">
-        ${canEdit ? `<button class="btn-primary" id="addFac">+ Add Faculty</button>` : `
+        ${canEdit ? `<button class="btn-outline" id="impFac">⬆ Bulk Upload</button>
+          <button class="btn-primary" id="addFac">+ Add Faculty</button>` : `
           <select class="filter-sel" id="facDept"><option value="">All Departments</option>
             ${departmentList().map(d => `<option>${esc(d)}</option>`).join('')}</select>
           <button class="btn-outline btn-sm" id="facPrint">🖨 Print</button>
@@ -1474,7 +1715,10 @@
         bindPager($('#facPager'), rows.length, page, (p) => page = p, draw);
       };
       $('#facSearch').oninput = () => { page = 1; draw(); };
-      if (canEdit) $('#addFac').onclick = () => facultyForm();
+      if (canEdit) {
+        $('#addFac').onclick = () => facultyForm();
+        $('#impFac').onclick = () => bulkImportModal('faculty');
+      }
       else {
         $('#facDept').onchange = () => { page = 1; draw(); };
         const report = () => facultyReport(filtered());

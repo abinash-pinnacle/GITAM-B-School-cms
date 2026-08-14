@@ -87,6 +87,39 @@ const Store = {
     return obj;
   },
 
+  // Bulk insert for spreadsheet imports. Ids are worked out here rather than
+  // on the server: the server has to probe for a free id one query at a time,
+  // which is fine for a single row and painfully slow for three hundred.
+  // Resolves to the rows written, or { error } if the server refused.
+  async addMany(col, objs) {
+    if (this._blocked(col, 'add')) return { error: 'Not permitted.' };
+    const rows = [];
+    for (const obj of objs) {
+      obj.id = obj.id || this._uid(col);
+      this.data[col].push(obj);   // pushed first, so the next id skips it
+      rows.push(obj);
+    }
+    try {
+      const res = await fetch(`${API}/${col}`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify(rows),
+      });
+      if (!res.ok) {
+        // roll the cache back so the screen matches what was actually saved
+        const ids = new Set(rows.map((r) => r.id));
+        this.data[col] = this.all(col).filter((x) => !ids.has(x.id));
+        this._check(res);
+        return { error: res.status === 403 ? 'Not permitted.' : 'Server refused the upload.' };
+      }
+    } catch (e) {
+      const ids = new Set(rows.map((r) => r.id));
+      this.data[col] = this.all(col).filter((x) => !ids.has(x.id));
+      return { error: 'Could not reach the server.' };
+    }
+    return rows;
+  },
+
   update(col, id, patch) {
     if (this._blocked(col, 'update')) return null;
     const item = this.find(col, id);

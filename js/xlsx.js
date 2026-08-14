@@ -299,5 +299,152 @@ ${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.open
     setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
-  global.XLSXLite = { build, download };
+  /* ================= READING (.xlsx / .csv) =================
+     Enough of the format to import a spreadsheet someone filled in: the
+     first worksheet, as an array of rows of strings. Formatting, formulas
+     and multiple sheets are ignored — a bulk-upload template has none. */
+
+  /** Locate the ZIP central directory and return { name: Uint8Array }. */
+  async function unzip(buf) {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    // The end-of-central-directory record sits in the last 64KB, after a
+    // comment of unknown length, so it has to be found by scanning back.
+    let eocd = -1;
+    for (let i = buf.length - 22; i >= 0 && i > buf.length - 66000; i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('Not a valid .xlsx file.');
+
+    const count = dv.getUint16(eocd + 10, true);
+    let p = dv.getUint32(eocd + 16, true);
+    const out = {};
+    for (let n = 0; n < count; n++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true);
+      const compSize = dv.getUint32(p + 20, true);
+      const nameLen = dv.getUint16(p + 28, true);
+      const extraLen = dv.getUint16(p + 30, true);
+      const commentLen = dv.getUint16(p + 32, true);
+      const localOff = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + nameLen));
+
+      // the local header repeats the name and has its own extra field, and
+      // only it says where the bytes actually start
+      const lNameLen = dv.getUint16(localOff + 26, true);
+      const lExtraLen = dv.getUint16(localOff + 28, true);
+      const start = localOff + 30 + lNameLen + lExtraLen;
+      const raw = buf.subarray(start, start + compSize);
+      out[name] = method === 0 ? raw : await inflateRaw(raw);
+
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return out;
+  }
+
+  async function inflateRaw(bytes) {
+    if (typeof DecompressionStream !== 'function') {
+      throw new Error('This browser cannot read .xlsx — save the sheet as CSV instead.');
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  const xmlText = (b) => b ? new TextDecoder().decode(b) : '';
+
+  function unescapeXml(s) {
+    return s.replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+            .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+            .replace(/&amp;/g, '&');
+  }
+
+  /** <si> entries; each may be split across several <t> runs. */
+  function sharedStrings(xml) {
+    const out = [];
+    for (const si of xml.match(/<si[\s>][\s\S]*?<\/si>/g) || []) {
+      let text = '';
+      for (const t of si.match(/<t[^>]*>[\s\S]*?<\/t>/g) || []) {
+        text += unescapeXml(t.replace(/^<t[^>]*>/, '').replace(/<\/t>$/, ''));
+      }
+      out.push(text);
+    }
+    return out;
+  }
+
+  const colIndex = (ref) => {            // "BC12" -> 54 (1-based column)
+    let n = 0;
+    for (const ch of ref.replace(/\d+$/, '')) n = n * 26 + (ch.charCodeAt(0) - 64);
+    return n;
+  };
+
+  function parseSheet(xml, shared) {
+    const rows = [];
+    for (const rowXml of xml.match(/<row[\s>][\s\S]*?<\/row>/g) || []) {
+      const cells = [];
+      for (const c of rowXml.match(/<c[\s>][\s\S]*?(?:<\/c>|\/>)/g) || []) {
+        const ref = (c.match(/\sr="([A-Z]+\d+)"/) || [])[1];
+        const type = (c.match(/\st="(\w+)"/) || [])[1] || 'n';
+        let value = '';
+        if (type === 'inlineStr') {
+          value = (c.match(/<t[^>]*>([\s\S]*?)<\/t>/) || [])[1] || '';
+          value = unescapeXml(value);
+        } else {
+          const v = (c.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+          if (v != null) {
+            value = type === 's' ? (shared[+v] ?? '') : unescapeXml(v);
+          }
+        }
+        // a blank cell in the middle of a row is simply omitted from the XML
+        cells[(ref ? colIndex(ref) : cells.length + 1) - 1] = String(value).trim();
+      }
+      rows.push(Array.from(cells, (v) => v ?? ''));
+    }
+    return rows;
+  }
+
+  /** RFC-4180-ish: quoted fields, doubled quotes, CR/LF inside quotes. */
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = '', quoted = false;
+    text = text.replace(/^﻿/, '');
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else field += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ',') { row.push(field.trim()); field = ''; }
+      else if (ch === '\n') { row.push(field.trim()); rows.push(row); row = []; field = ''; }
+      else if (ch !== '\r') field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field.trim()); rows.push(row); }
+    return rows;
+  }
+
+  /**
+   * Read a File / Blob into rows of strings. Blank trailing rows are dropped
+   * so a sheet with formatting left over below the data does not import a
+   * hundred empty students.
+   */
+  async function read(file) {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let rows;
+    if (/\.(csv|txt)$/i.test(file.name || '')) {
+      rows = parseCsv(new TextDecoder().decode(buf));
+    } else {
+      const files = await unzip(buf);
+      const shared = sharedStrings(xmlText(files['xl/sharedStrings.xml']));
+      const sheetName = Object.keys(files)
+        .filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+        .sort()[0];
+      if (!sheetName) throw new Error('No worksheet found in that file.');
+      rows = parseSheet(xmlText(files[sheetName]), shared);
+    }
+    while (rows.length && rows[rows.length - 1].every((c) => !c)) rows.pop();
+    return rows;
+  }
+
+  global.XLSXLite = { build, download, read };
 })(window);
