@@ -402,6 +402,13 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
 /** SQLSTATEs meaning "that table/column is not there" on MySQL or Postgres. */
 const SCHEMA_BEHIND = ['42703', '42P01', '42S02', '42S22'];
 
+/**
+ * PostgreSQL 0A000 here means "cached plan must not change result type": a
+ * pooled connection is holding a plan from before a column was added.
+ * PostgreSQL drops the stale plan as it raises this, so the retry succeeds.
+ */
+const STALE_PLAN = '0A000';
+
 try {
     if ($method === 'OPTIONS') {
         http_response_code(204);
@@ -432,10 +439,15 @@ try {
         // that it is current. If a table or column is missing anyway — the
         // signature said "done" while an ALTER never landed — one blind retry
         // beats serving 500s until someone notices.
-        if (!in_array((string) $e->getCode(), SCHEMA_BEHIND, true)) {
+        $code = (string) $e->getCode();
+        if ($code === STALE_PLAN) {
+            error_log('[nmiet-api] stale query plan, retrying: ' . $e->getMessage());
+            dispatch($method, $resource, $id, $isCollection);
+        }
+        if (!in_array($code, SCHEMA_BEHIND, true)) {
             throw $e;
         }
-        error_log('[nmiet-api] schema behind (' . $e->getCode() . '), rebuilding: ' . $e->getMessage());
+        error_log('[nmiet-api] schema behind (' . $code . '), rebuilding: ' . $e->getMessage());
         init_db();
         dispatch($method, $resource, $id, $isCollection);
     }

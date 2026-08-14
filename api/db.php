@@ -53,7 +53,15 @@ function db(): PDO
     $opts = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES   => false,
+        // Server-side prepares cache a query plan on the *server* connection.
+        // Behind a pooler (Neon, Supabase, PgBouncer) those connections are
+        // shared and outlive the request, so after a column is added the next
+        // `SELECT *` on a reused connection fails with 0A000, "cached plan must
+        // not change result type" — permanently, for that one table. Emulating
+        // prepares keeps the plan client-side, where a schema change cannot
+        // strand it. Every pgsql column here is TEXT, so nothing depends on
+        // server-side parameter typing.
+        PDO::ATTR_EMULATE_PREPARES   => $cfg['driver'] === 'pgsql',
     ];
 
     if ($cfg['driver'] === 'sqlite') {
