@@ -448,6 +448,11 @@ body.sidebar-collapsed .nav-section-mid{font-size:0;padding-top:12px;margin-top:
 a.install-btn{color:var(--primary);box-sizing:border-box}
 a.install-btn:hover{background:var(--primary-light)}
 
+/* ===== MY PLACEMENT (student view) ===== */
+.pl-detail{font-size:12.5px;color:var(--muted);line-height:1.6}
+/* why a drive is closed to this student, under the pill that says so */
+.pl-why{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+
 /* ===== BULK UPLOAD (Excel / CSV import) ===== */
 .imp-intro{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:14px}
 .imp-intro b{color:var(--ink)}

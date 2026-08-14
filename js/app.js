@@ -296,7 +296,8 @@
     student: [
       ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['myattendance','✅','My Attendance'], ['myresults','📝','My Results'],
       ['timetable','🗓️','Timetable'], ['syllabus','🧾','Subjects by Semester'],
-      ['mybooks','📖','My Library'], ['myfees','💳','My Fees'], ['profile','👤','My Profile'],
+      ['mybooks','📖','My Library'], ['myfees','💳','My Fees'],
+      ['myplacement','🏆','My Placement'], ['profile','👤','My Profile'],
     ],
     librarian: [
       ['dashboard','📊','Dashboard'], ['library','📖','Library'], ['issueBook','⬇️','Issue a Book'],
@@ -382,7 +383,8 @@
     dashboard:'Dashboard', students:'Students', faculty:'Faculty', courses:'Courses',
     attendance:'Attendance', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
-    myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees', profile:'My Profile',
+    myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
+    myplacement:'My Placement', profile:'My Profile',
     events:'Events', issueBook:'Issue a Book', returnBook:'Return a Book', reports:'Library Reports',
     accounts:'Login Accounts',
     finstudents:'Student List — Fee Overview', assets:'Asset List', fixedfee:'Fixed Fee Structure',
@@ -419,7 +421,8 @@
       syllabus: viewSyllabus,
       attendance: viewAttendance, marks: viewMarks, timetable: viewTimetable, fees: viewFees,
       assignments: viewAssignments, library: viewLibrary, mybooks: viewMyBooks,
-      myattendance: viewMyAttendance, myresults: viewMyResults, myfees: viewMyFees, profile: viewProfile,
+      myattendance: viewMyAttendance, myresults: viewMyResults, myfees: viewMyFees,
+      myplacement: viewMyPlacement, profile: viewProfile,
       events: viewEvents, issueBook: viewIssueBook, returnBook: viewReturnBook, reports: viewLibraryReports,
       accounts: viewAccounts,
       finstudents: viewFinStudents, assets: viewAssets, fixedfee: viewFixedFee, semfee: viewSemFee,
@@ -8609,6 +8612,107 @@
     const open = drivesOpenToStudent(Store.find('students', sid) || {});
     if (open.length) return { label: 'Eligible', pill: 'blue', detail: `${open.length} open drive(s)` };
     return { label: 'Not Eligible', pill: 'red', detail: 'No open drive matches' };
+  }
+
+  /* ==================== MY PLACEMENT (student) ====================
+     The placement cell already holds everything a student wants to know —
+     which companies are coming, whether they qualify, and where their own
+     applications stand — and until now none of it reached them. Read only:
+     applying still goes through the cell. */
+  function viewMyPlacement() {
+    const s = Store.find('students', user.refId);
+    if (!s) {
+      return `<div class="panel"><p class="empty">Your login is not linked to a student record.
+        Please contact the office.</p></div>`;
+    }
+    const st = placementStatusOf(s.id);
+    const apps = studentApplications(s.id);
+    const offers = studentOffers(s.id);
+    const ivs = Store.all('interviews').filter(i => i.studentId === s.id)
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    const cg = studentCgpa(s);
+    const open = openDrives().slice()
+      .sort((a, b) => String(a.appEndDate || a.driveDate || '').localeCompare(String(b.appEndDate || b.driveDate || '')));
+
+    const driveRows = open.length ? open.map(d => {
+      const el = driveEligibility(s, d);
+      return `<tr>
+        <td>${esc(companyName(d.companyId))}</td>
+        <td>${esc(d.jobRole || '—')}</td>
+        <td>${d.package ? money(d.package) : '—'}</td>
+        <td>${esc(d.location || '—')}</td>
+        <td>${esc(d.appEndDate || d.driveDate || '—')}</td>
+        <td>${el.ok ? `<span class="pill green">Eligible</span>`
+          : `<span class="pill red">Not eligible</span>
+             <div class="pl-why">${esc(el.reasons.join(' · '))}</div>`}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="6" class="empty">No drives are open right now.</td></tr>`;
+
+    const appRows = apps.length ? apps.map(a => `<tr>
+      <td>${esc(driveLabel(a.driveId))}</td>
+      <td>${esc(a.appliedOn || '—')}</td>
+      <td><span class="pill ${APP_PILL[a.status] || 'blue'}">${esc(a.status || '—')}</span></td>
+      <td>${esc(a.remarks || '—')}</td></tr>`).join('')
+      : `<tr><td colspan="4" class="empty">You have not been put forward for any drive yet.</td></tr>`;
+
+    const ivRows = ivs.length ? ivs.map(i => `<tr>
+      <td>${esc(driveLabel(i.driveId))}</td>
+      <td>${esc(i.round || '—')}</td>
+      <td>${esc(i.date || '—')}${i.time ? ' · ' + esc(i.time) : ''}</td>
+      <td>${esc(i.mode || '—')}${i.venue ? ' · ' + esc(i.venue) : ''}</td>
+      <td><span class="pill ${IV_PILL[i.status] || 'blue'}">${esc(i.status || '—')}</span></td></tr>`).join('')
+      : `<tr><td colspan="5" class="empty">No interviews scheduled.</td></tr>`;
+
+    const offerRows = offers.length ? offers.map(o => `<tr>
+      <td>${esc(companyName(o.companyId))}</td>
+      <td>${esc(o.jobRole || '—')}</td>
+      <td>${o.package ? money(o.package) : '—'}</td>
+      <td>${esc(o.offerDate || '—')}</td>
+      <td>${esc(o.joiningDate || '—')}</td>
+      <td><span class="pill ${OFFER_PILL[o.status] || 'blue'}">${esc(o.status || '—')}</span></td></tr>`).join('')
+      : `<tr><td colspan="6" class="empty">No offers yet.</td></tr>`;
+
+    return `<div class="panel">
+      <div class="panel-head"><h3>Placement Status</h3>
+        <span class="pill ${st.pill}">${esc(st.label)}</span></div>
+      <p class="pl-detail">${esc(st.detail)}</p>
+      <div class="stat-grid" style="margin-top:14px">
+        ${statCard('📨', apps.length, 'Applications')}
+        ${statCard('🎤', ivs.length, 'Interviews', 'c2')}
+        ${statCard('📜', offers.length, 'Offers', 'c3')}
+        ${statCard('🚀', drivesOpenToStudent(s).length, 'Drives You Qualify For', 'c2')}
+      </div></div>
+
+    <div class="panel"><div class="panel-head"><h3>Your Eligibility</h3></div>
+      <p class="pl-detail">These are the figures every drive is matched against. A wrong
+        CGPA or backlog count is corrected by the office, not here.</p>
+      <div class="tbl-wrap"><table><tbody>
+        <tr><td style="font-weight:600;width:200px">CGPA</td><td>${cg === null ? '— (not on record)' : cg}</td></tr>
+        <tr><td style="font-weight:600">Active Backlogs</td><td>${+s.backlogs || 0}</td></tr>
+        <tr><td style="font-weight:600">Branch</td><td>${esc(s.branch || '—')}</td></tr>
+        <tr><td style="font-weight:600">Course</td><td>${esc(s.course || '—')}</td></tr>
+        <tr><td style="font-weight:600">Batch</td><td>${esc(s.batch || '—')}</td></tr>
+      </tbody></table></div></div>
+
+    <div class="panel"><div class="panel-head"><h3>Open Drives</h3></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Company</th><th>Role</th><th>Package</th><th>Location</th><th>Apply By</th><th>Eligibility</th>
+      </tr></thead><tbody>${driveRows}</tbody></table></div></div>
+
+    <div class="panel"><div class="panel-head"><h3>Your Applications</h3></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Drive</th><th>Applied On</th><th>Status</th><th>Remarks</th>
+      </tr></thead><tbody>${appRows}</tbody></table></div></div>
+
+    <div class="panel"><div class="panel-head"><h3>Your Interviews</h3></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Drive</th><th>Round</th><th>When</th><th>Mode</th><th>Status</th>
+      </tr></thead><tbody>${ivRows}</tbody></table></div></div>
+
+    <div class="panel"><div class="panel-head"><h3>Your Offers</h3></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Company</th><th>Role</th><th>Package</th><th>Offered On</th><th>Joining</th><th>Status</th>
+      </tr></thead><tbody>${offerRows}</tbody></table></div></div>`;
   }
 
   /* ---------- one place every placement number comes from ---------- */

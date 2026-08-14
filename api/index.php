@@ -196,7 +196,9 @@ function guard_request(string $resource, string $method): void
     }
 
     if (in_array($resource, PLACEMENT_COLLECTIONS, true)) {
-        if ($isWrite ? !may_touch_placement() : !may_read_placement()) {
+        $studentMayRead = !$isWrite && current_role() === 'student'
+            && in_array($resource, array_merge(PLACEMENT_STUDENT_OPEN, PLACEMENT_STUDENT_OWN), true);
+        if (!$studentMayRead && ($isWrite ? !may_touch_placement() : !may_read_placement())) {
             send_json(['error' => 'forbidden'], 403);
         }
     }
@@ -245,8 +247,13 @@ function api_bootstrap(): void
             continue;
         }
         if (!$placement && in_array($col, PLACEMENT_COLLECTIONS, true)) {
-            $out[$col] = [];
-            continue;
+            // a student still gets the drives on offer and their own records;
+            // scope_rows below is what keeps other students' rows out
+            $isStudent = current_role() === 'student';
+            if (!$isStudent || !in_array($col, array_merge(PLACEMENT_STUDENT_OPEN, PLACEMENT_STUDENT_OWN), true)) {
+                $out[$col] = [];
+                continue;
+            }
         }
         if (!$finance && in_array($col, FINANCE_COLLECTIONS, true)) {
             $out[$col] = [];
@@ -256,14 +263,30 @@ function api_bootstrap(): void
             $out[$col] = [];
             continue;
         }
-        $out[$col] = array_map(fn($r) => row_out($col, $r), fetch_all('SELECT * FROM ' . qi($col)));
+        $rows = scope_rows($col, fetch_all('SELECT * FROM ' . qi($col)));
+        $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
     }
     send_json($out);
 }
 
+/**
+ * Rows the caller is allowed to see. A student reading their own placement
+ * records gets exactly theirs — the filter lives here so it applies to
+ * /api/{collection} and to the bootstrap payload alike.
+ */
+function scope_rows(string $col, array $rows): array
+{
+    if (current_role() !== 'student' || !in_array($col, PLACEMENT_STUDENT_OWN, true)) {
+        return $rows;
+    }
+    $sid = current_user()['refId'] ?? null;
+    return array_values(array_filter($rows, fn($r) => ($r['studentId'] ?? null) === $sid));
+}
+
 function api_list(string $col): void
 {
-    send_json(array_map(fn($r) => row_out($col, $r), fetch_all('SELECT * FROM ' . qi($col))));
+    $rows = scope_rows($col, fetch_all('SELECT * FROM ' . qi($col)));
+    send_json(array_map(fn($r) => row_out($col, $r), $rows));
 }
 
 /**

@@ -259,6 +259,14 @@ const PLACEMENT_VIEW_ROLES = ['admin', 'placement_officer', 'center_head'];
  */
 const PLACEMENT_READABLE = ['students', 'courses', 'marks', 'events', 'users', 'settings', 'syllabus'];
 
+/* ---------------- what a student sees of the placement cell ----------------
+   Which companies are visiting and on what terms is the whole point of the
+   cell, so those are open. Applications, interviews and offers name specific
+   students, so a student gets their own rows and nobody else's — filtered on
+   the server, not merely hidden by the UI. Students never write any of it. */
+const PLACEMENT_STUDENT_OPEN = ['companies', 'drives', 'placementevents'];
+const PLACEMENT_STUDENT_OWN  = ['applications', 'interviews', 'offers'];
+
 /* ---------------- curriculum ----------------
    The syllabus is a teaching document, so the accounts office has no business
    in it and everyone else does. Reads are refused for the roles below rather
