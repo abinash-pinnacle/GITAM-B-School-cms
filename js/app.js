@@ -178,7 +178,11 @@
       await Store.load();
       startApp();
     } catch (err) {
-      $('#loginError').textContent = 'Cannot reach server. Run: python server.py';
+      // Sign-in itself can succeed and the load right after it still fail, so
+      // this must not claim the server is unreachable — and telling a college
+      // office to run a dev server was never useful advice.
+      $('#loginError').textContent =
+        'Signed in, but the app could not load its data. Please try again in a moment.';
     } finally {
       btn.disabled = false; btn.textContent = 'Sign In';
     }

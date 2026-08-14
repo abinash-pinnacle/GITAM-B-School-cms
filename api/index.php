@@ -365,29 +365,12 @@ $resource = $seg[0] ?? '';
 $id = $seg[1] ?? null;
 $isCollection = isset(COLLECTIONS[$resource]) && $resource !== '';
 
-try {
-    if ($method === 'OPTIONS') {
-        http_response_code(204);
-        exit;
-    }
-
-    // Plain /api/health is a liveness check and must not touch the database —
-    // the platform restarts the container when it fails, and a database
-    // outage is not something a restart fixes. /api/health?db=1 is the
-    // deliberate deep check: it reports whether the database is reachable.
-    if ($method === 'GET' && $resource === 'health') {
-        if (!isset($_GET['db'])) {
-            send_json(['ok' => true]);
-        }
-        try {
-            db()->query('SELECT 1');
-            send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()]);
-        } catch (Throwable $e) {
-            error_log('[nmiet-api] health db: ' . $e->getMessage());
-            send_json(['ok' => false, 'db' => 'error'] + debug_detail($e), 503);
-        }
-    }
-
+/**
+ * Everything after the health check, in one callable so it can be retried
+ * once if the schema turns out to be behind (see the catch below).
+ */
+function dispatch(string $method, string $resource, ?string $id, bool $isCollection): void
+{
     ensure_schema();
     guard_request($resource, $method);
 
@@ -414,8 +397,54 @@ try {
     }
 
     send_json(['error' => 'not found'], 404);
+}
+
+/** SQLSTATEs meaning "that table/column is not there" on MySQL or Postgres. */
+const SCHEMA_BEHIND = ['42703', '42P01', '42S02', '42S22'];
+
+try {
+    if ($method === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
+
+    // Plain /api/health is a liveness check and must not touch the database —
+    // the platform restarts the container when it fails, and a database
+    // outage is not something a restart fixes. /api/health?db=1 is the
+    // deliberate deep check: it reports whether the database is reachable.
+    if ($method === 'GET' && $resource === 'health') {
+        if (!isset($_GET['db'])) {
+            send_json(['ok' => true]);
+        }
+        try {
+            db()->query('SELECT 1');
+            send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()]);
+        } catch (Throwable $e) {
+            error_log('[nmiet-api] health db: ' . $e->getMessage());
+            send_json(['ok' => false, 'db' => 'error'] + debug_detail($e), 503);
+        }
+    }
+
+    try {
+        dispatch($method, $resource, $id, $isCollection);
+    } catch (PDOException $e) {
+        // The schema is created and migrated on first use, and _meta records
+        // that it is current. If a table or column is missing anyway — the
+        // signature said "done" while an ALTER never landed — one blind retry
+        // beats serving 500s until someone notices.
+        if (!in_array((string) $e->getCode(), SCHEMA_BEHIND, true)) {
+            throw $e;
+        }
+        error_log('[nmiet-api] schema behind (' . $e->getCode() . '), rebuilding: ' . $e->getMessage());
+        init_db();
+        dispatch($method, $resource, $id, $isCollection);
+    }
 } catch (Throwable $e) {
     error_log('[nmiet-api] ' . $e->getMessage());
+    // The SQLSTATE names the kind of failure without revealing the query, the
+    // schema or the connection details, and it is what makes a production-only
+    // failure diagnosable without turning APP_DEBUG on.
+    $extra = $e instanceof PDOException && $e->getCode() ? ['code' => (string) $e->getCode()] : [];
     send_json(['error' => 'server error', 'message' => 'Server error — please try again.']
-        + debug_detail($e), 500);
+        + $extra + debug_detail($e), 500);
 }
