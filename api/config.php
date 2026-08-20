@@ -69,6 +69,11 @@ function db_config(): array
     ];
 }
 
+/* Bump when the demo data in seed_data() changes. It rides along in the
+   schema signature, so an install still carrying the previous demo set
+   re-runs init_db() once and picks the new one up. */
+const SEED_REVISION = '2026-08-15-mba-mca';
+
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name'],

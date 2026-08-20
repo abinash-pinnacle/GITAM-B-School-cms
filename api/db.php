@@ -300,9 +300,16 @@ function seed_staff_login(string $role, string $table, string $username): void
     ]);
 }
 
+/**
+ * Changes whenever the tables or the demo data change. SEED_REVISION is in it
+ * because seeding fills empty tables only: without it, a table emptied on
+ * purpose stays empty for good, and a rewritten demo set never reaches a
+ * database that was created before it. A live install with real data is
+ * unaffected either way — init_db() never overwrites a table that has rows.
+ */
 function schema_signature(): string
 {
-    return substr(md5(json_encode(COLLECTIONS)), 0, 16);
+    return substr(md5(json_encode(COLLECTIONS) . '|' . SEED_REVISION), 0, 16);
 }
 
 function mark_schema_ready(): void
