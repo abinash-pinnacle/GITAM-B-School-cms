@@ -254,6 +254,10 @@ a{color:var(--primary);text-decoration:none}
 .filter-sel{padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}
 .days-field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap}
 .days-field input{width:78px}
+/* 78px is right for a two-digit day count and far too narrow for a date:
+   Chrome truncated "dd-mm-yyyy" to "dd-r" and left no room for the
+   calendar button. */
+.days-field input[type="date"]{width:152px}
 
 /* ===== TABLES ===== */
 .tbl-wrap{overflow-x:auto}

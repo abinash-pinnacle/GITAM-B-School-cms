@@ -541,7 +541,7 @@
     // ---- welcome banner ----
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(user.name.split(' ').slice(-1)[0] || user.name)} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
         <p>NMIET B-SCHOOL College Management System · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>🎓 ${nStu} students</span><span>📚 ${nCou} courses</span>
@@ -627,6 +627,13 @@
   }
 
   // greeting + date helpers for the dashboard banner
+  /* The name a person is called by. "Ms. Kavita Menon" greeted as "Menon" reads
+     like a summons; the honorific is dropped and the given name used. */
+  function firstName(full) {
+    return String(full || '').split(/\s+/)
+      .filter(w => w && !/^(dr|prof|mr|mrs|ms|miss|shri|smt)\.?$/i.test(w))[0] || String(full || '');
+  }
+
   function greeting() {
     const h = new Date().getHours();
     return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -664,7 +671,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc((user.name || '').split(' ').slice(-1)[0])} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
         <p>${esc(f.designation || 'Faculty')} · ${esc(f.department || '')} · ${prettyDate()}</p>
         <div class="wb-chips"><span>📚 ${classes.length} classes assigned</span><span>🎓 ${studentSet.length} students</span></div>
       </div>
@@ -872,7 +879,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc((s.name || '').split(' ')[0])} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(s.name))} 👋</h2>
         <p>${esc(s.branch)} · Semester ${s.semester} · Section ${esc(s.section)} · Reg No ${esc(s.roll)}</p>
         <div class="wb-chips"><span>📅 ${prettyDate()}</span></div>
       </div>
@@ -2420,8 +2427,7 @@
         const sems = new Set(rows.map(r => r.semester));
         $('#sylStats').innerHTML = `${statCard('🌿', branches.size, 'Specialisations')}
           ${statCard('🎯', sems.size, 'Semesters', 'c2')}
-          ${statCard('📘', rows.length, 'Subjects', 'c3')}
-          ${statCard('🧪', rows.filter(r => r.type === 'Lab').length, 'Labs', 'c3')}`;
+          ${statCard('📘', rows.length, 'No. of Papers', 'c3')}`;
 
         // one block per branch, and inside it one table per semester
         const byBranch = new Map();
@@ -4857,7 +4863,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc((user.name || '').split(' ')[0] || 'Accounts')} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name) || 'Accounts')} 👋</h2>
         <p>Accounts &amp; Finance Office · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>Collection ${collPct}%</span>
@@ -7719,7 +7725,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc((user.name || '').split(' ').slice(-1)[0] || user.name)} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
         <p>Center Head · College-wide monitoring · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>🎓 ${students.length} students</span><span>👨‍🏫 ${faculty.length} faculty</span>
@@ -8609,8 +8615,18 @@
   const DRIVE_STATUS     = ['Draft', 'Published', 'Ongoing', 'Completed', 'Cancelled'];
   const APP_STATUS       = ['Applied', 'Shortlisted', 'Rejected', 'Selected', 'Withdrawn'];
   const INTERVIEW_STATUS = ['Scheduled', 'Completed', 'Cancelled', 'No Show'];
-  const OFFER_STATUS     = ['Offered', 'Accepted', 'Declined', 'Joined', 'Revoked'];
+  /* An offer does not end at "Joined". A student can accept and never turn up,
+     or join and leave within weeks — and the cell is asked for both numbers.
+     Neither counts as placed. */
+  const OFFER_STATUS     = ['Offered', 'Accepted', 'Declined', 'Joined', 'Not Joined', 'Left', 'Revoked'];
+  const OFFER_ENDED_STATUS = ['Not Joined', 'Left'];
   const INTERVIEW_MODES  = ['Offline', 'Online', 'Telephonic'];
+  /* What the cell is running, in its own words: a company visits campus, or
+     recruits off it, or takes summer interns, or comes through the national
+     test. An interview is either the real thing or practice for it. */
+  const DRIVE_TYPES      = ['On Campus', 'Off Campus', 'Summer Placement', 'NTA'];
+  const INTERVIEW_TYPES  = ['Final', 'Mock'];
+  const ENGAGEMENT_TYPES = ['Final Placement', 'Summer Internship'];
   const PL_EVENT_TYPES   = ['Drive', 'Interview', 'Pre-Placement Talk', 'Test', 'Other'];
   const JOB_LOCATIONS    = ['Bengaluru', 'Hyderabad', 'Pune', 'Chennai', 'Mumbai', 'Delhi NCR',
                             'Kolkata', 'Bhubaneswar', 'Remote'];
@@ -8622,7 +8638,8 @@
   const DRIVE_PILL = { Draft:'blue', Published:'green', Ongoing:'amber', Completed:'blue', Cancelled:'red' };
   const APP_PILL   = { Applied:'blue', Shortlisted:'amber', Rejected:'red', Selected:'green', Withdrawn:'red' };
   const IV_PILL    = { Scheduled:'amber', Completed:'green', Cancelled:'red', 'No Show':'red' };
-  const OFFER_PILL = { Offered:'amber', Accepted:'green', Declined:'red', Joined:'green', Revoked:'red' };
+  const OFFER_PILL = { Offered:'amber', Accepted:'green', Declined:'red', Joined:'green',
+                       'Not Joined':'red', Left:'red', Revoked:'red' };
   const PLEV_PILL  = { Drive:'green', Interview:'amber', 'Pre-Placement Talk':'blue', Test:'blue', Other:'blue' };
 
   /* ---------- lookups ---------- */
@@ -8702,6 +8719,14 @@
   function isPlaced(sid) { return !!placedOffer(sid); }
   /** the single label shown wherever a student's placement standing appears */
   function placementStatusOf(sid) {
+    // an offer that ended badly outranks anything earlier in the pipeline —
+    // "Applied" would be a misleading thing to show about such a student
+    const ended = studentOffers(sid).find(o => OFFER_ENDED_STATUS.includes(o.status));
+    if (ended) {
+      return { label: ended.status, pill: 'red',
+               detail: [companyName(ended.companyId), ended.exitReason].filter(Boolean).join(' · ')
+                       || companyName(ended.companyId) };
+    }
     const off = placedOffer(sid);
     if (off) return { label: off.status === 'Joined' ? 'Joined' : 'Placed', pill: 'green',
                       detail: `${companyName(off.companyId)} · ${money(off.package)}` };
@@ -8874,8 +8899,11 @@
     // a student already placed was eligible by definition, so never divide by
     // a denominator smaller than the number placed
     const denom = Math.max(eligible.length, placedIds.size);
+    // eligible for at least one drive and not placed — the number the cell is
+    // actually chasing, which no screen showed
+    const unplaced = eligible.filter(s => !placedIds.has(s.id)).length;
     return {
-      students: students.length, eligible: eligible.length, denom,
+      students: students.length, eligible: eligible.length, denom, unplaced,
       companies: Store.all('companies').length,
       drives: Store.all('drives').length, activeDrives: openDrives().length,
       applications: Store.all('applications').length,
@@ -8983,7 +9011,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc((user.name || '').split(' ').slice(-1)[0] || user.name)} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
         <p>Training &amp; Placement Cell · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>🏢 ${st.companies} companies</span><span>🚀 ${st.activeDrives} active drives</span>
@@ -9017,6 +9045,7 @@
         ${statCard('📨', st.applications, 'Applications')}
         ${statCard('🎯', st.selected, 'Selected Students', 'c3')}
         ${statCard('🏆', st.placed, 'Placed Students', 'c3')}
+        ${statCard('🔍', st.unplaced, 'Unplaced Students', 'c4')}
         ${statCard('📈', st.pct + '%', `Placement (of ${st.denom} eligible)`, st.pct >= 50 ? 'c3' : 'c4')}
         ${statCard('💰', money(st.highest), 'Highest Package', 'c3')}
         ${statCard('📊', money(st.average), 'Average Package', 'c2')}
@@ -9102,13 +9131,15 @@
         <select class="filter-sel" id="psStatus"><option value="">All Placement Statuses</option>
           <option>Placed</option><option>Joined</option><option>Offer Pending</option>
           <option>Selected</option><option>In Process</option><option>Applied</option>
+          <option>Not Joined</option><option>Left</option>
           <option>Eligible</option><option>Not Eligible</option></select>
         <button class="btn-outline btn-sm" id="psClear">Clear</button>
       </div>
       <div id="psStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th style="text-align:right">CGPA</th>
-        <th style="text-align:right">Backlogs</th><th>Eligibility</th><th>Placement Status</th><th>Actions</th>
+        <th style="text-align:right">Attendance</th><th>Eligibility</th><th>Placement Status</th>
+        <th>Actions</th><th style="text-align:right">Backlogs</th>
       </tr></thead><tbody id="psBody"></tbody></table></div><div id="psPager"></div></div>`;
 
     viewPlacementStudents.after = () => {
@@ -9124,6 +9155,7 @@
           return {
             sid: s.id, roll: s.roll || '', name: s.name || '', branch: s.branch || '—',
             semester: s.semester || '', cgpa: studentCgpa(s) ?? '—', backlogs: +s.backlogs || 0,
+            attendance: studentAttendancePct(s.id),
             eligibleDrives: open.length, status: status.label, pill: status.pill, detail: status.detail,
             driveEligible: el, student: s,
           };
@@ -9140,18 +9172,21 @@
         $('#psStats').innerHTML = `${statCard('🎓', rows.length, 'Students Listed')}
           ${statCard('✅', rows.filter(r => r.eligibleDrives > 0).length, 'Eligible for a Drive', 'c3')}
           ${statCard('🏆', rows.filter(r => ['Placed', 'Joined'].includes(r.status)).length, 'Placed', 'c3')}
+          ${statCard('🔍', rows.filter(r => r.eligibleDrives > 0 && !['Placed', 'Joined'].includes(r.status)).length, 'Unplaced', 'c2')}
           ${statCard('⏳', rows.filter(r => ['Applied', 'In Process', 'Selected', 'Offer Pending'].includes(r.status)).length, 'In Process', 'c2')}`;
         $('#psBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.branch)}</td>
           <td>${esc(String(r.semester))}</td>
           <td style="text-align:right">${esc(String(r.cgpa))}</td>
-          <td style="text-align:right${r.backlogs ? ';color:var(--red);font-weight:600' : ''}">${r.backlogs}</td>
+          <td style="text-align:right">${r.attendance === null ? '—' : r.attendance + '%'}</td>
           <td><span class="pill ${r.eligibleDrives ? 'green' : 'red'}">${r.eligibleDrives} drive(s)</span></td>
           <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
             <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Placement history">👁 History</button>
-          </div></td></tr>`).join('')
-          : `<tr><td colspan="9" class="empty">No students match these filters.</td></tr>`;
+          </div></td>
+          <td style="text-align:right${r.backlogs ? ';color:var(--red);font-weight:600' : ''}">${r.backlogs}</td>
+        </tr>`).join('')
+          : `<tr><td colspan="10" class="empty">No students match these filters.</td></tr>`;
         $('#psBody').querySelectorAll('[data-hist]').forEach(b =>
           b.onclick = () => studentPlacementModal(b.dataset.hist));
         $('#psPager').innerHTML = pagerHtml(rows.length, page);
@@ -9174,10 +9209,11 @@
             { header: 'Specialisation', key: 'branch', width: 10 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'CGPA', key: 'cgpa', width: 9 },
-            { header: 'Backlogs', key: 'backlogs', width: 10, type: 'number' },
+            { header: 'Attendance %', key: 'attendance', width: 13 },
             { header: 'Eligible Drives', key: 'eligibleDrives', width: 15, type: 'number' },
             { header: 'Placement Status', key: 'status', width: 18 },
             { header: 'Detail', key: 'detail', width: 34 },
+            { header: 'Backlogs', key: 'backlogs', width: 10, type: 'number' },
           ],
           rows,
           totals: { roll: 'TOTAL', name: rows.length + ' students' },
@@ -9268,7 +9304,7 @@
       </div>
       <div id="coStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>ID</th><th>Company</th><th>Industry</th><th>Location</th><th>HR Contact</th>
+        <th>ID</th><th>Company</th><th>Industry</th><th>Recruits For</th><th>Location</th><th>HR Contact</th>
         <th style="text-align:right">Drives</th><th style="text-align:right">Placed</th><th>Actions</th>
       </tr></thead><tbody id="coBody"></tbody></table></div><div id="coPager"></div></div>`;
 
@@ -9301,7 +9337,9 @@
         $('#coBody').innerHTML = rows.length ? pageSlice(rows, page).map(c => `<tr>
           <td class="mono">${esc(c.id)}</td>
           <td><strong>${esc(c.name)}</strong>${c.website ? `<br><small style="color:var(--muted)">${esc(c.website)}</small>` : ''}</td>
-          <td>${esc(c.industry || '—')}</td><td>${esc(c.location || '—')}</td>
+          <td>${esc(c.industry || '—')}</td>
+          <td>${esc(c.engagementType || 'Final Placement')}</td>
+          <td>${esc(c.location || '—')}</td>
           <td><small>${esc(c.hr)}</small></td>
           <td style="text-align:right">${c.driveCount}</td>
           <td style="text-align:right">${c.placed}</td>
@@ -9361,6 +9399,8 @@
       <div class="form-grid">
         <div class="field full"><label>Company Name</label><input name="name" value="${esc(c.name || '')}" required></div>
         <div class="field"><label>Industry</label><input name="industry" placeholder="e.g. IT Services" value="${esc(c.industry || '')}"></div>
+        <div class="field"><label>Recruits For</label>
+          <select name="engagementType">${optionsFrom(ENGAGEMENT_TYPES, c.engagementType || ENGAGEMENT_TYPES[0])}</select></div>
         <div class="field"><label>Location</label><input name="location" list="coLocList" value="${esc(c.location || '')}">
           <datalist id="coLocList">${JOB_LOCATIONS.map(l => `<option>${esc(l)}</option>`).join('')}</datalist></div>
         <div class="field full"><label>Website</label><input name="website" type="url" placeholder="https://example.com" value="${esc(c.website || '')}"></div>
@@ -9378,6 +9418,14 @@
       const d = formData(e.target);
       if (!d.name) { toast('Company name is required.', 'err'); return; }
       if (!phoneValid(d.hrPhone)) { toast('HR phone must be exactly 10 digits.', 'err'); return; }
+      // one HR number belongs to one company — a repeat almost always means
+      // the same company entered twice under a slightly different name
+      const phoneClash = Store.all('companies').find(x =>
+        x.id !== id && String(x.hrPhone || '') === String(d.hrPhone || '') && d.hrPhone);
+      if (phoneClash) {
+        toast(`That HR number is already saved against ${phoneClash.name}.`, 'err');
+        return;
+      }
       if (id) Store.update('companies', id, d); else Store.add('companies', d);
       closeModal(); toast('Company saved.'); after ? after() : render();
     };
@@ -9432,7 +9480,7 @@
       </div>
       <div id="drStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>ID</th><th>Company</th><th>Role</th><th style="text-align:right">Package</th>
+        <th>ID</th><th>Company</th><th>Role</th><th>Type</th><th style="text-align:right">Package</th>
         <th>Eligibility</th><th>Drive Date</th><th style="text-align:right">Eligible</th>
         <th style="text-align:right">Applied</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="drBody"></tbody></table></div><div id="drPager"></div></div>`;
@@ -9474,6 +9522,7 @@
         $('#drBody').innerHTML = rows.length ? pageSlice(rows, page).map(d => `<tr>
           <td class="mono">${esc(d.id)}</td><td>${esc(d.company)}</td>
           <td><strong>${esc(d.jobRole || '—')}</strong>${d.location ? `<br><small style="color:var(--muted)">${esc(d.location)}</small>` : ''}</td>
+          <td>${esc(d.driveType || 'On Campus')}</td>
           <td style="text-align:right">${money(d.package)}</td>
           <td><small>${esc(d.criteria)}</small></td>
           <td>${esc(d.driveDate || '—')}</td>
@@ -9553,6 +9602,8 @@
       <div class="form-grid">
         <div class="field"><label>Company</label><select name="companyId" required>${companyOptions(d.companyId)}</select></div>
         <div class="field"><label>Job Role</label><input name="jobRole" placeholder="e.g. Systems Engineer" value="${esc(d.jobRole || '')}" required></div>
+        <div class="field"><label>Drive Type</label>
+          <select name="driveType">${optionsFrom(DRIVE_TYPES, d.driveType || DRIVE_TYPES[0])}</select></div>
         <div class="field"><label>Package (₹ per annum)</label><input name="package" id="drPkg" inputmode="numeric" value="${esc(d.package || '')}"></div>
         <div class="field"><label>Job Location</label><input name="location" list="drLocList" value="${esc(d.location || '')}">
           <datalist id="drLocList">${JOB_LOCATIONS.map(l => `<option>${esc(l)}</option>`).join('')}</datalist></div>
@@ -9881,7 +9932,7 @@
       </div>
       <div id="ivStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>ID</th><th>Student</th><th>Drive</th><th style="text-align:right">Round</th>
+        <th>ID</th><th>Student</th><th>Drive</th><th>Type</th><th style="text-align:right">Round</th>
         <th>Date &amp; Time</th><th>Mode</th><th>Venue</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="ivBody"></tbody></table></div><div id="ivPager"></div></div>`;
 
@@ -9919,6 +9970,7 @@
           <td class="mono">${esc(i.id)}</td>
           <td>${esc(i.name)}<br><small style="color:var(--muted)">${esc(i.roll)}</small></td>
           <td>${esc(i.jobRole)}<br><small style="color:var(--muted)">${esc(i.company)}</small></td>
+          <td>${esc(i.interviewType || 'Final')}</td>
           <td style="text-align:right">${esc(String(i.round || 1))}</td>
           <td>${esc(i.when)}</td><td>${esc(i.mode || '—')}</td><td>${esc(i.venue || '—')}</td>
           <td><span class="pill ${IV_PILL[i.status] || 'blue'}">${esc(i.status || 'Scheduled')}</span></td>
@@ -9989,6 +10041,8 @@
       <div class="form-grid">
         <div class="field full"><label>Application</label>
           <select name="applicationId" id="ivfApp" required>${list.map(appOption).join('')}</select></div>
+        <div class="field"><label>Interview Type</label>
+          <select name="interviewType">${optionsFrom(INTERVIEW_TYPES, iv.interviewType || INTERVIEW_TYPES[0])}</select></div>
         <div class="field"><label>Round</label><input name="round" type="number" min="1" max="10" value="${esc(iv.round || 1)}"></div>
         <div class="field"><label>Mode</label><select name="mode">${optionsFrom(INTERVIEW_MODES, iv.mode || 'Offline')}</select></div>
         <div class="field"><label>Date</label><input name="date" type="date" value="${esc(iv.date || today())}" required></div>
@@ -10236,13 +10290,26 @@
         <div class="field"><label>Offer Date</label><input name="offerDate" type="date" value="${esc(o.offerDate || today())}"></div>
         <div class="field"><label>Joining Date</label><input name="joiningDate" type="date" value="${esc(o.joiningDate || '')}"></div>
         <div class="field full"><label>Offer Status</label>
-          <select name="status">${optionsFrom(OFFER_STATUS, o.status || 'Offered')}</select></div>
+          <select name="status" id="offStatus">${optionsFrom(OFFER_STATUS, o.status || 'Offered')}</select></div>
+        <div class="field ${OFFER_ENDED_STATUS.includes(o.status) ? '' : 'hidden'}" id="offExitWrap">
+          <label>Left On</label>
+          <input name="exitDate" type="date" value="${esc(o.exitDate || '')}"></div>
+        <div class="field full ${OFFER_ENDED_STATUS.includes(o.status) ? '' : 'hidden'}" id="offReasonWrap">
+          <label>Reason</label>
+          <input name="exitReason" id="offReason" value="${esc(o.exitReason || '')}"
+                 placeholder="Why the student did not join, or left"></div>
         ${offerLetterField(o.offerLetter, o.offerLetterName)}
         <div class="field full"><label>Remarks</label><textarea name="remarks" rows="2">${esc(o.remarks || '')}</textarea></div>
       </div>
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
         <button type="submit" class="btn-primary">Save Offer</button></div></form>`, true);
     $('#cx').onclick = closeModal;
+    // the reason only makes sense for the two statuses that need explaining
+    $('#offStatus').onchange = () => {
+      const ended = OFFER_ENDED_STATUS.includes($('#offStatus').value);
+      $('#offReasonWrap').classList.toggle('hidden', !ended);
+      $('#offExitWrap').classList.toggle('hidden', !ended);
+    };
     bindAmountInput($('#offPkg'));
     bindOfferLetterField();
 
@@ -10507,6 +10574,7 @@
     ['drive', '🚀 Drive Report'],
     ['application', '📨 Application Report'],
     ['unplaced', '⏳ Unplaced Students'],
+    ['left', '🚪 Not Joined / Left'],
   ];
   let plReport = 'placement';
 
@@ -10818,6 +10886,56 @@
         ],
         rows,
         totals: { id: 'TOTAL', roll: rows.length + ' applications' },
+      };
+    }
+
+    if (kind === 'left') {
+      /* A student who took an offer and then did not turn up, or left within
+         weeks, is a placement the cell has to explain and often refill. Neither
+         shows up in the placed figures, so without this they show up nowhere. */
+      const SHORT_STAY_DAYS = 31;
+      const rows = Store.all('offers')
+        .filter(o => OFFER_ENDED_STATUS.includes(o.status))
+        .map(o => {
+          const stu = Store.find('students', o.studentId) || {};
+          // how long they lasted, when both dates are known
+          const joined = o.joiningDate ? new Date(o.joiningDate) : null;
+          const ended = o.exitDate ? new Date(o.exitDate) : null;
+          const days = joined && ended ? Math.round((ended - joined) / 86400000) : null;
+          return {
+            roll: stu.roll || '—', name: stu.name || '—', branch: stu.branch || '—',
+            company: companyName(o.companyId), jobRole: o.jobRole || '—',
+            package: +o.package || 0, joiningDate: o.joiningDate || '—',
+            status: o.status, days: days === null ? '—' : days,
+            shortStay: days !== null && days <= SHORT_STAY_DAYS,
+            reason: o.exitReason || '—',
+          };
+        })
+        .filter(r =>
+          (!f.q || [r.roll, r.name, r.company, r.reason].some(v => String(v).toLowerCase().includes(f.q))) &&
+          (!f.branch || r.branch === f.branch))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      return {
+        title: 'Not Joined / Left Report', sheetName: 'Not Joined or Left', subtitle: stamp,
+        note: `Students who accepted an offer and did not join, or joined and left. A stay of ${SHORT_STAY_DAYS} days or less counts as short.`,
+        stats: [
+          statCard('🚪', rows.length, 'Offers Ended', 'c4'),
+          statCard('🚫', rows.filter(r => r.status === 'Not Joined').length, 'Never Joined', 'c4'),
+          statCard('⏱️', rows.filter(r => r.status === 'Left').length, 'Left After Joining', 'c4'),
+        ],
+        columns: [
+          { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
+          { header: 'Specialisation', key: 'branch', width: 14 },
+          { header: 'Company', key: 'company', width: 24 },
+          { header: 'Designation', key: 'jobRole', width: 22 },
+          { header: 'Package', key: 'package', width: 14, type: 'number' },
+          { header: 'Joining Date', key: 'joiningDate', width: 14 },
+          { header: 'Status', key: 'status', width: 14 },
+          { header: 'Days Stayed', key: 'days', width: 12 },
+          { header: 'Reason', key: 'reason', width: 34 },
+        ],
+        rows,
+        totals: { roll: 'TOTAL', name: rows.length + ' student(s)' },
       };
     }
 

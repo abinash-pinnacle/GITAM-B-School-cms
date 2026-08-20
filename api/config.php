@@ -133,23 +133,27 @@ const COLLECTIONS = [
        One shared set of tables for the admin and the placement officer. Student
        identity is never copied here — every row points at an existing
        `students` / `courses` record by id. */
+    // engagementType: whether this company takes final-year hires or summer interns
     'companies'  => ['id', 'name', 'logo', 'industry', 'website', 'location',
-                     'hrName', 'hrEmail', 'hrPhone', 'description'],
+                     'hrName', 'hrEmail', 'hrPhone', 'description', 'engagementType'],
     // a recruitment drive by one company, with the eligibility rule it enforces
     'drives'     => ['id', 'companyId', 'jobRole', 'jobDescription', 'package', 'location', 'openings',
                      'eligibleCourses', 'eligibleBranches', 'minCgpa', 'maxBacklogs',
                      'driveDate', 'appStartDate', 'appEndDate', 'interviewDate',
-                     'selectionProcess', 'status', 'publishedOn'],
+                     'selectionProcess', 'status', 'publishedOn', 'driveType'],
     // one row per student per drive — the single source for applications,
     // shortlisting and selection (status moves Applied -> ... -> Selected)
     'applications' => ['id', 'studentId', 'driveId', 'appliedOn', 'status',
                        'shortlistedOn', 'remarks', 'updatedBy', 'updatedOn'],
+    // interviewType: the real interview, or a mock run before it
     'interviews' => ['id', 'applicationId', 'studentId', 'driveId', 'round', 'date', 'time',
-                     'mode', 'venue', 'status', 'remarks'],
+                     'mode', 'venue', 'status', 'remarks', 'interviewType'],
     // the offer that follows a selection; `status` = Offered/Accepted/... and
     // an Accepted or Joined offer is what makes a student "Placed"
+    // exitReason explains a 'Not Joined' or 'Left' status — asked for by name
     'offers'     => ['id', 'studentId', 'driveId', 'companyId', 'jobRole', 'package', 'ctc', 'location',
-                     'offerDate', 'joiningDate', 'status', 'offerLetter', 'offerLetterName', 'remarks'],
+                     'offerDate', 'joiningDate', 'status', 'offerLetter', 'offerLetterName', 'remarks',
+                     'exitReason', 'exitDate'],
     // placement calendar: drives, interviews and talks all land here
     'placementevents' => ['id', 'title', 'type', 'date', 'startTime', 'endTime',
                           'companyId', 'driveId', 'venue', 'description'],
