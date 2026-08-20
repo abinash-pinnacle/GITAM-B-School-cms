@@ -1308,7 +1308,11 @@
     $('#f').onsubmit = (e) => {
       e.preventDefault();
       const d = formData(e.target);
-      const regBad = regNoProblem(d.roll, id);
+      // A record enrolled under an older scheme keeps its number: the digits
+      // rule applies to what is being written now, not retrospectively, or
+      // correcting a phone number on a 2019 student would be impossible.
+      const regChanged = !id || String(d.roll || '') !== String(s.roll || '');
+      const regBad = regChanged ? regNoProblem(d.roll, id) : regNoDuplicate(d.roll, id);
       if (regBad) { toast(regBad, 'err'); return; }
       if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
       if (d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
@@ -1335,15 +1339,20 @@
     const n = parseInt(row && row.value, 10);
     return Number.isFinite(n) && n > 0 ? n : DEFAULT_REG_LENGTH;
   }
+  /** Whoever else already holds this number, or null. Checked on every save,
+      old scheme or new — two students with one number is never acceptable. */
+  function regNoDuplicate(roll, excludeId) {
+    const v = String(roll || '').trim();
+    const clash = Store.all('students').find(x => String(x.roll || '') === v && x.id !== excludeId);
+    return clash ? `Registration number ${v} already belongs to ${clash.name}.` : null;
+  }
   /** A message naming what is wrong with this registration number, or null. */
   function regNoProblem(roll, excludeId) {
     const v = String(roll || '').trim();
     const len = regNoLength();
     if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
     if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
-    const clash = Store.all('students').find(x => String(x.roll || '') === v && x.id !== excludeId);
-    if (clash) return `Registration number ${v} already belongs to ${clash.name}.`;
-    return null;
+    return regNoDuplicate(v, excludeId);
   }
 
   function ensureStudentLogin(s) {
