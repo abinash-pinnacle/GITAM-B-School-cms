@@ -1212,8 +1212,8 @@
         <div class="field"><label>Phone</label><input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone||'')}"></div>
         <div class="field"><label>Course</label><select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
         <div class="field"><label>Branch</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
-        <div class="field"><label>Year</label><input name="year" type="number" min="1" max="4" value="${s.year||1}"></div>
-        <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="8" value="${s.semester||1}"></div>
+        <div class="field"><label>Year</label><input name="year" type="number" min="1" max="2" value="${s.year||1}"></div>
+        <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${s.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(s.section||'A')}"></div>
         <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
         ${photoField(s.photo)}
@@ -1282,7 +1282,7 @@
         { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
         { key:'batch', header:'Batch' },
       ],
-      sample: ['21CS010','Rahul Das','rahul@nmiet.in','9810000010','B.Tech','CSE',3,5,'A','2026-27','8.2',0,'2021-2025'],
+      sample: ['25MBA010','Rahul Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A','2026-27','8.2',0,'2025-2027'],
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
@@ -1306,8 +1306,8 @@
         { key:'username', header:'Username', store:false },
         { key:'password', header:'Password', store:false },
       ],
-      sample: ['NM-F-1010','Dr. Meena Sahu','Computer Science','Assistant Professor','meena@nmiet.edu',
-               '9876500010','Ph.D. (CSE)','Machine Learning','4 journal papers','NM-F-1001','meena','pass123'],
+      sample: ['NM-F-1010','Dr. Meena Sahu','MBA','Assistant Professor','meena@nmiet.edu',
+               '9876500010','Ph.D. (Management)','Marketing Analytics','4 journal papers','NM-F-1001','meena','pass123'],
       login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
                          role: 'faculty', name: row.name }),
     },
@@ -1526,7 +1526,7 @@
      Move a whole batch up (or back) a semester in one go, instead of opening
      every student record. Nothing is written until the admin sees exactly which
      students will change and confirms. */
-  const MAX_SEMESTER = 8;
+  const MAX_SEMESTER = 4;
   // year follows the semester: sem 1-2 -> year 1, 3-4 -> year 2, and so on
   const yearForSemester = (sem) => Math.max(1, Math.ceil((+sem || 1) / 2));
 
@@ -2462,7 +2462,7 @@
         <div class="field"><label>Course Code</label><input name="code" value="${esc(c.code||'')}" required></div>
         <div class="field"><label>Course Name</label><input name="name" value="${esc(c.name||'')}" required></div>
         <div class="field"><label>Branch</label><select name="branch" id="courseFormBranch">${branchOptions(c.branch, true)}</select></div>
-        <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="8" value="${c.semester||1}"></div>
+        <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${c.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(c.section||'A')}" placeholder="e.g. A"></div>
         <div class="field"><label>Credits</label><input name="credits" type="number" min="1" max="6" value="${c.credits||3}"></div>
         <div class="field"><label>Short Name</label>
@@ -2515,7 +2515,7 @@
     const classes = teacherCourses();
     return Store.all('students').filter(s => classes.some(c => inCourseClass(s, c)));
   }
-  // faculty's own department, normalized to a branch code (CSE/ECE/ME/...) so
+  // faculty's own department, normalized to a programme code (MBA/MCA) so
   // it can be matched against student.branch — falls back to null if unknown
   function facultyDeptBranch() {
     const f = Store.find('faculty', user.refId);
@@ -2524,12 +2524,10 @@
     if (!dep) return null;
     if (BRANCHES.includes(dep.toUpperCase())) return dep.toUpperCase();
     const map = {
-      'computer science': 'CSE', 'computer science engineering': 'CSE', 'cse': 'CSE',
-      'electronics': 'ECE', 'electronics and communication': 'ECE', 'electronics and communication engineering': 'ECE', 'ece': 'ECE',
-      'mechanical': 'ME', 'mechanical engineering': 'ME', 'me': 'ME',
-      'electrical': 'EEE', 'electrical engineering': 'EEE', 'eee': 'EEE',
-      'civil': 'CIVIL', 'civil engineering': 'CIVIL',
-      'information technology': 'IT', 'it': 'IT',
+      'management': 'MBA', 'business administration': 'MBA',
+      'master of business administration': 'MBA', 'mba': 'MBA',
+      'computer applications': 'MCA', 'computer application': 'MCA',
+      'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[dep.toLowerCase()] || null;
   }
@@ -2857,7 +2855,7 @@
     let html = `<div class="panel"><div class="panel-head"><h3>${isFaculty ? 'My Timetable' : 'Class Timetable'}</h3>
       <div class="panel-tools">`;
     if (canPickClass) {
-      html += `<select class="filter-sel" id="ttBranch">${branchOptions('CSE')}</select>
+      html += `<select class="filter-sel" id="ttBranch">${branchOptions('MBA')}</select>
         <select class="filter-sel" id="ttSem">${[...Array(8)].map((_,i)=>`<option value="${i+1}" ${i+1===5?'selected':''}>Sem ${i+1}</option>`).join('')}</select>
         <input class="filter-sel" id="ttSec" value="A" style="width:60px">
         ${isAdmin ? `<button class="btn-primary" id="addSlot">+ Add Slot</button>`
@@ -2978,14 +2976,14 @@
   function slotForm(after, opts) {
     opts = opts || {};
     const draft = opts.draft || {};
-    const selBranch = draft.branch || 'CSE';
+    const selBranch = draft.branch || 'MBA';
     const selDay = draft.day || DAYS[0];
     const selStart = draft.startTime || '08:30';
     const selEnd = draft.endTime || '09:30';
     const selCourse = opts.presetCourse || draft.courseId || '';
     openModal('Add Timetable Slot', `<form id="f"><div class="form-grid">
       <div class="field"><label>Branch</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
-      <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="8" value="${draft.semester||5}"></div>
+      <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${draft.semester||2}"></div>
       <div class="field"><label>Section</label><input name="section" value="${esc(draft.section||'A')}"></div>
       <div class="field"><label>Day</label><select name="day" id="slotDay">${DAYS.map(d=>`<option ${d===selDay?'selected':''}>${d}</option>`).join('')}${listExtraOpts()}</select></div>
       <div class="field"><label>Start Time</label><select name="startTime">${timeOptions(selStart)}</select></div>
@@ -4457,7 +4455,8 @@
      ledger, `payments` is the receipt trail behind fees.paid.
      ========================================================= */
 
-  const ACADEMIC_COURSES = ['B.Tech', 'M.Tech', 'MBA', 'BBA', 'BCA', 'MCA', 'B.Sc', 'M.Sc'];
+  // NMIET B-SCHOOL runs two programmes, both two-year and four-semester
+  const ACADEMIC_COURSES = ['MBA', 'MCA'];
   const FEE_TYPES = ['Tuition Fee', 'Admission Fee', 'Examination Fee', 'Library Fee',
                      'Laboratory Fee', 'Development Fee', 'Other Fee'];
   const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque'];
@@ -4465,7 +4464,7 @@
                             'Printer', 'Networking Equipment', 'Library Equipment', 'Other'];
   const ASSET_STATUS = ['In Use', 'In Store', 'Under Maintenance', 'Damaged', 'Disposed'];
   const STRUCT_STATUS = ['Active', 'Inactive'];
-  const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
+  const SEMESTERS = [1, 2, 3, 4];
 
   /* ---------- option lists ---------- */
   function optionsFrom(list, sel) {
@@ -6635,8 +6634,9 @@
 
   const REQ_GOODS_CATEGORIES = ASSET_CATEGORIES.slice(0, -1)
     .concat(['Stationery', 'Consumables', 'Other']);
-  const BOOK_CATEGORIES = ['Computer Science', 'Electronics', 'Mechanical', 'Civil', 'Electrical',
-                           'Management', 'Mathematics', 'Physics', 'Chemistry', 'Reference', 'General'];
+  const BOOK_CATEGORIES = ['Management', 'Computer Applications', 'Finance', 'Marketing',
+                           'Human Resources', 'Economics', 'Mathematics & Statistics',
+                           'Reference', 'General'];
   const REQ_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
   const REQ_STATUS = ['Pending', 'Approved', 'Rejected', 'Ordered', 'Received'];
 
@@ -7131,7 +7131,7 @@
   }
   /* ---------- branch list: saved by the admin + every branch actually in use ---------- */
   const COURSE_TYPES = ['Core', 'Elective', 'Lab', 'Project'];
-  const DEFAULT_BRANCHES = ['CSE','ECE','ME','EEE','CIVIL','IT'];
+  const DEFAULT_BRANCHES = ['MBA','MCA'];
   const SET_BRANCHES = 'branchList';
   let BRANCHES = DEFAULT_BRANCHES.slice();     // kept as one array — bindListAddNew holds a reference
 
@@ -7414,13 +7414,10 @@
     if (!d) return null;
     if (BRANCHES.includes(d.toUpperCase())) return d.toUpperCase();
     const map = {
-      'computer science': 'CSE', 'computer science engineering': 'CSE', 'cse': 'CSE',
-      'electronics': 'ECE', 'electronics and communication': 'ECE',
-      'electronics and communication engineering': 'ECE', 'ece': 'ECE',
-      'mechanical': 'ME', 'mechanical engineering': 'ME', 'me': 'ME',
-      'electrical': 'EEE', 'electrical engineering': 'EEE', 'eee': 'EEE',
-      'civil': 'CIVIL', 'civil engineering': 'CIVIL',
-      'information technology': 'IT', 'it': 'IT',
+      'management': 'MBA', 'business administration': 'MBA',
+      'master of business administration': 'MBA', 'mba': 'MBA',
+      'computer applications': 'MCA', 'computer application': 'MCA',
+      'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[d.toLowerCase()] || null;
   }
@@ -7872,7 +7869,7 @@
     return html;
   }
 
-  /** fee roll-up per academic course (B.Tech, MBA, …) */
+  /** fee roll-up per academic programme (MBA, MCA) */
   function courseFeeRows() {
     const groups = {};
     financeRows().forEach(r => {

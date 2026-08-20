@@ -225,8 +225,8 @@ function init_db(): void
     db()->exec('UPDATE ' . qi('courses') . ' SET ' . qi('section') . "='A'
                 WHERE " . qi('section') . ' IS NULL OR ' . qi('section') . "=''");
     upsert('courses', [
-        'id' => 'C06', 'code' => 'CS501', 'name' => 'Data Structures & Algorithms',
-        'branch' => 'CSE', 'semester' => 5, 'credits' => 4, 'facultyId' => 'F02', 'section' => 'B',
+        'id' => 'C06', 'code' => 'MBA201', 'name' => 'Marketing Management',
+        'branch' => 'MBA', 'semester' => 2, 'credits' => 4, 'facultyId' => 'F02', 'section' => 'B',
     ]);
 
     seed_accountant_login();
