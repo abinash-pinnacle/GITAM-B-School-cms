@@ -269,7 +269,7 @@
     // Every page below renders without a single Add/Edit/Delete/Approve control.
     center_head: [
       ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'], ['faculty','👨‍🏫','Faculty'],
-      ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Branches'],
+      ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Specialisations'],
       ['syllabus','🧾','Subjects by Semester'],
       ['attendance','✅','Attendance'], ['timetable','🗓️','Timetable'],
       [NAV_SECTION,'','Fees & Finance'],
@@ -394,7 +394,7 @@
     pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Accountants',
     goodsreq:'Goods Requisition', bookreq:'Book Requisition', requisitions:'Requisitions & Approvals',
     batchsem:'Batch Semester Update',
-    departments:'Departments', branches:'Branches', chreports:'Reports',
+    departments:'Departments', branches:'Specialisations', chreports:'Reports',
     syllabus:'Subjects — Semester wise',
     plstudents:'Students — Placement', companies:'Companies', drives:'Placement Drives',
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
@@ -562,7 +562,7 @@
     // ---- charts row: branch distribution + fee donut ----
     html += `<div class="dash-2col">
       <div class="panel">
-        <div class="panel-head"><h3>Students by Branch</h3></div>
+        <div class="panel-head"><h3>Students by Specialisation</h3></div>
         ${branchRows.length ? branchRows.map(([b, n]) => `
           <div class="dist-row">
             <span class="dist-label">${esc(b)}</span>
@@ -614,7 +614,7 @@
     // ---- students overview table ----
     html += `<div class="panel"><div class="panel-head"><h3>Students Overview</h3></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Reg No</th><th>Name</th><th>Branch</th><th>Sem</th><th>Attendance</th><th>GPA</th>
+        <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th>Attendance</th><th>GPA</th>
       </tr></thead><tbody>`;
     students.forEach(s => {
       const att = studentAttendancePct(s.id);
@@ -684,7 +684,7 @@
       html += `<p class="empty">No classes have been assigned to you yet. Please contact the System Admin.</p>`;
     } else {
       html += `<div class="tbl-wrap"><table><thead><tr>
-        <th>Code</th><th>Course</th><th>Branch</th><th>Sem</th><th>Section</th><th>Students</th><th>Actions</th>
+        <th>Code</th><th>Course</th><th>Specialisation</th><th>Sem</th><th>Section</th><th>Students</th><th>Actions</th>
       </tr></thead><tbody>${classes.map(c => `<tr>
         <td>${esc(c.code)}</td><td>${esc(c.name)}</td><td>${esc(c.branch)}</td><td>${c.semester}</td>
         <td><span class="pill blue">Sec ${esc(c.section || 'A')}</span></td>
@@ -992,7 +992,7 @@
       <div class="tbl-wrap"><table class="tbl-filter"><thead>
         <tr>
           <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
-          <th>Branch</th><th>Section</th><th>House</th><th>Batch</th><th>Course</th>
+          <th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
           <th>Phone No.</th><th>Status</th><th></th>
         </tr>
         <tr class="filter-row">
@@ -1003,7 +1003,6 @@
           <td><input data-f="lastName"></td>
           <td><select data-f="branch">${colFilterOptions(all, 'branch', '')}</select></td>
           <td><select data-f="section">${colFilterOptions(all, 'section', '')}</select></td>
-          <td><select data-f="house">${colFilterOptions(all, 'house', '')}</select></td>
           <td><select data-f="batch">${colFilterOptions(all, 'batch', '')}</select></td>
           <td><select data-f="course">${colFilterOptions(all, 'course', '')}</select></td>
           <td><input data-f="phone"></td>
@@ -1031,7 +1030,7 @@
           // a text filter matches anywhere in the cell; a dropdown is exact
           return Object.entries(f).every(([k, v]) => {
             const cell = String(s[k] ?? '').toLowerCase();
-            const isSelect = ['branch', 'section', 'house', 'batch', 'course', 'status'].includes(k);
+            const isSelect = ['branch', 'section', 'batch', 'course', 'status'].includes(k);
             return isSelect ? cell === v : cell.includes(v);
           });
         });
@@ -1050,7 +1049,6 @@
           <td>${esc(s.lastName || '')}</td>
           <td>${esc(s.branch || '')}</td>
           <td>${esc(s.section || '')}</td>
-          <td>${esc(s.house || 'N/A')}</td>
           <td>${esc(s.batch || '—')}</td>
           <td>${esc(s.course || '—')}</td>
           <td>${esc(s.phone || '')}</td>
@@ -1064,7 +1062,7 @@
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
           </div></td>
-        </tr>`).join('') : `<tr><td colspan="13" class="empty">No students found.</td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="12" class="empty">No students found.</td></tr>`;
 
         $('#stuBody').querySelectorAll('[data-profile]').forEach(b =>
           b.onclick = () => studentProfileModal(b.dataset.profile));
@@ -1153,7 +1151,7 @@
       <div class="tbl-wrap"><table><tbody>
         ${row('Student ID', esc(s.roll))}
         ${row('Course', esc(s.course || '—'))}
-        ${row('Branch', esc(s.branch || '—'))}
+        ${row('Specialisation', esc(s.branch || '—'))}
         ${row('Year / Semester', `${esc(s.year || '—')} / ${esc(s.semester || '—')}`)}
         ${row('Section', esc(s.section || '—'))}
         ${row('Academic Year', esc(s.academicYear || '—'))}
@@ -1191,11 +1189,10 @@
         { header: 'First Name', key: 'firstName', width: 16 },
         { header: 'Middle Name', key: 'middleName', width: 14 },
         { header: 'Last Name', key: 'lastName', width: 16 },
-        { header: 'House', key: 'house', width: 10 },
         { header: 'Batch', key: 'batch', width: 14 },
         { header: 'Status', key: 'status', width: 10 },
         { header: 'Course', key: 'course', width: 12 },
-        { header: 'Branch', key: 'branch', width: 12 },
+        { header: 'Specialisation', key: 'branch', width: 12 },
         { header: 'Year', key: 'year', width: 8, type: 'number' },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
@@ -1265,19 +1262,20 @@
     const s = id ? Store.find('students', id) : {};
     openModal((id ? 'Edit' : 'Add') + ' Student', `<form id="f">
       <div class="form-grid">
-        <div class="field"><label>Registration Number</label><input name="roll" id="rollInput" inputmode="numeric" value="${esc(s.roll||'')}" required></div>
+        <div class="field"><label>Registration Number</label>
+          <input name="roll" id="rollInput" inputmode="numeric" maxlength="${regNoLength()}"
+                 placeholder="${regNoLength()} digits" value="${esc(s.roll||'')}" required></div>
         <div class="field"><label>First Name</label><input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
         <div class="field"><label>Middle Name</label><input name="middleName" value="${esc(s.middleName||'')}"></div>
         <div class="field"><label>Last Name</label><input name="lastName" value="${esc(s.lastName||'')}"></div>
         <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(s.email||'')}"></div>
         <div class="field"><label>Phone</label><input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone||'')}"></div>
         <div class="field"><label>Course</label><select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
-        <div class="field"><label>Branch</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
+        <div class="field"><label>Specialisation</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
         <div class="field"><label>Year</label><input name="year" type="number" min="1" max="2" value="${s.year||1}"></div>
         <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${s.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(s.section||'A')}"></div>
         <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
-        <div class="field"><label>House</label><input name="house" value="${esc(s.house||'')}" placeholder="e.g. Red — leave blank for N/A"></div>
         <div class="field"><label>Status</label><select name="status">${
           ['Active','Inactive'].map(v => `<option ${((s.status||'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
         }</select></div>
@@ -1303,6 +1301,8 @@
     $('#f').onsubmit = (e) => {
       e.preventDefault();
       const d = formData(e.target);
+      const regBad = regNoProblem(d.roll, id);
+      if (regBad) { toast(regBad, 'err'); return; }
       if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
       if (d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
         toast('CGPA must be between 0 and 10.', 'err'); return;
@@ -1318,6 +1318,27 @@
       closeModal(); toast('Student saved.'); render();
     };
   }
+  /* The registration number identifies a student for their whole time here —
+     it prints on the ID card, it is their login, and every fee and placement
+     record hangs off it. Two students sharing one, or one being a digit short,
+     is the kind of mistake that is found months later. */
+  const DEFAULT_REG_LENGTH = 10;
+  function regNoLength() {
+    const row = settingRow('regNoLength');
+    const n = parseInt(row && row.value, 10);
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_REG_LENGTH;
+  }
+  /** A message naming what is wrong with this registration number, or null. */
+  function regNoProblem(roll, excludeId) {
+    const v = String(roll || '').trim();
+    const len = regNoLength();
+    if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
+    if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
+    const clash = Store.all('students').find(x => String(x.roll || '') === v && x.id !== excludeId);
+    if (clash) return `Registration number ${v} already belongs to ${clash.name}.`;
+    return null;
+  }
+
   function ensureStudentLogin(s) {
     Store.add('users', { username: s.roll, password: 'pass123', role: 'student', refId: s.id, name: s.name });
   }
@@ -1345,7 +1366,7 @@
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
         { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
         { key:'course', header:'Course' },
-        { key:'branch', header:'Branch', aliases:['department','dept'] },
+        { key:'branch', header:'Specialisation', aliases:['department','dept'] },
         { key:'year', header:'Year', number:true, def:1 },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
@@ -1353,11 +1374,10 @@
         { key:'cgpa', header:'CGPA', aliases:['gpa'] },
         { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
         { key:'batch', header:'Batch' },
-        { key:'house', header:'House' },
         { key:'status', header:'Status', def:'Active' },
       ],
-      sample: ['25MBA010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A',
-               '2026-27','8.2',0,'2025-2027','','Active'],
+      sample: ['2025180010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A',
+               '2026-27','8.2',0,'2025-2027','Active'],
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
@@ -1433,6 +1453,11 @@
       const key = raw[spec.keyField].toLowerCase();
       if (existingKeys.has(key)) return { raw, error: 'Already exists' };
       if (seen.has(key)) return { raw, error: 'Duplicate in this file' };
+      if (spec.collection === 'students') {
+        const regBad = regNoProblem(raw.roll, null);
+        // "already belongs to" is covered by the two checks above
+        if (regBad && !/already belongs/.test(regBad)) return { raw, error: regBad };
+      }
 
       if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
       if (raw.cgpa && (isNaN(+raw.cgpa) || +raw.cgpa < 0 || +raw.cgpa > 10)) {
@@ -1619,7 +1644,7 @@
       <div class="panel-tools fin-filters">
         <input class="search-box" id="bsQ" placeholder="Search name / reg no...">
         <select class="filter-sel" id="bsCourse"><option value="">All Courses</option>${listOptions('course')}</select>
-        <select class="filter-sel" id="bsBranch"><option value="">All Branches</option>${branchOptions()}</select>
+        <select class="filter-sel" id="bsBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
         <select class="filter-sel" id="bsSem"><option value="">All Semesters</option>${semesterOptions()}</select>
         <select class="filter-sel" id="bsSection"><option value="">All Sections</option></select>
         <select class="filter-sel" id="bsYear"><option value="">All Academic Years</option>${optionsFrom(academicYearList())}</select>
@@ -1650,7 +1675,7 @@
         </div></div>
       <div id="bsStats" class="stat-grid" style="margin-bottom:18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th style="width:34px"></th><th>Reg No</th><th>Name</th><th>Course</th><th>Branch</th>
+        <th style="width:34px"></th><th>Reg No</th><th>Name</th><th>Course</th><th>Specialisation</th>
         <th>Sec</th><th>Academic Year</th><th>Year</th><th>Current Sem</th><th>→</th><th>New Sem</th><th>New Year</th>
       </tr></thead><tbody id="bsBody"></tbody></table></div><div id="bsPager"></div></div>`;
 
@@ -2223,13 +2248,13 @@
       <h3>Courses</h3><div class="panel-tools">
         <input class="search-box" id="couSearch" placeholder="Search code / name...">
         ${canEdit ? `<button class="btn-primary" id="addCou">+ Add Course</button>` : `
-          <select class="filter-sel" id="couBranch"><option value="">All Branches</option>${branchOptions()}</select>
+          <select class="filter-sel" id="couBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
           <select class="filter-sel" id="couSem"><option value="">All Semesters</option>${semesterOptions()}</select>
           <button class="btn-outline btn-sm" id="couPrint">🖨 Print</button>
           <button class="btn-outline btn-sm" id="couCsv">📑 CSV</button>
           <button class="btn-primary btn-sm" id="couXls">⬇ Excel</button>`}</div></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Code</th><th>Course Name</th><th>Type</th><th>Branch</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
+        <th>Code</th><th>Course Name</th><th>Type</th><th>Specialisation</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
         ${canEdit ? '<th>Actions</th>' : '<th style="text-align:right">Students</th>'}
       </tr></thead><tbody id="couBody"></tbody></table></div><div id="couPager"></div></div>`;
     viewCourses.after = () => {
@@ -2289,7 +2314,7 @@
         { header: 'Code', key: 'code', width: 12 },
         { header: 'Course Name', key: 'name', width: 32 },
         { header: 'Type', key: 'type', width: 12 },
-        { header: 'Branch', key: 'branch', width: 12 },
+        { header: 'Specialisation', key: 'branch', width: 12 },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
         { header: 'Credits', key: 'credits', width: 9, type: 'number' },
@@ -2358,7 +2383,7 @@
       <h3>Subjects — Semester wise</h3>
       <div class="panel-tools">
         <input class="search-box" id="sylQ" placeholder="Search subject / code...">
-        <select class="filter-sel" id="sylBranch"><option value="">All Branches</option>
+        <select class="filter-sel" id="sylBranch"><option value="">All Specialisations</option>
           ${syllabusBranches().map(b =>
             `<option ${b === myBranch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
         <select class="filter-sel" id="sylSem"><option value="">All Semesters</option>${semesterOptions(mySem)}</select>
@@ -2367,7 +2392,7 @@
       </div></div>
       <div id="sylStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div id="sylBody"></div></div>
-      <div class="panel"><div class="panel-head"><h3>Branch × Semester — Subject Count</h3></div>
+      <div class="panel"><div class="panel-head"><h3>Specialisation × Semester — Paper Count</h3></div>
         <div id="sylMatrix"></div></div>`;
 
     viewSyllabus.after = () => {
@@ -2377,7 +2402,7 @@
         return {
           title: 'Curriculum — Subjects by Semester', sheetName: 'Syllabus', subtitle: reportStamp(),
           columns: [
-            { header: 'Branch', key: 'branch', width: 12 },
+            { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'Code', key: 'code', width: 12 },
             { header: 'Subject Name', key: 'name', width: 40 },
@@ -2393,7 +2418,7 @@
         const rows = rowsNow();
         const branches = new Set(rows.map(r => r.branch));
         const sems = new Set(rows.map(r => r.semester));
-        $('#sylStats').innerHTML = `${statCard('🌿', branches.size, 'Branches')}
+        $('#sylStats').innerHTML = `${statCard('🌿', branches.size, 'Specialisations')}
           ${statCard('🎯', sems.size, 'Semesters', 'c2')}
           ${statCard('📘', rows.length, 'Subjects', 'c3')}
           ${statCard('🧪', rows.filter(r => r.type === 'Lab').length, 'Labs', 'c3')}`;
@@ -2456,7 +2481,7 @@
         const brs = [...new Set(all.map(r => r.branch))].sort();
         const allSems = [...new Set(all.map(r => r.semester))].sort((a, b) => a - b);
         $('#sylMatrix').innerHTML = brs.length ? `<div class="tbl-wrap"><table>
-          <thead><tr><th>Branch</th>${allSems.map(s => `<th style="text-align:right">Sem ${s}</th>`).join('')}
+          <thead><tr><th>Specialisation</th>${allSems.map(s => `<th style="text-align:right">Sem ${s}</th>`).join('')}
             <th style="text-align:right">Total</th></tr></thead>
           <tbody>${brs.map(b => {
             const cells = allSems.map(s => all.filter(r => r.branch === b && r.semester === s).length);
@@ -2485,7 +2510,7 @@
       <div class="form-grid">
         <!-- the shared master-list select: it carries "+ Add New..." and
              "🗑 Remove...", and the list is saved so every page sees it -->
-        <div class="field"><label>Branch</label>
+        <div class="field"><label>Specialisation</label>
           <select name="branch" id="sylFormBranch">${branchOptions(branch, true)}</select></div>
         <div class="field"><label>Semester</label>
           <select name="semester">${semesterOptions(sem)}</select></div>
@@ -2536,7 +2561,7 @@
       <div class="form-grid">
         <div class="field"><label>Course Code</label><input name="code" value="${esc(c.code||'')}" required></div>
         <div class="field"><label>Course Name</label><input name="name" value="${esc(c.name||'')}" required></div>
-        <div class="field"><label>Branch</label><select name="branch" id="courseFormBranch">${branchOptions(c.branch, true)}</select></div>
+        <div class="field"><label>Specialisation</label><select name="branch" id="courseFormBranch">${branchOptions(c.branch, true)}</select></div>
         <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${c.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(c.section||'A')}" placeholder="e.g. A"></div>
         <div class="field"><label>Credits</label><input name="credits" type="number" min="1" max="6" value="${c.credits||3}"></div>
@@ -2658,7 +2683,7 @@
 
     const summaryStudents = visibleStudents();
     html += `<div class="panel"><div class="panel-head"><h3>Attendance Summary (by student)</h3></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Branch</th><th>Sec</th><th>Attendance %</th></tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sec</th><th>Attendance %</th></tr></thead>
       <tbody>${summaryStudents.length ? summaryStudents.map(s => `<tr><td>${esc(s.roll)}</td><td>${esc(s.name)}</td>
         <td>${esc(s.branch)}</td><td>${esc(s.section)}</td><td>${attBar(studentAttendancePct(s.id))}</td></tr>`).join('')
         : `<tr><td colspan="5" class="empty">No students in your assigned classes.</td></tr>`}</tbody></table></div></div>`;
@@ -3043,7 +3068,7 @@
         { header: 'Time', key: 'time', width: 20 },
         { header: 'Code', key: 'code', width: 12 },
         { header: 'Subject', key: 'subject', width: 32 },
-        { header: 'Branch', key: 'branch', width: 10 },
+        { header: 'Specialisation', key: 'branch', width: 10 },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
         { header: 'Faculty', key: 'faculty', width: 24 },
@@ -3062,7 +3087,7 @@
     const selEnd = draft.endTime || '09:30';
     const selCourse = opts.presetCourse || draft.courseId || '';
     openModal('Add Timetable Slot', `<form id="f"><div class="form-grid">
-      <div class="field"><label>Branch</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
+      <div class="field"><label>Specialisation</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
       <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${draft.semester||2}"></div>
       <div class="field"><label>Section</label><input name="section" value="${esc(draft.section||'A')}"></div>
       <div class="field"><label>Day</label><select name="day" id="slotDay">${DAYS.map(d=>`<option ${d===selDay?'selected':''}>${d}</option>`).join('')}${listExtraOpts()}</select></div>
@@ -3237,7 +3262,7 @@
         const m = $('#printSheet'); if (m) m.onclick = () => printMarksheet(s.id);
       };
       return profileCard([['Registration Number',s.roll],['Name',s.name],['Email',s.email],['Phone',s.phone],
-        ['Branch',s.branch],['Year',s.year],['Semester',s.semester],['Section',s.section]],
+        ['Specialisation',s.branch],['Year',s.year],['Semester',s.semester],['Section',s.section]],
         `<button class="btn-primary" id="printId">🪪 Print ID Card</button>
          <button class="btn-outline" id="printSheet">📄 Download Marksheet</button>`, s.photo);
     }
@@ -3451,7 +3476,7 @@
             <option value="Returned Late">Returned late</option></select>
         </div></div>
         <div class="tbl-wrap"><table><thead><tr>
-          <th>Book</th><th>Student</th><th>Branch / Sem</th><th>Issued On</th><th>Due Date</th>
+          <th>Book</th><th>Student</th><th>Specialisation / Sem</th><th>Issued On</th><th>Due Date</th>
           <th>Returned On</th><th>Late Days</th><th>Status</th>
         </tr></thead><tbody id="bkTxnBody"></tbody></table></div><div id="bkTxnPager"></div></div>`;
     }
@@ -3754,7 +3779,7 @@
         <button class="btn-outline btn-sm" id="rpClear">Clear</button>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>#</th><th>Roll No</th><th>Student</th><th>Branch / Sem</th><th>Book Title</th><th>Author</th>
+        <th>#</th><th>Roll No</th><th>Student</th><th>Specialisation / Sem</th><th>Book Title</th><th>Author</th>
         <th>ISBN</th><th>Category</th><th>Issued On</th><th>Due Date</th><th>Returned On</th>
         <th>Days Kept</th><th>Late Days</th><th>Status</th>
       </tr></thead><tbody id="rpBody"></tbody></table></div>
@@ -3763,7 +3788,7 @@
     // ---- student-wise summary ----
     html += `<div class="panel"><div class="panel-head"><h3>Student-wise Summary</h3></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Roll No</th><th>Student</th><th>Branch</th><th>Total Borrowed</th><th>Returned</th>
+        <th>Roll No</th><th>Student</th><th>Specialisation</th><th>Total Borrowed</th><th>Returned</th>
         <th>On Loan</th><th>Overdue</th><th>Books Taken</th>
       </tr></thead><tbody id="rpStuBody"></tbody></table></div><div id="rpStuPager"></div></div>`;
 
@@ -3919,7 +3944,7 @@
       { header:'Issue ID', key:'id', width:10, align:'center' },
       { header:'Roll No', key:'roll', width:14 },
       { header:'Student Name', key:'student', width:24 },
-      { header:'Branch', key:'branch', width:14 },
+      { header:'Specialisation', key:'branch', width:14 },
       { header:'Year', key:'year', width:7, type:'number' },
       { header:'Sem', key:'semester', width:7, type:'number' },
       { header:'Section', key:'section', width:9, align:'center' },
@@ -3992,7 +4017,7 @@
           { header:'#', key:'sn', width:6, type:'number' },
           { header:'Roll No', key:'roll', width:14 },
           { header:'Student Name', key:'student', width:24 },
-          { header:'Branch', key:'branch', width:14 },
+          { header:'Specialisation', key:'branch', width:14 },
           { header:'Phone', key:'phone', width:15, align:'center' },
           { header:'Email', key:'email', width:26 },
           { header:'Book Title', key:'title', width:34 },
@@ -4011,7 +4036,7 @@
         columns: [
           { header:'Roll No', key:'roll', width:14 },
           { header:'Student Name', key:'student', width:24 },
-          { header:'Branch', key:'branch', width:14 },
+          { header:'Specialisation', key:'branch', width:14 },
           { header:'Sem', key:'semester', width:7, type:'number' },
           { header:'Phone', key:'phone', width:15, align:'center' },
           { header:'Total Borrowed', key:'total', width:15, type:'number' },
@@ -4477,7 +4502,7 @@
       photo: s.photo,
       rows: [
         ['🎓','Reg No', s.roll],
-        ['🏫','Branch', s.branch],
+        ['🏫','Specialisation', s.branch],
         ['📘','Year / Sem', `${s.year} / ${s.semester}`],
         ['🔤','Section', s.section],
         ['📞','Phone', s.phone || '—'],
@@ -4517,7 +4542,7 @@
       <h2 style="font-size:17px;color:#0d2f6b;margin-bottom:10px">Statement of Grades</h2>
       <table style="margin-bottom:6px"><tbody>
         <tr><th style="width:120px">Name</th><td>${esc(s.name)}</td><th style="width:120px">Reg No</th><td>${esc(s.roll)}</td></tr>
-        <tr><th>Branch</th><td>${esc(s.branch)}</td><th>Semester</th><td>${esc(s.semester)}</td></tr>
+        <tr><th>Specialisation</th><td>${esc(s.branch)}</td><th>Semester</th><td>${esc(s.semester)}</td></tr>
       </tbody></table>
       <table><thead><tr><th>Code</th><th>Course</th><th>Credits</th><th>Internal /${INTERNAL_MAX}</th><th>Percentage</th><th>Grade</th></tr></thead>
         <tbody>${rows}</tbody></table>
@@ -4666,7 +4691,7 @@
     return `<div class="panel-tools fin-filters">
       <input class="search-box" id="${p}Q" placeholder="${esc(o.placeholder || 'Search student / reg no...')}">
       ${o.noCourse ? '' : `<select class="filter-sel" id="${p}Course"><option value="">All Courses</option>${optionsFrom(courseList())}</select>`}
-      ${o.noBranch ? '' : `<select class="filter-sel" id="${p}Branch"><option value="">All Branches</option>${branchOptions()}</select>`}
+      ${o.noBranch ? '' : `<select class="filter-sel" id="${p}Branch"><option value="">All Specialisations</option>${branchOptions()}</select>`}
       ${o.noSem ? '' : `<select class="filter-sel" id="${p}Sem"><option value="">All Semesters</option>${semesterOptions()}</select>`}
       ${o.noYear ? '' : `<select class="filter-sel" id="${p}Year"><option value="">All Academic Years</option>${optionsFrom(academicYearList())}</select>`}
       ${o.dates ? `<label class="days-field">From <input class="filter-sel" id="${p}From" type="date"></label>
@@ -4675,11 +4700,11 @@
       <button class="btn-outline btn-sm" id="${p}Clear">Clear</button>
     </div>`;
   }
-  const FIN_FILTER_IDS = ['Q', 'Course', 'Branch', 'Sem', 'Year', 'From', 'To'];
+  const FIN_FILTER_IDS = ['Q', 'Course', 'Specialisation', 'Sem', 'Year', 'From', 'To'];
   function finFilterValues(p, extraIds) {
     const val = (suffix) => { const el = $('#' + p + suffix); return el ? el.value : ''; };
     const out = {
-      q: (val('Q') || '').trim().toLowerCase(), course: val('Course'), branch: val('Branch'),
+      q: (val('Q') || '').trim().toLowerCase(), course: val('Course'), branch: val('Specialisation'),
       semester: val('Sem'), year: val('Year'), from: val('From'), to: val('To'),
     };
     (extraIds || []).forEach(s => { out[s.toLowerCase()] = val(s); });
@@ -4955,7 +4980,7 @@
         <option>Unpaid</option><option>No Fee Set</option></select>` })}
       <div id="fsStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Student ID</th><th>Student Name</th><th>Course</th><th>Branch</th><th>Sem</th>
+        <th>Student ID</th><th>Student Name</th><th>Course</th><th>Specialisation</th><th>Sem</th>
         <th>Academic Year</th><th style="text-align:right">Total Fee</th><th style="text-align:right">Paid Fee</th>
         <th style="text-align:right">Pending Fee</th><th>Fee Status</th><th>Actions</th>
       </tr></thead><tbody id="fsBody"></tbody></table></div><div id="fsPager"></div></div>`;
@@ -5004,7 +5029,7 @@
             { header: 'Student ID', key: 'roll', width: 14 },
             { header: 'Student Name', key: 'name', width: 26 },
             { header: 'Course', key: 'course', width: 12 },
-            { header: 'Branch', key: 'branch', width: 12 },
+            { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'Academic Year', key: 'academicYear', width: 15 },
             { header: 'Total Fee', key: 'total', width: 14, money: true },
@@ -5045,7 +5070,7 @@
       <div class="tbl-wrap"><table><tbody>
         <tr><td style="font-weight:600;width:170px">Student ID</td><td>${esc(s.roll)}</td></tr>
         <tr><td style="font-weight:600">Course</td><td>${esc(s.course || '—')}</td></tr>
-        <tr><td style="font-weight:600">Branch</td><td>${esc(s.branch || '—')}</td></tr>
+        <tr><td style="font-weight:600">Specialisation</td><td>${esc(s.branch || '—')}</td></tr>
         <tr><td style="font-weight:600">Year / Semester</td><td>${esc(s.year || '—')} / ${esc(s.semester || '—')}</td></tr>
         <tr><td style="font-weight:600">Section</td><td>${esc(s.section || '—')}</td></tr>
         <tr><td style="font-weight:600">Academic Year</td><td>${esc(s.academicYear || '—')}</td></tr>
@@ -5303,7 +5328,7 @@
       })}
       <div id="ffStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>ID</th><th>Course</th><th>Branch</th><th>Academic Year</th><th>Fee Type</th>
+        <th>ID</th><th>Course</th><th>Specialisation</th><th>Academic Year</th><th>Fee Type</th>
         <th style="text-align:right">Fixed Amount</th><th>Effective From</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="ffBody"></tbody></table></div><div id="ffPager"></div></div>
       <div class="panel"><div class="panel-head"><h3>Structure Totals</h3>
@@ -5366,7 +5391,7 @@
         });
         const summary = Object.values(groups).sort((a, b) => b.amount - a.amount);
         $('#ffSummary').innerHTML = reportTableHtml([
-          { header: 'Course', key: 'course' }, { header: 'Branch', key: 'branch' },
+          { header: 'Course', key: 'course' }, { header: 'Specialisation', key: 'branch' },
           { header: 'Academic Year', key: 'academicYear' }, { header: 'Fee Heads', key: 'heads' },
           { header: 'Total Fixed Fee', key: 'amount', money: true },
         ], summary, 'No active fee heads for these filters.');
@@ -5380,7 +5405,7 @@
           columns: [
             { header: 'ID', key: 'id', width: 10, align: 'center' },
             { header: 'Course', key: 'course', width: 14 },
-            { header: 'Branch', key: 'branch', width: 14 },
+            { header: 'Specialisation', key: 'branch', width: 14 },
             { header: 'Academic Year', key: 'academicYear', width: 15 },
             { header: 'Fee Type', key: 'feeType', width: 20 },
             { header: 'Fixed Amount', key: 'amount', width: 16, money: true },
@@ -5405,7 +5430,7 @@
     openModal('Fixed Fee — ' + (r.feeType || ''), `<div class="tbl-wrap"><table><tbody>
       <tr><td style="font-weight:600;width:180px">ID</td><td class="mono">${esc(r.id)}</td></tr>
       <tr><td style="font-weight:600">Course</td><td>${esc(r.course || '—')}</td></tr>
-      <tr><td style="font-weight:600">Branch</td><td>${esc(r.branch || '—')}</td></tr>
+      <tr><td style="font-weight:600">Specialisation</td><td>${esc(r.branch || '—')}</td></tr>
       <tr><td style="font-weight:600">Academic Year</td><td>${esc(r.academicYear || '—')}</td></tr>
       <tr><td style="font-weight:600">Fee Type</td><td>${esc(r.feeType || '—')}</td></tr>
       <tr><td style="font-weight:600">Fixed Amount</td><td><b>${money(r.amount)}</b></td></tr>
@@ -5423,7 +5448,7 @@
     const r = id ? (Store.find('fixedfees', id) || {}) : {};
     openModal((id ? 'Edit' : 'Add') + ' Fixed Fee', `<form id="f"><div class="form-grid">
       <div class="field"><label>Course</label><select name="course" id="ffFormCourse">${listOptions('course', r.course, true)}</select></div>
-      <div class="field"><label>Branch</label><select name="branch" id="ffFormBranch">${branchOptions(r.branch, true)}</select></div>
+      <div class="field"><label>Specialisation</label><select name="branch" id="ffFormBranch">${branchOptions(r.branch, true)}</select></div>
       <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(r.academicYear)}</select></div>
       <div class="field"><label>Fee Type</label><select name="feeType" id="ffFormType">${listOptions('feeType', r.feeType, true)}</select></div>
       <div class="field"><label>Fixed Amount (₹)</label><input name="amount" id="ffAmt" inputmode="numeric" value="${r.amount || ''}" required></div>
@@ -5468,7 +5493,7 @@
       ${finFilterBar('sf')}
       <div id="sfStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Student</th><th>Reg No</th><th>Course</th><th>Branch</th><th>Semester</th><th>Academic Year</th>
+        <th>Student</th><th>Reg No</th><th>Course</th><th>Specialisation</th><th>Semester</th><th>Academic Year</th>
         <th style="text-align:right">Total Fee</th><th style="text-align:right">Paid</th>
         <th style="text-align:right">Pending</th><th>Due Date</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="sfBody"></tbody></table></div><div id="sfPager"></div></div>
@@ -5557,7 +5582,7 @@
             { header: 'Reg No', key: 'roll', width: 14 },
             { header: 'Student Name', key: 'name', width: 26 },
             { header: 'Course', key: 'course', width: 12 },
-            { header: 'Branch', key: 'branch', width: 12 },
+            { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'Academic Year', key: 'academicYear', width: 15 },
             { header: 'Total Fee', key: 'total', width: 14, money: true },
@@ -5590,7 +5615,7 @@
         </select>
         ${id ? `<input type="hidden" name="studentId" value="${esc(f.studentId)}">` : ''}</div>
       <div class="field"><label>Course</label><input id="sffCourse" value="${esc(s.course || '—')}" disabled></div>
-      <div class="field"><label>Branch</label><input id="sffBranch" value="${esc(s.branch || '—')}" disabled></div>
+      <div class="field"><label>Specialisation</label><input id="sffBranch" value="${esc(s.branch || '—')}" disabled></div>
       <div class="field"><label>Semester</label><select name="semester" id="sffSem">${semesterOptions(f.semester || s.semester)}</select></div>
       <div class="field"><label>Academic Year</label><select name="academicYear" id="sffYear">${academicYearOptions(f.academicYear || s.academicYear)}</select></div>
       <div class="field"><label>Total Fee (₹)</label><input name="total" id="sffTotal" inputmode="numeric" value="${f.total || ''}" required></div>
@@ -5673,7 +5698,7 @@
       ${finFilterBar('fc', { extra: `<label class="switch-label">
         <input type="checkbox" id="fcOnlyDue" checked><span>Only students with dues</span></label>` })}
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Reg No</th><th>Student Name</th><th>Course</th><th>Branch</th><th>Sem</th>
+        <th>Reg No</th><th>Student Name</th><th>Course</th><th>Specialisation</th><th>Sem</th>
         <th style="text-align:right">Total Fee</th><th style="text-align:right">Paid</th>
         <th style="text-align:right">Pending</th><th>Status</th><th>Action</th>
       </tr></thead><tbody id="fcBody"></tbody></table></div><div id="fcPager"></div></div>
@@ -5752,7 +5777,7 @@
         <div class="field"><label>Student ID</label><input value="${esc(s.roll)}" disabled></div>
         <div class="field"><label>Student Name</label><input value="${esc(s.name)}" disabled></div>
         <div class="field"><label>Course</label><input value="${esc(s.course || '—')}" disabled></div>
-        <div class="field"><label>Branch</label><input value="${esc(s.branch || '—')}" disabled></div>
+        <div class="field"><label>Specialisation</label><input value="${esc(s.branch || '—')}" disabled></div>
         <div class="field full"><label>Fee Record (Semester)</label>
           <select name="feeId" id="cfFee">${due.map(f =>
             `<option value="${f.id}">Semester ${esc(f.semester || '—')} · ${esc(f.academicYear || '—')} · pending ${money(pendingOf(f))}</option>`).join('')}</select></div>
@@ -5835,7 +5860,7 @@
         ${row('Student ID', s.roll)}
         ${row('Student Name', s.name)}
         ${row('Course', s.course)}
-        ${row('Branch', s.branch)}
+        ${row('Specialisation', s.branch)}
         ${row('Semester', fee.semester || s.semester)}
         ${row('Academic Year', fee.academicYear || s.academicYear)}
       </tbody></table>
@@ -5938,7 +5963,7 @@
       { header: 'Student ID', key: 'roll', width: 14 },
       { header: 'Student Name', key: 'name', width: 26 },
       { header: 'Course', key: 'course', width: 12 },
-      { header: 'Branch', key: 'branch', width: 12 },
+      { header: 'Specialisation', key: 'branch', width: 12 },
       { header: 'Semester', key: 'semester', width: 10, type: 'number' },
       { header: 'Amount', key: 'amount', width: 14, money: true },
       { header: 'Payment Mode', key: 'mode', width: 15 },
@@ -5998,7 +6023,7 @@
       })}
       <div id="pfStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Student ID</th><th>Student Name</th><th>Course</th><th>Branch</th><th>Semester</th>
+        <th>Student ID</th><th>Student Name</th><th>Course</th><th>Specialisation</th><th>Semester</th>
         <th style="text-align:right">Total Fee</th><th style="text-align:right">Paid Fee</th>
         <th style="text-align:right">Pending Fee</th><th>Due Date</th><th>Status</th><th>Action</th>
       </tr></thead><tbody id="pfBody"></tbody></table></div><div id="pfPager"></div></div>`;
@@ -6058,7 +6083,7 @@
             { header: 'Student ID', key: 'roll', width: 14 },
             { header: 'Student Name', key: 'name', width: 26 },
             { header: 'Course', key: 'course', width: 12 },
-            { header: 'Branch', key: 'branch', width: 12 },
+            { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'Academic Year', key: 'academicYear', width: 15 },
             { header: 'Total Fee', key: 'total', width: 14, money: true },
@@ -6140,7 +6165,7 @@
         note: 'Student-wise fee details — total, paid and pending across every semester on record.',
         columns: [
           { header: 'Student ID', key: 'roll', width: 14 }, { header: 'Student Name', key: 'name', width: 26 },
-          { header: 'Course', key: 'course', width: 12 }, { header: 'Branch', key: 'branch', width: 12 },
+          { header: 'Course', key: 'course', width: 12 }, { header: 'Specialisation', key: 'branch', width: 12 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Academic Year', key: 'academicYear', width: 15 },
           { header: 'Total Fee', key: 'total', width: 14, money: true },
@@ -6258,7 +6283,7 @@
         note: 'The published fee structure. The date range filters on "effective from".',
         columns: [
           { header: 'ID', key: 'id', width: 10 }, { header: 'Course', key: 'course', width: 14 },
-          { header: 'Branch', key: 'branch', width: 14 }, { header: 'Academic Year', key: 'academicYear', width: 15 },
+          { header: 'Specialisation', key: 'branch', width: 14 }, { header: 'Academic Year', key: 'academicYear', width: 15 },
           { header: 'Fee Type', key: 'feeType', width: 20 },
           { header: 'Fixed Amount', key: 'amount', width: 16, money: true },
           { header: 'Effective From', key: 'effectiveFrom', width: 15 }, { header: 'Status', key: 'status', width: 11 },
@@ -6292,7 +6317,7 @@
         columns: [
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Student ID', key: 'roll', width: 14 }, { header: 'Student Name', key: 'name', width: 26 },
-          { header: 'Course', key: 'course', width: 12 }, { header: 'Branch', key: 'branch', width: 12 },
+          { header: 'Course', key: 'course', width: 12 }, { header: 'Specialisation', key: 'branch', width: 12 },
           { header: 'Academic Year', key: 'academicYear', width: 15 },
           { header: 'Total Fee', key: 'total', width: 14, money: true },
           { header: 'Paid Amount', key: 'paid', width: 14, money: true },
@@ -7759,7 +7784,7 @@
         ${statCard('🎯', Store.all('marks').length, 'Result Entries', 'c2')}
       </div>
       <div class="dash-2col">
-        <div class="panel"><div class="panel-head"><h3>Branch-wise Student Count</h3></div>
+        <div class="panel"><div class="panel-head"><h3>Specialisation-wise Student Count</h3></div>
           ${branches.length ? branches.map(b => bar(b.branch, b.students, maxBranch,
             b.attendance === '—' ? '' : b.attendance + '% att')).join('') : '<p class="empty">No data.</p>'}
         </div>
@@ -7827,7 +7852,7 @@
       </div>
       <div class="panel"><div class="panel-head"><h3>⚠ Students Below 75% Attendance</h3>
         <span style="font-size:12px;color:var(--muted)">${lowAttendance.length ? 'Lowest ' + lowAttendance.length : 'None'}</span></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Branch</th><th>Sem</th>
+        <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th>
           <th style="text-align:right">Held</th><th style="text-align:right">Present</th><th>Attendance</th>
         </tr></thead><tbody>${lowAttendance.length ? lowAttendance.map(r => `<tr>
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.branch)}</td>
@@ -7994,7 +8019,7 @@
           `<button class="fin-tab ${key === chAttTab ? 'active' : ''}" data-att="${key}">${label}</button>`).join('')}</div>
         <div class="panel-tools fin-filters">
           <input class="search-box" id="caQ" placeholder="Search student / subject / faculty...">
-          <select class="filter-sel" id="caBranch"><option value="">All Branches</option>${branchOptions()}</select>
+          <select class="filter-sel" id="caBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
           <select class="filter-sel" id="caSem"><option value="">All Semesters</option>${semesterOptions()}</select>
           <label class="days-field">From <input class="filter-sel" id="caFrom" type="date"></label>
           <label class="days-field">To <input class="filter-sel" id="caTo" type="date"></label>
@@ -8056,7 +8081,7 @@
         note: 'Every class session on record, newest first.',
         columns: [
           { header: 'Date', key: 'date', width: 13 }, { header: 'Code', key: 'code', width: 12 },
-          { header: 'Subject', key: 'name', width: 30 }, { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Subject', key: 'name', width: 30 }, { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Section', key: 'section', width: 9 }, { header: 'Faculty', key: 'faculty', width: 24 },
           { header: 'Present', key: 'present', width: 10, type: 'number' },
@@ -8082,7 +8107,7 @@
         note: 'Attendance of every student across all the sessions they appear in.',
         columns: [
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student Name', key: 'name', width: 26 },
-          { header: 'Course', key: 'course', width: 12 }, { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Course', key: 'course', width: 12 }, { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Section', key: 'section', width: 9 },
           { header: 'Sessions Held', key: 'held', width: 14, type: 'number' },
@@ -8131,7 +8156,7 @@
         note: 'Attendance for every course, from the sessions recorded against it.',
         columns: [
           { header: 'Code', key: 'code', width: 12 }, { header: 'Course', key: 'name', width: 30 },
-          { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Section', key: 'section', width: 9 }, { header: 'Faculty', key: 'faculty', width: 24 },
           { header: 'Students', key: 'students', width: 10, type: 'number' },
@@ -8151,7 +8176,7 @@
         note: 'Attendance rolled up per department, through the branch each department teaches.',
         columns: [
           { header: 'Department', key: 'department', width: 24 },
-          { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
           { header: 'Courses', key: 'courses', width: 10, type: 'number' },
           { header: 'Students', key: 'students', width: 10, type: 'number' },
@@ -8170,7 +8195,7 @@
       note: 'Attendance and headcount per semester.',
       columns: [
         { header: 'Semester', key: 'semester', width: 14 },
-        { header: 'Branches', key: 'branches', width: 24 },
+        { header: 'Specialisations', key: 'branches', width: 24 },
         { header: 'Students', key: 'students', width: 10, type: 'number' },
         { header: 'Attendance %', key: 'attendance', width: 14 },
       ],
@@ -8203,7 +8228,7 @@
         title: 'Department Report', sheetName: 'Departments', subtitle: reportStamp(),
         columns: [
           { header: 'Department', key: 'department', width: 26 },
-          { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
           { header: 'Professors', key: 'professors', width: 12, type: 'number' },
           { header: 'Courses', key: 'courses', width: 10, type: 'number' },
@@ -8259,14 +8284,14 @@
   /* =========================== BRANCHES =========================== */
   function viewBranches() {
     const html = readOnlyBanner('Branches come from the master list the admin maintains, plus every branch in use.') +
-      `<div class="panel"><div class="panel-head"><h3>Branches</h3>
+      `<div class="panel"><div class="panel-head"><h3>Specialisations</h3>
         <div class="panel-tools">
           <input class="search-box" id="brQ" placeholder="Search branch...">
           ${exportButtons('br')}
         </div></div>
         <div id="brStats" class="stat-grid" style="margin:6px 0 18px"></div>
         <div id="brTable"></div></div>
-      <div class="panel"><div class="panel-head"><h3>Branch × Semester Distribution</h3></div>
+      <div class="panel"><div class="panel-head"><h3>Specialisation × Semester Distribution</h3></div>
         <div id="brMatrix"></div></div>`;
 
     viewBranches.after = () => {
@@ -8277,9 +8302,9 @@
       const report = () => {
         const rows = filtered();
         return {
-          title: 'Branch Report', sheetName: 'Branches', subtitle: reportStamp(),
+          title: 'Branch Report', sheetName: 'Specialisations', subtitle: reportStamp(),
           columns: [
-            { header: 'Branch', key: 'branch', width: 12 },
+            { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Students', key: 'students', width: 10, type: 'number' },
             { header: 'Courses', key: 'courses', width: 10, type: 'number' },
             { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
@@ -8302,7 +8327,7 @@
       };
       const draw = () => {
         const r = report();
-        $('#brStats').innerHTML = `${statCard('🌿', r.rows.length, 'Branches')}
+        $('#brStats').innerHTML = `${statCard('🌿', r.rows.length, 'Specialisations')}
           ${statCard('🎓', r.totals.students, 'Students', 'c2')}
           ${statCard('📚', r.totals.courses, 'Courses', 'c3')}
           ${statCard('💰', money(r.totals.feePaid), 'Fees Collected', 'c3')}`;
@@ -8312,7 +8337,7 @@
         const students = Store.all('students');
         const sems = [...new Set(students.map(s => +s.semester || 0))].filter(Boolean).sort((a, b) => a - b);
         $('#brMatrix').innerHTML = r.rows.length && sems.length ? `<div class="tbl-wrap"><table>
-          <thead><tr><th>Branch</th>${sems.map(s => `<th style="text-align:right">Sem ${s}</th>`).join('')}
+          <thead><tr><th>Specialisation</th>${sems.map(s => `<th style="text-align:right">Sem ${s}</th>`).join('')}
             <th style="text-align:right">Total</th></tr></thead>
           <tbody>${r.rows.map(b => {
             const cells = sems.map(s => students.filter(x => x.branch === b.branch && +x.semester === s).length);
@@ -8398,7 +8423,7 @@
       r.note = 'Every student on record with their attendance and result standing.';
       r.stats = [
         statCard('🎓', rows.length, 'Students Listed'),
-        statCard('🌿', new Set(rows.map(s => s.branch)).size, 'Branches', 'c2'),
+        statCard('🌿', new Set(rows.map(s => s.branch)).size, 'Specialisations', 'c2'),
         statCard('📆', new Set(rows.map(s => s.semester)).size, 'Semesters', 'c3'),
       ];
       return r;
@@ -8453,7 +8478,7 @@
         ],
         columns: [
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'student', width: 24 },
-          { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Book Title', key: 'title', width: 32 }, { header: 'Author', key: 'author', width: 24 },
           { header: 'ISBN', key: 'isbn', width: 16 }, { header: 'Category', key: 'category', width: 18 },
@@ -8483,7 +8508,7 @@
         ],
         columns: [
           { header: 'Department', key: 'department', width: 26 },
-          { header: 'Branch', key: 'branch', width: 10 },
+          { header: 'Specialisation', key: 'branch', width: 10 },
           { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
           { header: 'Professors', key: 'professors', width: 12, type: 'number' },
           { header: 'Courses', key: 'courses', width: 10, type: 'number' },
@@ -8780,7 +8805,7 @@
       <div class="tbl-wrap"><table><tbody>
         <tr><td style="font-weight:600;width:200px">CGPA</td><td>${cg === null ? '— (not on record)' : cg}</td></tr>
         <tr><td style="font-weight:600">Active Backlogs</td><td>${+s.backlogs || 0}</td></tr>
-        <tr><td style="font-weight:600">Branch</td><td>${esc(s.branch || '—')}</td></tr>
+        <tr><td style="font-weight:600">Specialisation</td><td>${esc(s.branch || '—')}</td></tr>
         <tr><td style="font-weight:600">Course</td><td>${esc(s.course || '—')}</td></tr>
         <tr><td style="font-weight:600">Batch</td><td>${esc(s.batch || '—')}</td></tr>
       </tbody></table></div></div>
@@ -9021,8 +9046,8 @@
     </div>`;
 
     html += `<div class="dash-2col">
-      <div class="panel"><div class="panel-head"><h3>Branch-wise Placement</h3></div>
-        <div class="tbl-wrap"><table><thead><tr><th>Branch</th>
+      <div class="panel"><div class="panel-head"><h3>Specialisation-wise Placement</h3></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Specialisation</th>
           <th style="text-align:right">Students</th><th style="text-align:right">Placed</th><th>Rate</th>
         </tr></thead><tbody>${branchRows.length ? branchRows.map(b => `<tr>
           <td>${esc(b.branch)}</td><td style="text-align:right">${b.total}</td>
@@ -9072,7 +9097,7 @@
       <div class="panel-tools">${exportButtons('ps')}</div></div>
       <div class="panel-tools fin-filters">
         <input class="search-box" id="psQ" placeholder="Search name / reg no...">
-        <select class="filter-sel" id="psBranch"><option value="">All Branches</option>${branchOptions()}</select>
+        <select class="filter-sel" id="psBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
         <select class="filter-sel" id="psDrive"><option value="">Eligibility: any drive</option>${driveOptions()}</select>
         <select class="filter-sel" id="psStatus"><option value="">All Placement Statuses</option>
           <option>Placed</option><option>Joined</option><option>Offer Pending</option>
@@ -9082,7 +9107,7 @@
       </div>
       <div id="psStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Reg No</th><th>Name</th><th>Branch</th><th>Sem</th><th style="text-align:right">CGPA</th>
+        <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th style="text-align:right">CGPA</th>
         <th style="text-align:right">Backlogs</th><th>Eligibility</th><th>Placement Status</th><th>Actions</th>
       </tr></thead><tbody id="psBody"></tbody></table></div><div id="psPager"></div></div>`;
 
@@ -9146,7 +9171,7 @@
           title: 'Student Placement Report', sheetName: 'Placement Students', subtitle: placementStamp(),
           columns: [
             { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student Name', key: 'name', width: 26 },
-            { header: 'Branch', key: 'branch', width: 10 },
+            { header: 'Specialisation', key: 'branch', width: 10 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'CGPA', key: 'cgpa', width: 9 },
             { header: 'Backlogs', key: 'backlogs', width: 10, type: 'number' },
@@ -9539,7 +9564,7 @@
       <div class="form-grid">
         <div class="field"><label>Minimum CGPA</label><input name="minCgpa" type="number" step="0.1" min="0" max="10" value="${esc(d.minCgpa || '')}"></div>
         <div class="field"><label>Maximum Backlogs</label><input name="maxBacklogs" type="number" min="0" value="${esc(d.maxBacklogs === '' || d.maxBacklogs === null || d.maxBacklogs === undefined ? '' : d.maxBacklogs)}"></div>
-        <div class="field full"><label>Eligible Branches <small style="color:var(--muted);font-weight:400">(none ticked = open to all)</small></label>
+        <div class="field full"><label>Eligible Specialisations <small style="color:var(--muted);font-weight:400">(none ticked = open to all)</small></label>
           <div class="chk-grid">${refreshBranches().map(b => `<label class="chk">
             <input type="checkbox" name="branch_${b}" ${selBranches.includes(b) ? 'checked' : ''}> ${esc(b)}</label>`).join('')}</div></div>
         <div class="field full"><label>Eligible Courses <small style="color:var(--muted);font-weight:400">(none ticked = open to all)</small></label>
@@ -9615,11 +9640,11 @@
       <div class="tbl-wrap"><table><tbody>
         ${row('Minimum CGPA', d.minCgpa || 'No minimum')}
         ${row('Maximum Backlogs', (d.maxBacklogs === '' || d.maxBacklogs === null || d.maxBacklogs === undefined) ? 'No limit' : d.maxBacklogs)}
-        ${row('Eligible Branches', csvList(d.eligibleBranches).join(', ') || 'All branches')}
+        ${row('Eligible Specialisations', csvList(d.eligibleBranches).join(', ') || 'All branches')}
         ${row('Eligible Courses', csvList(d.eligibleCourses).join(', ') || 'All courses')}
       </tbody></table></div>
       <h4 class="ro-sub">Eligible Students Who Have Not Applied (${notApplied.length})</h4>
-      <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Branch</th>
+      <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Specialisation</th>
         <th style="text-align:right">CGPA</th><th style="text-align:right">Backlogs</th>
       </tr></thead><tbody>${notApplied.length ? notApplied.slice(0, 25).map(s => `<tr>
         <td class="mono">${esc(s.roll)}</td><td>${esc(s.name)}</td><td>${esc(s.branch || '—')}</td>
@@ -9646,12 +9671,12 @@
         <input class="search-box" id="apQ" placeholder="Search student / reg no / role...">
         <select class="filter-sel" id="apDrive"><option value="">All Drives</option>${driveOptions(preset)}</select>
         <select class="filter-sel" id="apStatus"><option value="">All Statuses</option>${optionsFrom(APP_STATUS)}</select>
-        <select class="filter-sel" id="apBranch"><option value="">All Branches</option>${branchOptions()}</select>
+        <select class="filter-sel" id="apBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
         <button class="btn-outline btn-sm" id="apClear">Clear</button>
       </div>
       <div id="apStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>ID</th><th>Student</th><th>Reg No</th><th>Branch</th><th>Drive</th>
+        <th>ID</th><th>Student</th><th>Reg No</th><th>Specialisation</th><th>Drive</th>
         <th>Applied On</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="apBody"></tbody></table></div><div id="apPager"></div></div>`;
 
@@ -9733,7 +9758,7 @@
           columns: [
             { header: 'Application ID', key: 'id', width: 14 },
             { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-            { header: 'Branch', key: 'branch', width: 10 }, { header: 'CGPA', key: 'cgpa', width: 9 },
+            { header: 'Specialisation', key: 'branch', width: 10 }, { header: 'CGPA', key: 'cgpa', width: 9 },
             { header: 'Company', key: 'company', width: 24 }, { header: 'Job Role', key: 'jobRole', width: 24 },
             { header: 'Package', key: 'package', width: 14, money: true },
             { header: 'Applied On', key: 'appliedOn', width: 13 },
@@ -9929,7 +9954,7 @@
           columns: [
             { header: 'Interview ID', key: 'id', width: 13 },
             { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-            { header: 'Branch', key: 'branch', width: 10 },
+            { header: 'Specialisation', key: 'branch', width: 10 },
             { header: 'Company', key: 'company', width: 24 }, { header: 'Job Role', key: 'jobRole', width: 22 },
             { header: 'Round', key: 'round', width: 8, type: 'number' },
             { header: 'Date', key: 'date', width: 13 }, { header: 'Time', key: 'time', width: 10 },
@@ -9997,13 +10022,13 @@
       <div class="panel-tools fin-filters">
         <input class="search-box" id="plQ" placeholder="Search student / company / role...">
         <select class="filter-sel" id="plCompany"><option value="">All Companies</option>${companyOptions()}</select>
-        <select class="filter-sel" id="plBranch"><option value="">All Branches</option>${branchOptions()}</select>
+        <select class="filter-sel" id="plBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
         <select class="filter-sel" id="plStatus"><option value="">All Statuses</option>${optionsFrom(OFFER_STATUS)}</select>
         <button class="btn-outline btn-sm" id="plClear">Clear</button>
       </div>
       <div id="plStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Reg No</th><th>Student</th><th>Branch</th><th>Company</th><th>Designation</th>
+        <th>Reg No</th><th>Student</th><th>Specialisation</th><th>Company</th><th>Designation</th>
         <th style="text-align:right">Package</th><th>Joining Date</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="plBody"></tbody></table></div><div id="plPager"></div></div>`;
 
@@ -10080,7 +10105,7 @@
   function placementColumns() {
     return [
       { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-      { header: 'Branch', key: 'branch', width: 10 }, { header: 'Batch', key: 'batch', width: 13 },
+      { header: 'Specialisation', key: 'branch', width: 10 }, { header: 'Batch', key: 'batch', width: 13 },
       { header: 'Company', key: 'company', width: 24 },
       { header: 'Designation', key: 'jobRole', width: 24 },
       { header: 'Package', key: 'package', width: 14, money: true },
@@ -10477,7 +10502,7 @@
   const PL_REPORTS = [
     ['placement', '🏆 Placement Report'],
     ['company', '🏢 Company-wise Report'],
-    ['branch', '🌿 Branch-wise Report'],
+    ['branch', '🌿 Specialisation-wise Report'],
     ['package', '💰 Package Report'],
     ['drive', '🚀 Drive Report'],
     ['application', '📨 Application Report'],
@@ -10493,7 +10518,7 @@
         `<button class="fin-tab ${key === plReport ? 'active' : ''}" data-rep="${key}">${label}</button>`).join('')}</div>
       <div class="panel-tools fin-filters">
         <input class="search-box" id="prQ" placeholder="Search...">
-        <select class="filter-sel" id="prBranch"><option value="">All Branches</option>${branchOptions()}</select>
+        <select class="filter-sel" id="prBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
         <select class="filter-sel" id="prCompany"><option value="">All Companies</option>${companyOptions()}</select>
         <label class="days-field">From <input class="filter-sel" id="prFrom" type="date"></label>
         <label class="days-field">To <input class="filter-sel" id="prTo" type="date"></label>
@@ -10645,15 +10670,15 @@
       })).filter(g => (!f.q || g.branch.toLowerCase().includes(f.q)) && (!f.branch || g.branch === f.branch))
         .sort((a, b) => b.placed - a.placed);
       return {
-        title: 'Branch-wise Placement Report', sheetName: 'By Branch', subtitle: stamp,
+        title: 'Specialisation-wise Placement Report', sheetName: 'By Branch', subtitle: stamp,
         note: 'Headcount, eligibility and placement outcome for each branch.',
         stats: [
-          statCard('🌿', rows.length, 'Branches'),
+          statCard('🌿', rows.length, 'Specialisations'),
           statCard('🎓', rows.reduce((a, g) => a + g.students, 0), 'Students', 'c2'),
           statCard('🏆', rows.reduce((a, g) => a + g.placed, 0), 'Placed', 'c3'),
         ],
         columns: [
-          { header: 'Branch', key: 'branch', width: 12 },
+          { header: 'Specialisation', key: 'branch', width: 12 },
           { header: 'Students', key: 'students', width: 10, type: 'number' },
           { header: 'Eligible', key: 'eligible', width: 10, type: 'number' },
           { header: 'Applied', key: 'applied', width: 10, type: 'number' },
@@ -10696,7 +10721,7 @@
         columns: [
           { header: 'Rank', key: 'rank', width: 8, type: 'number' },
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-          { header: 'Branch', key: 'branch', width: 10 }, { header: 'Company', key: 'company', width: 24 },
+          { header: 'Specialisation', key: 'branch', width: 10 }, { header: 'Company', key: 'company', width: 24 },
           { header: 'Designation', key: 'jobRole', width: 24 },
           { header: 'Package', key: 'package', width: 14, money: true },
           { header: 'CTC', key: 'ctc', width: 12 },
@@ -10784,7 +10809,7 @@
         columns: [
           { header: 'Application ID', key: 'id', width: 14 },
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-          { header: 'Branch', key: 'branch', width: 10 }, { header: 'CGPA', key: 'cgpa', width: 9 },
+          { header: 'Specialisation', key: 'branch', width: 10 }, { header: 'CGPA', key: 'cgpa', width: 9 },
           { header: 'Company', key: 'company', width: 24 }, { header: 'Job Role', key: 'jobRole', width: 22 },
           { header: 'Package', key: 'package', width: 14, money: true },
           { header: 'Applied On', key: 'appliedOn', width: 13 },
@@ -10821,7 +10846,7 @@
       ],
       columns: [
         { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
-        { header: 'Branch', key: 'branch', width: 10 },
+        { header: 'Specialisation', key: 'branch', width: 10 },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'CGPA', key: 'cgpa', width: 9 },
         { header: 'Backlogs', key: 'backlogs', width: 10, type: 'number' },
