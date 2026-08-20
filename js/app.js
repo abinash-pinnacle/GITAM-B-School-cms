@@ -2810,8 +2810,10 @@
           </select></label>
         <label class="att-field"><span>Date of Class</span>
           <input type="date" id="atDate" value="${today()}"></label>
-        <label class="att-field"><span>Class Time</span>
+        <label class="att-field"><span>Start Time</span>
           <input type="time" id="atTime" value="09:30"></label>
+        <label class="att-field"><span>End Time</span>
+          <input type="time" id="atEnd" value="10:30"></label>
       </div>
       <div id="attArea"><p class="empty">Choose the class above — the students on it load by themselves.</p></div>
     </div>`;
@@ -2822,7 +2824,7 @@
         type: val('atType'), course: val('atCourse'), batch: val('atBatch'),
         semester: val('atSem'), department: val('atDept'), specialisation: val('atSpec'),
         paperCode: val('atPaper'), facultyId: val('atFaculty'),
-        date: val('atDate'), classTime: val('atTime'),
+        date: val('atDate'), classTime: val('atTime'), endTime: val('atEnd'),
       });
 
       /* Each dropdown narrows the ones after it. Rebuilding from the roster
@@ -2915,7 +2917,7 @@
       };
 
       const inputs = ['atType', 'atCourse', 'atBatch', 'atSem', 'atDept', 'atSpec',
-                      'atPaper', 'atFaculty', 'atDate', 'atTime'];
+                      'atPaper', 'atFaculty', 'atDate', 'atTime', 'atEnd'];
       inputs.forEach(id => {
         $('#' + id).onchange = () => {
           const key = { atCourse: 'course', atBatch: 'batch', atSem: 'semester', atDept: 'department' }[id];
@@ -2952,6 +2954,10 @@
   }
 
   function saveSession(f, session, area) {
+    if (f.classTime && f.endTime && f.endTime <= f.classTime) {
+      toast('The class cannot end before it starts.', 'err');
+      return;
+    }
     const records = {};
     area.querySelectorAll('.att-toggle').forEach(grp => {
       const on = grp.querySelector('.toggle-btn.on');
@@ -2988,7 +2994,8 @@
         const department = a.department || (course && course.branch) || st.branch || '—';
         if (scopeDept && department !== scopeDept) return;
         out.push({
-          sessionId: a.id, date: a.date || '—', classTime: a.classTime || '—',
+          sessionId: a.id, date: a.date || '—',
+          classTime: [a.classTime, a.endTime].filter(Boolean).join(' – ') || '—',
           type: a.type || 'Academic',
           course: a.course || st.course || '—', batch: a.batch || st.batch || '—',
           semester: a.semester || (course && course.semester) || st.semester || '—',
@@ -3020,7 +3027,7 @@
         { header: 'Paper Name', key: 'paperName', width: 30 },
         { header: 'Faculty', key: 'faculty', width: 22 },
         { header: 'Date', key: 'date', width: 12 },
-        { header: 'Time', key: 'classTime', width: 10 },
+        { header: 'Time', key: 'classTime', width: 16 },
         { header: 'Student Name', key: 'studentName', width: 24 },
         { header: 'Roll No.', key: 'roll', width: 14 },
         { header: 'Status', key: 'status', width: 10 },

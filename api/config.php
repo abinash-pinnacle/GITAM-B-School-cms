@@ -119,7 +119,7 @@ const COLLECTIONS = [
        placement training session. */
     'attendance' => ['id', 'courseId', 'date', 'records', 'type', 'course', 'batch',
                      'semester', 'department', 'specialisation', 'paperCode',
-                     'paperName', 'facultyId', 'classTime', 'markedBy'],
+                     'paperName', 'facultyId', 'classTime', 'endTime', 'markedBy'],
     'marks'      => ['id', 'studentId', 'courseId', 'internal', 'external'],
     // one row per student per semester — the single fee ledger shared by admin,
     // accountant and the student's own "My Fees" page
