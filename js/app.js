@@ -157,7 +157,19 @@
   function readOnlyWritable() {
     return user && user.role === 'center_head' ? { requisitions: ['update'] } : {};
   }
-  function applyReadOnly() { Store.setReadOnly(readOnly(), readOnlyWritable()); }
+  function applyReadOnly() {
+    // A coordinator writes attendance and nothing else, so the store treats it
+    // as read-only with that one exception — the same rule the API applies.
+    if (user && user.role === 'course_coordinator') {
+      Store.setReadOnly(true, { attendance: ['add', 'update', 'remove'] });
+      return;
+    }
+    Store.setReadOnly(readOnly(), readOnlyWritable());
+  }
+  /** true for a role that may look at the master data but never change it */
+  function viewsMasterOnly() {
+    return readOnly() || (!!user && user.role === 'course_coordinator');
+  }
   /** roles whose scope is the whole college: the admin runs it, the center head watches it */
   function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
   /** the label shown in the top bar and the sidebar */
@@ -2288,7 +2300,7 @@
 
   // ---- COURSES ----
   function viewCourses() {
-    const canEdit = !readOnly();
+    const canEdit = !viewsMasterOnly();
     let html = `<div class="panel"><div class="panel-head">
       <h3>Courses</h3><div class="panel-tools">
         <input class="search-box" id="couSearch" placeholder="Search code / name...">
@@ -2640,6 +2652,10 @@
   // ---- ATTENDANCE (mark) ----
   function teacherCourses() {
     if (collegeWide()) return Store.all('courses');
+    if (user.role === 'course_coordinator') {
+      const dept = attendanceScopeDept();
+      return dept ? Store.all('courses').filter(c => c.branch === dept) : Store.all('courses');
+    }
     return Store.all('courses').filter(c => c.facultyId === user.refId);
   }
   // does a student belong to this course's class (branch + sem + assigned section)?
@@ -2682,6 +2698,13 @@
     // admin does. What they cannot do is change it, which the server enforces.
     if (collegeWide() || ['librarian', 'accountant', 'placement_officer'].includes(user.role)) {
       return Store.all('students');
+    }
+    /* A coordinator calls the register for their department, so the roll they
+       read is the same set — without this they fell through to the
+       taught-classes rule below, which is a faculty idea, and saw nobody. */
+    if (user.role === 'course_coordinator') {
+      const dept = attendanceScopeDept();
+      return dept ? Store.all('students').filter(s => s.branch === dept) : Store.all('students');
     }
     if (user.role === 'faculty') {
       const branch = facultyDeptBranch();
@@ -3268,8 +3291,9 @@
   function viewTimetable() {
     const isAdmin = user.role === 'admin';
     const isFaculty = user.role === 'faculty';
-    // the center head picks any class the admin can, but edits none of it
-    const canPickClass = isAdmin || readOnly();
+    // the center head and the coordinator pick any class the admin can, and
+    // edit none of it
+    const canPickClass = isAdmin || viewsMasterOnly();
     // determine scope
     let branch, semester, section;
     if (user.role === 'student') {
@@ -3282,7 +3306,7 @@
       <div class="panel-tools">`;
     if (canPickClass) {
       html += `<select class="filter-sel" id="ttBranch">${branchOptions('MBA')}</select>
-        <select class="filter-sel" id="ttSem">${[...Array(8)].map((_,i)=>`<option value="${i+1}" ${i+1===5?'selected':''}>Sem ${i+1}</option>`).join('')}</select>
+        <select class="filter-sel" id="ttSem">${SEMESTERS.map(n=>`<option value="${n}" ${n===2?'selected':''}>Sem ${n}</option>`).join('')}</select>
         <input class="filter-sel" id="ttSec" value="A" style="width:60px">
         ${isAdmin ? `<button class="btn-primary" id="addSlot">+ Add Slot</button>`
           : `<select class="filter-sel" id="ttView">
