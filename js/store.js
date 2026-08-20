@@ -109,8 +109,10 @@ const Store = {
         // roll the cache back so the screen matches what was actually saved
         const ids = new Set(rows.map((r) => r.id));
         this.data[col] = this.all(col).filter((x) => !ids.has(x.id));
-        this._check(res);
-        return { error: res.status === 403 ? 'Not permitted.' : 'Server refused the upload.' };
+        const said = await res.json().catch(() => null);
+        if (res.status === 403) this._fail('Not permitted — your role cannot change this record.');
+        return { error: (said && said.message)
+          || (res.status === 403 ? 'Not permitted.' : 'Server refused the upload.') };
       }
     } catch (e) {
       const ids = new Set(rows.map((r) => r.id));
@@ -179,8 +181,12 @@ const Store = {
   },
   // the server rejects writes from a role that may not make them
   _check(res) {
-    if (res.status === 403) this._fail('Not permitted — your role cannot change this record.');
-    else if (!res.ok) this._fail();
+    if (res.status === 403) { this._fail('Not permitted — your role cannot change this record.'); return; }
+    if (res.ok) return;
+    /* A refusal usually says why — a duplicate registration number, a phone
+       that is a digit short. Reading it beats "Save failed", which sends
+       people looking for a network problem that isn't there. */
+    res.json().then((d) => this._fail(d && d.message)).catch(() => this._fail());
   },
   _fail(msg) {
     const t = document.getElementById('toast');

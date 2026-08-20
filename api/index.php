@@ -443,6 +443,74 @@ function guard_student_application(array $d): array
     ];
 }
 
+/* ---------------- what a stored row has to look like ----------------
+   The browser checks these too, so a person is told at the keyboard rather
+   than by a 422. These exist because the browser is not the only way in:
+   the bulk upload, a script, and anyone holding the URL all arrive here. */
+
+/** Every field on this collection that holds a phone number. */
+const PHONE_FIELDS = [
+    'students' => ['phone'], 'faculty' => ['phone'], 'accountants' => ['phone'],
+    'centerheads' => ['phone'], 'placementofficers' => ['phone'],
+    'coordinators' => ['phone'], 'companies' => ['hrPhone'],
+];
+
+/**
+ * The complaint about this row, or null when it is fine. `$id` is the row
+ * being updated, so a record does not clash with itself.
+ */
+function row_problem(string $col, array $d, ?string $id = null): ?string
+{
+    foreach (PHONE_FIELDS[$col] ?? [] as $field) {
+        if (!array_key_exists($field, $d)) {
+            continue;
+        }
+        $phone = trim((string) ($d[$field] ?? ''));
+        // blank is allowed — half the staff records have no number on file
+        if ($phone !== '' && !preg_match('/^\d{10}$/', $phone)) {
+            return 'Phone number must be exactly 10 digits.';
+        }
+    }
+
+    if ($col === 'students' && array_key_exists('roll', $d)) {
+        $roll = trim((string) ($d['roll'] ?? ''));
+        $len = (int) setting_value('regNoLength', '10');
+        if ($roll === '') {
+            return 'A registration number is required.';
+        }
+        // A number issued under an older scheme keeps its shape; the rule is
+        // for what is being written now, and is checked on the way in.
+        $existing = $id ? fetch_one('SELECT * FROM ' . qi('students') . ' WHERE ' . qi('id') . ' = ?', [$id]) : null;
+        $changed = $existing === null || (string) ($existing['roll'] ?? '') !== $roll;
+        if ($changed) {
+            if (!preg_match('/^\d+$/', $roll)) {
+                return 'Registration number must be digits only.';
+            }
+            if ($len > 0 && strlen($roll) !== $len) {
+                return "Registration number must be exactly $len digits.";
+            }
+        }
+        $clash = fetch_one(
+            'SELECT * FROM ' . qi('students') . ' WHERE ' . qi('roll') . ' = ?' .
+            ($id ? ' AND ' . qi('id') . ' <> ?' : ''),
+            $id ? [$roll, $id] : [$roll]
+        );
+        if ($clash) {
+            return "Registration number $roll already belongs to " . ($clash['name'] ?? 'another student') . '.';
+        }
+    }
+    return null;
+}
+
+/** Refuse the write, naming the row when a whole sheet was posted. */
+function reject_row(string $problem, ?int $index = null): void
+{
+    send_json([
+        'error'   => 'invalid',
+        'message' => $index === null ? $problem : "Row " . ($index + 2) . ": $problem",
+    ], 422);
+}
+
 /**
  * Rows the caller is allowed to see. A student reading their own placement
  * records gets exactly theirs — the filter lives here so it applies to
@@ -508,6 +576,14 @@ function api_create(string $col): void
     // one-per-row over a hosted database, and one transaction means a failure
     // half way through does not leave half a class imported.
     if (is_array($d) && array_is_list($d) && $d !== [] && is_array($d[0])) {
+        // the whole sheet is checked before any of it is written, so a bad row
+        // half way down does not leave the first half imported
+        foreach ($d as $i => $row) {
+            $problem = row_problem($col, is_array($row) ? $row : [], null);
+            if ($problem !== null) {
+                reject_row($problem, $i);
+            }
+        }
         $rows = [];
         db()->beginTransaction();
         try {
@@ -526,6 +602,10 @@ function api_create(string $col): void
         send_json($rows, 201);
     }
 
+    $problem = row_problem($col, $d, null);
+    if ($problem !== null) {
+        reject_row($problem);
+    }
     if (empty($d['id'])) {
         $d['id'] = next_id($col);
     }
@@ -536,6 +616,10 @@ function api_create(string $col): void
 function api_update(string $col, string $id): void
 {
     $d = body();
+    $problem = row_problem($col, $d, $id);
+    if ($problem !== null) {
+        reject_row($problem);
+    }
     // a role with a column allowlist gets everything else in the body dropped,
     // so a crafted payload cannot ride along with a legitimate one
     $allowed = writable_fields($col);
