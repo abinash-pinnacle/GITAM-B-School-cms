@@ -72,7 +72,7 @@ function db_config(): array
 /* Bump when the demo data in seed_data() changes. It rides along in the
    schema signature, so an install still carrying the previous demo set
    re-runs init_db() once and picks the new one up. */
-const SEED_REVISION = '2026-08-20-regno';
+const SEED_REVISION = '2026-08-20-attendance';
 
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
@@ -82,9 +82,13 @@ const COLLECTIONS = [
     /* `name` stays the full name every other screen prints — the ID card, the
        marksheet, the fee receipt — and is composed from the three parts on
        save, so nothing downstream had to learn about them. */
+    /* branch is the department a student belongs to (MBA, MCA); specialisation
+       is the stream inside it (Marketing, Finance, Data Science). Attendance is
+       taken per specialisation, which is why both are recorded. */
     'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
-                     'email', 'phone', 'branch', 'year', 'semester', 'section', 'photo',
-                     'course', 'academicYear', 'cgpa', 'backlogs', 'batch', 'status'],
+                     'email', 'phone', 'branch', 'specialisation', 'year', 'semester',
+                     'section', 'photo', 'course', 'academicYear', 'cgpa', 'backlogs',
+                     'batch', 'status'],
     // reportingTo holds the id of another faculty row — the person this one
     // reports to. Blank for the top of the tree.
     'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
@@ -95,6 +99,9 @@ const COLLECTIONS = [
     'centerheads' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
     // placement-cell staff record; the login lives in `users` with role = placement_officer
     'placementofficers' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'department', 'photo'],
+    /* course coordinators run attendance for a department. They may register a
+       class and correct it; they may not touch the master data behind it. */
+    'coordinators' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'department', 'photo'],
     // shortName drives the timetable label; facultyId is set from the Assignments page
     'courses'    => ['id', 'code', 'name', 'branch', 'semester', 'credits', 'facultyId', 'section', 'shortName', 'type'],
     /* The curriculum: what a branch studies in each semester. Deliberately not
@@ -105,7 +112,14 @@ const COLLECTIONS = [
        Courses dropdowns on the attendance/marks pages do not fill up with two
        hundred catalogue entries nobody teaches this term. */
     'syllabus'   => ['id', 'branch', 'semester', 'code', 'name', 'type', 'credits'],
-    'attendance' => ['id', 'courseId', 'date', 'records'],   // records = JSON object
+    /* One row per class held. `records` maps studentId -> P|A; the rest is the
+       class it was held for, copied in at save time rather than derived later —
+       a student who changes specialisation next term must not silently rewrite
+       what was registered last term. `type` separates an academic class from a
+       placement training session. */
+    'attendance' => ['id', 'courseId', 'date', 'records', 'type', 'course', 'batch',
+                     'semester', 'department', 'specialisation', 'paperCode',
+                     'paperName', 'facultyId', 'classTime', 'markedBy'],
     'marks'      => ['id', 'studentId', 'courseId', 'internal', 'external'],
     // one row per student per semester — the single fee ledger shared by admin,
     // accountant and the student's own "My Fees" page
@@ -194,6 +208,7 @@ const ID_PREFIX = [
     'books' => 'B', 'issues' => 'IS', 'events' => 'EV', 'settings' => 'SET',
     'accountants' => 'AC', 'assets' => 'AS', 'fixedfees' => 'FF', 'payments' => 'PY',
     'requisitions' => 'RQ', 'centerheads' => 'CH', 'placementofficers' => 'PO',
+    'coordinators' => 'CC',
     'companies' => 'CO', 'drives' => 'DR', 'applications' => 'AP',
     'interviews' => 'IV', 'offers' => 'OF', 'placementevents' => 'PE',
     'syllabus' => 'SY',
@@ -218,7 +233,7 @@ const ID_PREFIX = [
  * well, but the server is the gate: a hand-made POST/PUT/DELETE is refused.
  */
 const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
-               'faculty', 'librarian', 'student'];
+               'course_coordinator', 'faculty', 'librarian', 'student'];
 
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */
 const READ_ONLY_ROLES = ['center_head'];
@@ -232,9 +247,20 @@ const FINANCE_ROLES = ['admin', 'accountant'];
 /** may read financial data — the center head monitors it without touching it */
 const FINANCE_VIEW_ROLES = ['admin', 'accountant', 'center_head'];
 
+/* ---------------- attendance ----------------
+   The admin and the course coordinator always mark attendance. Faculty do so
+   only while the admin leaves the `facultyAttendance` switch on — some
+   institutes want the coordinator to be the single point of entry. */
+const ATTENDANCE_ALWAYS_ROLES = ['admin', 'course_coordinator'];
+const ATTENDANCE_OPTIONAL_ROLES = ['faculty'];
+/** master data a coordinator reads but never writes */
+const COORDINATOR_READONLY = ['students', 'faculty', 'courses', 'syllabus', 'timetable',
+                              'settings', 'users', 'coordinators', 'events', 'marks'];
+
 /** requisitions: staff raise them, admin/accountant approve them — students never see them */
 const STAFF_COLLECTIONS = ['requisitions'];
-const STAFF_ROLES = ['admin', 'accountant', 'center_head', 'faculty', 'librarian'];
+const STAFF_ROLES = ['admin', 'accountant', 'center_head', 'faculty', 'librarian',
+                     'course_coordinator'];
 
 /* ---------------- requisition approval chain ----------------
    A request now clears the center head before the accounts office can touch
@@ -380,6 +406,7 @@ function seed_data(): array
             ['u6', 'accounts', 'pass123', 'accountant', 'AC01', 'Sunita Rao'],
             ['u7', 'centerhead', 'pass123', 'center_head', 'CH01', 'Dr. Anand Rao'],
             ['u8', 'placement', 'pass123', 'placement_officer', 'PO01', 'Ms. Kavita Menon'],
+            ['u9', 'coordinator', 'pass123', 'course_coordinator', 'CC01', 'Dr. Sunil Mohanty'],
         ],
         'faculty' => [
             ['F01', 'NM-F-1001', 'Dr. Rajesh Mehta', 'rmehta@nmiet.edu', '9876500011', 'MBA', 'Professor', null,
@@ -394,12 +421,12 @@ function seed_data(): array
         // id, roll, name, first, middle, last, email, phone, branch, year, semester,
         // section, photo, course, academicYear, cgpa, backlogs, batch, status
         'students' => [
-            ['S01', '2025180001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', 'Active'],
-            ['S02', '2025180002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@nmiet.in', '9810000002', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', 'Active'],
-            ['S03', '2025180003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', 'Active'],
-            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
-            ['S05', '2025190001', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
-            ['S06', '2025190002', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
+            ['S01', '2025180001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', 'Active'],
+            ['S02', '2025180002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@nmiet.in', '9810000002', 'MBA', 'Finance', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', 'Active'],
+            ['S03', '2025180003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', 'Active'],
+            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 'Human Resource', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
+            ['S05', '2025190001', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MCA', 'Data Science', 1, 2, 'A', null, 'MCA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
+            ['S06', '2025190002', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MCA', 'Software Engineering', 1, 2, 'A', null, 'MCA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
         ],
         'accountants' => [
             ['AC01', 'NM-A-2001', 'Sunita Rao', 'sunita.rao@nmiet.edu', '9876500021', 'Senior Accountant', null],
@@ -410,6 +437,10 @@ function seed_data(): array
         'placementofficers' => [
             ['PO01', 'NM-P-4001', 'Ms. Kavita Menon', 'kavita.menon@nmiet.edu', '9876500041',
              'Placement Officer', 'Training & Placement Cell', null],
+        ],
+        'coordinators' => [
+            ['CC01', 'NM-C-5001', 'Dr. Sunil Mohanty', 'sunil.mohanty@nmiet.edu', '9876500051',
+             'Course Coordinator', 'MBA', null],
         ],
         'courses' => [
             ['C01', 'MBA201', 'Marketing Management', 'MBA', 2, 4, 'F01', 'A'],
@@ -571,6 +602,7 @@ function seed_data(): array
         'settings' => [
             ['SET01', 'studentFeesVisible', '1'],
             ['SET02', 'regNoLength', '10'],
+            ['SET03', 'facultyAttendance', '1'],
         ],
     ];
 }

@@ -119,6 +119,30 @@ function guard_requisition_stage(string $id): void
     }
 }
 
+/** A stored setting's value, or the fallback when it has never been set. */
+function setting_value(string $name, string $default = ''): string
+{
+    $row = fetch_one('SELECT * FROM ' . qi('settings') . ' WHERE ' . qi('name') . ' = ?', [$name]);
+    return $row === null ? $default : (string) ($row['value'] ?? $default);
+}
+
+/**
+ * Who may register attendance. The admin and the course coordinator always
+ * may. Faculty may while the admin leaves the switch on — an institute that
+ * wants the coordinator to be the single point of entry turns it off, and
+ * turning it off has to mean the API refuses them too, not merely that the
+ * menu item disappears.
+ */
+function may_mark_attendance(): bool
+{
+    $role = current_role();
+    if (in_array($role, ATTENDANCE_ALWAYS_ROLES, true)) {
+        return true;
+    }
+    return in_array($role, ATTENDANCE_OPTIONAL_ROLES, true)
+        && setting_value('facultyAttendance', '1') === '1';
+}
+
 /** admin and placement officer may create/edit/delete placement records */
 function may_touch_placement(): bool
 {
@@ -193,6 +217,32 @@ function guard_request(string $resource, string $method): void
     }
     if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff()) {
         send_json(['error' => 'forbidden'], 403);
+    }
+
+    /* A course coordinator exists to run attendance. It reads the master data
+       that attendance is built from — students, papers, faculty — and writes
+       none of it: the one collection it may change is `attendance` itself. */
+    if (current_role() === 'course_coordinator') {
+        if ($isWrite && $resource !== 'attendance') {
+            send_json([
+                'error'   => 'forbidden',
+                'message' => 'A course coordinator can register attendance, not change master records.',
+            ], 403);
+        }
+        if (!$isWrite && $resource !== '' && isset(COLLECTIONS[$resource])
+            && !in_array($resource, COORDINATOR_READONLY, true) && $resource !== 'attendance') {
+            send_json(['error' => 'forbidden'], 403);
+        }
+    }
+
+    // attendance is registered by the roles allowed to hold a class
+    if ($resource === 'attendance' && $isWrite && !may_mark_attendance()) {
+        send_json([
+            'error'   => 'forbidden',
+            'message' => current_role() === 'faculty'
+                ? 'Attendance entry is currently handled by the course coordinator.'
+                : 'Your role cannot register attendance.',
+        ], 403);
     }
 
     // The student roll is read by the accounts office, the placement cell, the

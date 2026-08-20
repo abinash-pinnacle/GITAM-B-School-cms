@@ -67,6 +67,16 @@
   /* ---------- admin-controlled feature switches ---------- */
   const SET_STUDENT_FEES = 'studentFeesVisible';
   function settingRow(name) { return Store.all('settings').find(x => x.name === name); }
+  /* Faculty mark attendance only while the admin leaves this on; the
+     coordinator and the admin always may. The server enforces the same rule —
+     this only decides whether the page is offered. */
+  function facultyAttendanceOn() { return settingOn('facultyAttendance', true); }
+  function canMarkAttendance() {
+    if (!user) return false;
+    if (['admin', 'course_coordinator'].includes(user.role)) return true;
+    return user.role === 'faculty' && facultyAttendanceOn();
+  }
+
   function settingOn(name, dflt) {
     const row = settingRow(name);
     return row ? String(row.value) === '1' : dflt;
@@ -133,7 +143,7 @@
   const READ_ONLY_ROLES = ['center_head'];
   const ROLE_LABEL = {
     admin: 'Admin', accountant: 'Accountant', center_head: 'Center Head',
-    placement_officer: 'Placement Officer',
+    placement_officer: 'Placement Officer', course_coordinator: 'Course Coordinator',
     faculty: 'Faculty', librarian: 'Librarian', student: 'Student',
   };
   /** the placement cell — the admin runs everything, the officer runs placement */
@@ -236,6 +246,7 @@
       ['batchsem','🎯','Semester Update'], ['faculty','👨‍🏫','Faculty'],
       ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
       ['assignments','🗂️','Assignments'], ['attendance','✅','Attendance'],
+      ['attrecords','🗂️','Attendance Records'],
       ['marks','📝','Marks & Results'], ['timetable','🗓️','Timetable'], ['library','📖','Library'], ['reports','📊','Library Reports'], ['fees','💳','Fees'],
       ['employees','🧑‍💼','Employees'], ['accounts','🔑','Login Accounts'],
       // the accounts-office modules — the admin gets every one of them
@@ -301,6 +312,15 @@
       ['mybooks','📖','My Library'], ['myfees','💳','My Fees'],
       ['myplacement','🏆','My Placement'], ['profile','👤','My Profile'],
     ],
+    /* The coordinator runs attendance and reads what it is built from. Nothing
+       here writes master data — the server refuses it either way. */
+    course_coordinator: [
+      ['dashboard','📊','Dashboard'], ['attendance','✅','Attendance'],
+      ['attrecords','🗂️','Attendance Records'],
+      ['students','🎓','Students'], ['courses','📚','Courses'],
+      ['syllabus','🧾','Subjects by Semester'], ['timetable','🗓️','Timetable'],
+      ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+    ],
     librarian: [
       ['dashboard','📊','Dashboard'], ['library','📖','Library'], ['issueBook','⬇️','Issue a Book'],
       ['returnBook','⬆️','Return a Book'], ['bookreq','📚','Book Requisition'],
@@ -314,6 +334,7 @@
   function menuFor(role) {
     let items = MENU[role] || [];
     if (role === 'student' && !studentFeesVisible()) items = items.filter(([key]) => key !== 'myfees');
+    if (role === 'faculty' && !facultyAttendanceOn()) items = items.filter(([key]) => key !== 'attendance');
     return items;
   }
 
@@ -383,7 +404,7 @@
 
   const TITLES = {
     dashboard:'Dashboard', students:'Manage Students', faculty:'Faculty', courses:'Courses',
-    attendance:'Attendance', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
+    attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
     myplacement:'My Placement', profile:'My Profile',
@@ -425,6 +446,7 @@
       assignments: viewAssignments, library: viewLibrary, mybooks: viewMyBooks,
       myattendance: viewMyAttendance, myresults: viewMyResults, myfees: viewMyFees,
       myplacement: viewMyPlacement, profile: viewProfile,
+      attrecords: viewAttendanceRecords,
       events: viewEvents, issueBook: viewIssueBook, returnBook: viewReturnBook, reports: viewLibraryReports,
       accounts: viewAccounts,
       finstudents: viewFinStudents, assets: viewAssets, fixedfee: viewFixedFee, semfee: viewSemFee,
@@ -999,7 +1021,7 @@
       <div class="tbl-wrap"><table class="tbl-filter"><thead>
         <tr>
           <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
-          <th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
+          <th>Department</th><th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
           <th>Phone No.</th><th>Status</th><th></th>
         </tr>
         <tr class="filter-row">
@@ -1009,6 +1031,7 @@
           <td><input data-f="middleName"></td>
           <td><input data-f="lastName"></td>
           <td><select data-f="branch">${colFilterOptions(all, 'branch', '')}</select></td>
+          <td><select data-f="specialisation">${colFilterOptions(all, 'specialisation', '')}</select></td>
           <td><select data-f="section">${colFilterOptions(all, 'section', '')}</select></td>
           <td><select data-f="batch">${colFilterOptions(all, 'batch', '')}</select></td>
           <td><select data-f="course">${colFilterOptions(all, 'course', '')}</select></td>
@@ -1037,7 +1060,7 @@
           // a text filter matches anywhere in the cell; a dropdown is exact
           return Object.entries(f).every(([k, v]) => {
             const cell = String(s[k] ?? '').toLowerCase();
-            const isSelect = ['branch', 'section', 'batch', 'course', 'status'].includes(k);
+            const isSelect = ['branch', 'specialisation', 'section', 'batch', 'course', 'status'].includes(k);
             return isSelect ? cell === v : cell.includes(v);
           });
         });
@@ -1055,6 +1078,7 @@
           <td>${esc(s.middleName || '')}</td>
           <td>${esc(s.lastName || '')}</td>
           <td>${esc(s.branch || '')}</td>
+          <td>${esc(s.specialisation || '—')}</td>
           <td>${esc(s.section || '')}</td>
           <td>${esc(s.batch || '—')}</td>
           <td>${esc(s.course || '—')}</td>
@@ -1069,7 +1093,7 @@
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
           </div></td>
-        </tr>`).join('') : `<tr><td colspan="12" class="empty">No students found.</td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="13" class="empty">No students found.</td></tr>`;
 
         $('#stuBody').querySelectorAll('[data-profile]').forEach(b =>
           b.onclick = () => studentProfileModal(b.dataset.profile));
@@ -1199,7 +1223,8 @@
         { header: 'Batch', key: 'batch', width: 14 },
         { header: 'Status', key: 'status', width: 10 },
         { header: 'Course', key: 'course', width: 12 },
-        { header: 'Specialisation', key: 'branch', width: 12 },
+        { header: 'Department', key: 'branch', width: 12 },
+        { header: 'Specialisation', key: 'specialisation', width: 18 },
         { header: 'Year', key: 'year', width: 8, type: 'number' },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
@@ -1278,7 +1303,9 @@
         <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(s.email||'')}"></div>
         <div class="field"><label>Phone</label><input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone||'')}"></div>
         <div class="field"><label>Course</label><select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
-        <div class="field"><label>Specialisation</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
+        <div class="field"><label>Department</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
+        <div class="field"><label>Specialisation</label>
+          <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
         <div class="field"><label>Year</label><input name="year" type="number" min="1" max="2" value="${s.year||1}"></div>
         <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${s.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(s.section||'A')}"></div>
@@ -1303,6 +1330,7 @@
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
     bindBranchSelect($('#stuFormBranch'));
+    bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
     bindPhotoField();
     $('#f').onsubmit = (e) => {
@@ -1382,7 +1410,8 @@
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
         { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
         { key:'course', header:'Course' },
-        { key:'branch', header:'Specialisation', aliases:['department','dept'] },
+        { key:'branch', header:'Department', aliases:['dept','branch'] },
+        { key:'specialisation', header:'Specialisation', aliases:['stream','spec'] },
         { key:'year', header:'Year', number:true, def:1 },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
@@ -1392,8 +1421,8 @@
         { key:'batch', header:'Batch' },
         { key:'status', header:'Status', def:'Active' },
       ],
-      sample: ['2025180010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A',
-               '2026-27','8.2',0,'2025-2027','Active'],
+      sample: ['2025180010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',
+               'Marketing',1,2,'A','2026-27','8.2',0,'2025-2027','Active'],
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
@@ -2673,55 +2702,180 @@
              pct: vals.length ? Math.round(present / vals.length * 100) : 0 };
   }
 
+  /* ==================== ATTENDANCE ====================
+     A class is identified by the whole chain the institute already keeps:
+     course, batch, semester, department, specialisation, paper, faculty, date
+     and time. Every one of those is chosen from existing master data — nothing
+     about a class or a student is typed in twice — and the student list is
+     whoever matches, not a list anybody maintains by hand. */
+  const ATT_TYPES = ['Academic', 'Placement'];
+
+  /** Students matching a class, in the order a register is called. */
+  function studentsForClass(f) {
+    return Store.all('students').filter(s =>
+      (!f.course || s.course === f.course) &&
+      (!f.batch || s.batch === f.batch) &&
+      (!f.semester || String(s.semester) === String(f.semester)) &&
+      (!f.department || s.branch === f.department) &&
+      (!f.specialisation || s.specialisation === f.specialisation) &&
+      (s.status || 'Active') === 'Active')
+      .sort((a, b) => String(a.roll || '').localeCompare(String(b.roll || '')));
+  }
+
+  /** Papers on the scheme for a department and semester. */
+  function papersFor(department, semester) {
+    return Store.all('syllabus').filter(r =>
+      (!department || r.branch === department) &&
+      (!semester || String(r.semester) === String(semester)))
+      .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  }
+
+  /* Options built from the students actually on the roll, so a combination
+     that would return nobody is never offered. */
+  function attOptions(rows, key, label) {
+    const seen = [...new Set(rows.map(r => String(r[key] ?? '').trim()).filter(Boolean))]
+      .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    return `<option value="">${label}</option>` +
+      seen.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  }
+
+  /** A coordinator runs their own department; everyone else who can mark, marks. */
+  function attendanceScopeDept() {
+    if (!user || user.role !== 'course_coordinator') return null;
+    const me = Store.find('coordinators', user.refId);
+    return me && me.department ? me.department : null;
+  }
+
   function viewAttendance() {
     // a monitoring role never gets the marking panel — it gets the overview
     if (readOnly()) return viewAttendanceOverview();
-    const courses = teacherCourses();
-    let html = `<div class="panel"><div class="panel-head"><h3>Mark Attendance</h3>
-      <div class="panel-tools">
-        <select class="filter-sel" id="attCourse"><option value="">Select class...</option>
-          ${courses.map(c => `<option value="${c.id}">${esc(courseLabel(c))}</option>`).join('')}</select>
-        <input class="filter-sel" type="date" id="attDate" value="${today()}">
-      </div></div>
-      ${courses.length ? '' : `<p class="empty">No classes have been assigned to you yet. Ask the System Admin to assign one.</p>`}
-      <div id="attArea"><p class="empty">Select a class and a date to mark attendance.</p></div></div>`;
+    if (!canMarkAttendance()) {
+      return `<div class="panel"><p class="empty">Attendance entry is currently handled by
+        the course coordinator. Ask the System Admin if you need it back.</p></div>`;
+    }
+    const scopeDept = attendanceScopeDept();
+    const roster = Store.all('students').filter(s => !scopeDept || s.branch === scopeDept);
 
-    html += `<div class="panel"><div class="panel-head"><h3>Attendance History</h3>
-      <div class="panel-tools">
-        <select class="filter-sel" id="histCourse"><option value="">All my classes</option>
-          ${courses.map(c => `<option value="${c.id}">${esc(courseLabel(c))}</option>`).join('')}</select>
-        <button class="btn-primary" id="attReport">📄 Generate Attendance Report</button>
-      </div></div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th>Date</th><th>Class</th><th>Present</th><th>Absent</th><th>Total</th><th>%</th><th>Action</th>
-      </tr></thead><tbody id="histBody"></tbody></table></div><div id="histPager"></div></div>`;
-
-    const summaryStudents = visibleStudents();
-    html += `<div class="panel"><div class="panel-head"><h3>Attendance Summary (by student)</h3></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sec</th><th>Attendance %</th></tr></thead>
-      <tbody>${summaryStudents.length ? summaryStudents.map(s => `<tr><td>${esc(s.roll)}</td><td>${esc(s.name)}</td>
-        <td>${esc(s.branch)}</td><td>${esc(s.section)}</td><td>${attBar(studentAttendancePct(s.id))}</td></tr>`).join('')
-        : `<tr><td colspan="5" class="empty">No students in your assigned classes.</td></tr>`}</tbody></table></div></div>`;
+    let html = `<div class="panel"><div class="panel-head"><h3>Register Attendance</h3>
+        ${scopeDept ? `<span class="pill blue">${esc(scopeDept)} department</span>` : ''}
+        ${user.role === 'admin' ? `<div class="panel-tools">
+          <label class="switch-label" title="Turn off to leave attendance entry to the course coordinator">
+            <input type="checkbox" id="facAttToggle" ${facultyAttendanceOn() ? 'checked' : ''}>
+            <span>Faculty can mark attendance</span>
+          </label></div>` : ''}</div>
+      <div class="att-form">
+        <label class="att-field"><span>Type</span>
+          <select id="atType">${ATT_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
+        <label class="att-field"><span>Course</span>
+          <select id="atCourse">${attOptions(roster, 'course', 'Select course...')}</select></label>
+        <label class="att-field"><span>Batch</span>
+          <select id="atBatch"><option value="">Select batch...</option></select></label>
+        <label class="att-field"><span>Semester</span>
+          <select id="atSem"><option value="">Select semester...</option></select></label>
+        <label class="att-field"><span>Department</span>
+          <select id="atDept"><option value="">Select department...</option></select></label>
+        <label class="att-field"><span>Specialisation</span>
+          <select id="atSpec"><option value="">Select specialisation...</option></select></label>
+        <label class="att-field"><span>Paper Code</span>
+          <select id="atPaper"><option value="">Select paper...</option></select></label>
+        <label class="att-field"><span>Paper Name</span>
+          <input id="atPaperName" readonly placeholder="fills from the paper code"></label>
+        <label class="att-field"><span>Faculty</span>
+          <select id="atFaculty"><option value="">Select faculty...</option>
+            ${Store.all('faculty').slice().sort((a, b) => String(a.name).localeCompare(String(b.name)))
+              .map(f => `<option value="${f.id}">${esc(f.name)}${f.department ? ' · ' + esc(f.department) : ''}</option>`).join('')}
+          </select></label>
+        <label class="att-field"><span>Date of Class</span>
+          <input type="date" id="atDate" value="${today()}"></label>
+        <label class="att-field"><span>Class Time</span>
+          <input type="time" id="atTime" value="09:30"></label>
+      </div>
+      <div id="attArea"><p class="empty">Choose the class above — the students on it load by themselves.</p></div>
+    </div>`;
 
     viewAttendance.after = () => {
+      const val = (id) => ($('#' + id).value || '');
+      const current = () => ({
+        type: val('atType'), course: val('atCourse'), batch: val('atBatch'),
+        semester: val('atSem'), department: val('atDept'), specialisation: val('atSpec'),
+        paperCode: val('atPaper'), facultyId: val('atFaculty'),
+        date: val('atDate'), classTime: val('atTime'),
+      });
+
+      /* Each dropdown narrows the ones after it. Rebuilding from the roster
+         each time is what keeps a stale choice from surviving a change
+         further up the chain. */
+      const refill = (from) => {
+        const f = current();
+        const after = (key) => {
+          const partial = Object.assign({}, f);
+          ['course', 'batch', 'semester', 'department', 'specialisation']
+            .slice(['course', 'batch', 'semester', 'department', 'specialisation'].indexOf(key))
+            .forEach(k => { partial[k] = ''; });
+          return studentsForClass(Object.assign({}, partial, { specialisation: '' }))
+            .filter(s => !scopeDept || s.branch === scopeDept);
+        };
+        const keep = (id, options) => {
+          const prev = $('#' + id).value;
+          $('#' + id).innerHTML = options;
+          $('#' + id).value = [...$('#' + id).options].some(o => o.value === prev) ? prev : '';
+        };
+        if (from === 'course') keep('atBatch', attOptions(after('batch'), 'batch', 'Select batch...'));
+        if (['course', 'batch'].includes(from)) keep('atSem', attOptions(after('semester'), 'semester', 'Select semester...'));
+        if (['course', 'batch', 'semester'].includes(from)) {
+          keep('atDept', attOptions(after('department'), 'branch', 'Select department...'));
+        }
+        keep('atSpec', attOptions(studentsForClass(Object.assign({}, current(), { specialisation: '' })),
+                                  'specialisation', 'Select specialisation...'));
+        const dept = val('atDept'), sem = val('atSem');
+        const papers = papersFor(dept, sem);
+        keep('atPaper', `<option value="">Select paper...</option>` + papers.map(r =>
+          `<option value="${esc(r.code || r.name)}">${esc(r.code || '—')}</option>`).join(''));
+        showPaperName();
+      };
+
+      const showPaperName = () => {
+        const code = val('atPaper');
+        const paper = papersFor(val('atDept'), val('atSem')).find(r => (r.code || r.name) === code);
+        $('#atPaperName').value = paper ? (paper.name || '') : '';
+      };
+
       const renderArea = () => {
-        const cid = $('#attCourse').value, date = $('#attDate').value;
+        const f = current();
         const area = $('#attArea');
-        if (!cid || !date) { area.innerHTML = `<p class="empty">Please select a course and a date.</p>`; return; }
-        const c = Store.find('courses', cid);
-        const studs = studentsOfCourse(c);
-        if (!studs.length) { area.innerHTML = `<p class="empty">This class (Sec ${esc(c.section||'A')}) has no students.</p>`; return; }
-        let session = Store.all('attendance').find(a => a.courseId === cid && a.date === date);
-        const rec = session ? session.records : {};
-        area.innerHTML = `<div class="att-list">${studs.map(s => {
-          const st = rec[s.id] || 'P';
-          return `<div class="att-row"><div class="who"><strong>${esc(s.name)}</strong><small>${esc(s.roll)}</small></div>
-            <div class="att-toggle" data-sid="${s.id}">
-              <button type="button" class="toggle-btn p ${st==='P'?'on':''}" data-v="P">Present</button>
-              <button type="button" class="toggle-btn a ${st==='A'?'on':''}" data-v="A">Absent</button>
-            </div></div>`;
-        }).join('')}</div>
-        <div class="form-actions"><button class="btn-primary" id="saveAtt">Save Attendance</button></div>`;
+        const missing = [];
+        if (!f.course) missing.push('course');
+        if (!f.semester) missing.push('semester');
+        if (!f.department) missing.push('department');
+        if (!f.date) missing.push('date');
+        if (missing.length) {
+          area.innerHTML = `<p class="empty">Choose the ${missing.join(', ')} to load the students.</p>`;
+          return;
+        }
+        const studs = studentsForClass(f).filter(s => !scopeDept || s.branch === scopeDept);
+        if (!studs.length) {
+          area.innerHTML = `<p class="empty">No active student matches this class.</p>`;
+          return;
+        }
+        // an existing register for the same class and date is reopened, not duplicated
+        const session = existingSession(f);
+        const rec = session ? (session.records || {}) : {};
+        area.innerHTML = `<div class="att-head-row">
+            <strong>${studs.length} student(s)</strong>
+            <button type="button" class="btn-outline btn-sm" id="markAll">✅ Mark All Present</button>
+            ${session ? `<span class="pill amber">Editing the register saved for this class</span>` : ''}
+          </div>
+          <div class="tbl-wrap"><table><thead><tr>
+            <th>#</th><th>Student Name</th><th>Roll No.</th><th>Attendance</th>
+          </tr></thead><tbody>${studs.map((st, i) => {
+            const v = rec[st.id] || 'P';
+            return `<tr><td>${i + 1}</td><td>${esc(st.name)}</td><td>${esc(st.roll)}</td>
+              <td><div class="att-toggle" data-sid="${st.id}">
+                <button type="button" class="toggle-btn p ${v === 'P' ? 'on' : ''}" data-v="P">Present</button>
+                <button type="button" class="toggle-btn a ${v === 'A' ? 'on' : ''}" data-v="A">Absent</button>
+              </div></td></tr>`;
+          }).join('')}</tbody></table></div>
+          <div class="form-actions"><button class="btn-primary" id="saveAtt">Save Attendance</button></div>`;
 
         area.querySelectorAll('.att-toggle').forEach(grp => {
           grp.querySelectorAll('.toggle-btn').forEach(btn => btn.onclick = () => {
@@ -2729,52 +2883,204 @@
             btn.classList.add('on');
           });
         });
-        $('#saveAtt').onclick = () => {
-          const records = {};
+        $('#markAll').onclick = () => {
           area.querySelectorAll('.att-toggle').forEach(grp => {
-            const on = grp.querySelector('.toggle-btn.on');
-            records[grp.dataset.sid] = on ? on.dataset.v : 'P';
+            grp.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('on', b.dataset.v === 'P'));
           });
-          if (session) Store.update('attendance', session.id, { records });
-          else Store.add('attendance', { courseId: cid, date, records });
-          toast('Attendance saved.'); render();
         };
+        $('#saveAtt').onclick = () => saveSession(f, session, area);
       };
-      $('#attCourse').onchange = renderArea;
-      $('#attDate').onchange = renderArea;
 
-      // ---- attendance history ----
-      let histPage = 1;
-      const drawHist = () => {
-        const filter = $('#histCourse').value;
-        const rows = myAttendanceSessions().filter(a => !filter || a.courseId === filter);
-        histPage = Math.min(histPage, pageCount(rows.length));
-        const pageRows = pageSlice(rows, histPage);
-        $('#histBody').innerHTML = pageRows.length ? pageRows.map(a => {
-          const c = Store.find('courses', a.courseId) || {};
-          const n = sessionCounts(a);
-          return `<tr><td>${esc(a.date)}</td><td>${esc(c.code || '?')} · Sec ${esc(c.section || 'A')}</td>
-            <td>${n.present}</td><td>${n.absent}</td><td>${n.total}</td>
-            <td><span class="pill ${n.pct < 75 ? 'red' : 'green'}">${n.pct}%</span></td>
-            <td><button class="btn-sm btn-edit" data-open="${a.id}">Open</button></td></tr>`;
-        }).join('') : `<tr><td colspan="7" class="empty">No attendance has been marked yet.</td></tr>`;
-        // "Open" loads that session back into the marking panel above
-        $('#histBody').querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
-          const a = Store.find('attendance', b.dataset.open);
-          if (!a) return;
-          $('#attCourse').value = a.courseId; $('#attDate').value = a.date;
+      const inputs = ['atType', 'atCourse', 'atBatch', 'atSem', 'atDept', 'atSpec',
+                      'atPaper', 'atFaculty', 'atDate', 'atTime'];
+      inputs.forEach(id => {
+        $('#' + id).onchange = () => {
+          const key = { atCourse: 'course', atBatch: 'batch', atSem: 'semester', atDept: 'department' }[id];
+          if (key) refill(key);
+          if (id === 'atPaper') showPaperName();
           renderArea();
-          $('#attArea').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-        $('#histPager').innerHTML = pagerHtml(rows.length, histPage);
-        bindPager($('#histPager'), rows.length, histPage, (p) => histPage = p, drawHist);
-      };
-      $('#histCourse').onchange = () => { histPage = 1; drawHist(); };
-      $('#attReport').onclick = () => attendanceReport($('#histCourse').value);
-      drawHist();
+        };
+      });
+      if (user.role === 'admin') {
+        $('#facAttToggle').onchange = (e) => {
+          setSetting('facultyAttendance', e.target.checked);
+          toast(e.target.checked
+            ? 'Faculty can now mark attendance.'
+            : 'Attendance entry is now with the course coordinator only.');
+        };
+      }
+      refill('course');
+      renderArea();
     };
     return html;
   }
+
+  /** The register already saved for this exact class and date, if any. */
+  function existingSession(f) {
+    return Store.all('attendance').find(a =>
+      a.date === f.date &&
+      String(a.course || '') === String(f.course || '') &&
+      String(a.batch || '') === String(f.batch || '') &&
+      String(a.semester || '') === String(f.semester || '') &&
+      String(a.department || '') === String(f.department || '') &&
+      String(a.specialisation || '') === String(f.specialisation || '') &&
+      String(a.paperCode || '') === String(f.paperCode || '') &&
+      String(a.classTime || '') === String(f.classTime || ''));
+  }
+
+  function saveSession(f, session, area) {
+    const records = {};
+    area.querySelectorAll('.att-toggle').forEach(grp => {
+      const on = grp.querySelector('.toggle-btn.on');
+      records[grp.dataset.sid] = on ? on.dataset.v : 'P';
+    });
+    const paper = papersFor(f.department, f.semester).find(r => (r.code || r.name) === f.paperCode);
+    /* The taught offering, when there is one — marks and the course-wise
+       reports hang off courseId, so a register that matches a course keeps
+       feeding them. */
+    const course = Store.all('courses').find(c =>
+      c.branch === f.department && String(c.semester) === String(f.semester) &&
+      (c.code === f.paperCode || c.name === (paper && paper.name)));
+    const row = Object.assign({}, f, {
+      paperName: paper ? (paper.name || '') : '',
+      courseId: course ? course.id : (session ? session.courseId : ''),
+      markedBy: user.id, records,
+    });
+    if (session) Store.update('attendance', session.id, row);
+    else Store.add('attendance', row);
+    toast('Attendance saved.');
+    render();
+  }
+
+  /* ---------- the register, one row per student ---------- */
+  function attendanceRows() {
+    const scopeDept = attendanceScopeDept();
+    const out = [];
+    Store.all('attendance').forEach(a => {
+      const fac = a.facultyId ? Store.find('faculty', a.facultyId) : null;
+      const course = a.courseId ? Store.find('courses', a.courseId) : null;
+      Object.entries(a.records || {}).forEach(([sid, status]) => {
+        const st = Store.find('students', sid);
+        if (!st) return;
+        const department = a.department || (course && course.branch) || st.branch || '—';
+        if (scopeDept && department !== scopeDept) return;
+        out.push({
+          sessionId: a.id, date: a.date || '—', classTime: a.classTime || '—',
+          type: a.type || 'Academic',
+          course: a.course || st.course || '—', batch: a.batch || st.batch || '—',
+          semester: a.semester || (course && course.semester) || st.semester || '—',
+          department,
+          specialisation: a.specialisation || st.specialisation || '—',
+          paperCode: a.paperCode || (course && course.code) || '—',
+          paperName: a.paperName || (course && course.name) || '—',
+          faculty: fac ? fac.name : (course && Store.find('faculty', course.facultyId)
+            ? Store.find('faculty', course.facultyId).name : '—'),
+          studentName: st.name || '—', roll: st.roll || '—',
+          status: status === 'A' ? 'Absent' : 'Present',
+        });
+      });
+    });
+    return out.sort((a, b) => String(b.date).localeCompare(String(a.date)) ||
+                              String(a.roll).localeCompare(String(b.roll)));
+  }
+
+  function attendanceRecordsReport(rows) {
+    return {
+      title: 'Attendance Records', sheetName: 'Attendance', subtitle: reportStamp(),
+      columns: [
+        { header: 'Course', key: 'course', width: 10 },
+        { header: 'Batch', key: 'batch', width: 14 },
+        { header: 'Semester', key: 'semester', width: 10 },
+        { header: 'Department', key: 'department', width: 12 },
+        { header: 'Specialisation', key: 'specialisation', width: 20 },
+        { header: 'Paper Code', key: 'paperCode', width: 12 },
+        { header: 'Paper Name', key: 'paperName', width: 30 },
+        { header: 'Faculty', key: 'faculty', width: 22 },
+        { header: 'Date', key: 'date', width: 12 },
+        { header: 'Time', key: 'classTime', width: 10 },
+        { header: 'Student Name', key: 'studentName', width: 24 },
+        { header: 'Roll No.', key: 'roll', width: 14 },
+        { header: 'Status', key: 'status', width: 10 },
+      ],
+      rows,
+      totals: { course: 'TOTAL', batch: rows.length + ' entries' },
+    };
+  }
+
+  function viewAttendanceRecords() {
+    const all = attendanceRows();
+    const html = `<div class="panel"><div class="panel-head"><h3>Attendance Records</h3>
+        <div class="panel-tools">${exportButtons('ar')}</div></div>
+      <div class="panel-tools fin-filters">
+        <input class="search-box" id="arQ" placeholder="Search student / roll / paper...">
+        <select class="filter-sel" id="arType"><option value="">All Types</option>
+          ${ATT_TYPES.map(t => `<option>${t}</option>`).join('')}</select>
+        <select class="filter-sel" id="arDept">${attOptions(all, 'department', 'All Departments')}</select>
+        <select class="filter-sel" id="arSpec">${attOptions(all, 'specialisation', 'All Specialisations')}</select>
+        <select class="filter-sel" id="arPaper">${attOptions(all, 'paperCode', 'All Papers')}</select>
+        <select class="filter-sel" id="arStatus"><option value="">Present & Absent</option>
+          <option>Present</option><option>Absent</option></select>
+        <label class="days-field">From <input class="filter-sel" id="arFrom" type="date"></label>
+        <label class="days-field">To <input class="filter-sel" id="arTo" type="date"></label>
+        <button class="btn-outline btn-sm" id="arClear">Clear</button>
+      </div>
+      <div id="arStats" class="stat-grid" style="margin:6px 0 18px"></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Course</th><th>Batch</th><th>Semester</th><th>Department</th><th>Specialisation</th>
+        <th>Paper Code</th><th>Paper Name</th><th>Faculty</th><th>Date</th><th>Time</th>
+        <th>Student Name</th><th>Roll No.</th><th>Status</th>
+      </tr></thead><tbody id="arBody"></tbody></table></div><div id="arPager"></div></div>`;
+
+    viewAttendanceRecords.after = () => {
+      let page = 1;
+      const rowsFor = () => {
+        const q = ($('#arQ').value || '').trim().toLowerCase();
+        const type = $('#arType').value, dept = $('#arDept').value, spec = $('#arSpec').value;
+        const paper = $('#arPaper').value, status = $('#arStatus').value;
+        const from = $('#arFrom').value, to = $('#arTo').value;
+        return all.filter(r =>
+          (!q || [r.studentName, r.roll, r.paperCode, r.paperName, r.faculty]
+            .some(v => String(v).toLowerCase().includes(q))) &&
+          (!type || r.type === type) && (!dept || r.department === dept) &&
+          (!spec || r.specialisation === spec) && (!paper || r.paperCode === paper) &&
+          (!status || r.status === status) &&
+          (!from || (r.date !== '—' && r.date >= from)) &&
+          (!to || (r.date !== '—' && r.date <= to)));
+      };
+      const draw = () => {
+        const rows = rowsFor();
+        page = Math.min(page, pageCount(rows.length));
+        const present = rows.filter(r => r.status === 'Present').length;
+        $('#arStats').innerHTML = `${statCard('🗂️', rows.length, 'Entries')}
+          ${statCard('✅', present, 'Present', 'c3')}
+          ${statCard('❌', rows.length - present, 'Absent', 'c4')}
+          ${statCard('📈', rows.length ? Math.round(present / rows.length * 100) + '%' : '—', 'Attendance', 'c2')}`;
+        $('#arBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
+          <td>${esc(r.course)}</td><td>${esc(r.batch)}</td><td>${esc(String(r.semester))}</td>
+          <td>${esc(r.department)}</td><td>${esc(r.specialisation)}</td>
+          <td class="mono">${esc(r.paperCode)}</td><td>${esc(r.paperName)}</td>
+          <td>${esc(r.faculty)}</td><td>${esc(r.date)}</td><td>${esc(r.classTime)}</td>
+          <td>${esc(r.studentName)}</td><td class="mono">${esc(r.roll)}</td>
+          <td><span class="pill ${r.status === 'Present' ? 'green' : 'red'}">${r.status}</span></td>
+        </tr>`).join('') : `<tr><td colspan="13" class="empty">No attendance has been registered yet.</td></tr>`;
+        $('#arPager').innerHTML = pagerHtml(rows.length, page);
+        bindPager($('#arPager'), rows.length, page, (p) => page = p, draw);
+      };
+      ['arQ', 'arType', 'arDept', 'arSpec', 'arPaper', 'arStatus', 'arFrom', 'arTo'].forEach(id => {
+        const el = $('#' + id);
+        el[el.tagName === 'INPUT' && el.type !== 'date' ? 'oninput' : 'onchange'] = () => { page = 1; draw(); };
+      });
+      $('#arClear').onclick = () => {
+        ['arQ', 'arType', 'arDept', 'arSpec', 'arPaper', 'arStatus', 'arFrom', 'arTo']
+          .forEach(id => { $('#' + id).value = ''; });
+        page = 1; draw();
+      };
+      bindExports('ar', () => attendanceRecordsReport(rowsFor()));
+      draw();
+    };
+    return html;
+  }
+
 
   // printable student-wise attendance report for one class, or all of them
   function attendanceReport(courseId) {
@@ -4593,6 +4899,8 @@
   // the editable course list (see LIST_DEFS) — standard courses, whatever the
   // admin added, plus every course already referenced by a student or fee head
   function courseList() { return listValues('course'); }
+  function specialisationList() { return listValues('specialisation'); }
+  function specialisationOptions(sel, withExtras) { return listOptions('specialisation', sel, withExtras); }
   function courseOptions(sel, withExtras) { return listOptions('course', sel, withExtras); }
   // rolling window around the current session, plus anything already on record
   function academicYearList() {
@@ -7343,6 +7651,15 @@
       prompt: 'New book category (e.g. Biotechnology):',
       used: () => Store.all('books').map(b => b.category)
         .concat(Store.all('requisitions').filter(r => r.type === 'Book').map(r => r.category)),
+    },
+    /* The stream inside a department — Marketing under MBA, Data Science under
+       MCA. Editable, because no two institutes run the same set. */
+    specialisation: {
+      setting: 'specialisationList',
+      defaults: ['Marketing', 'Finance', 'Human Resource', 'Operations', 'Business Analytics',
+                 'Software Engineering', 'Data Science', 'Cloud Computing', 'Networking'],
+      prompt: 'New specialisation (e.g. Business Analytics):',
+      used: () => Store.all('students').map(s => s.specialisation),
     },
     // People a faculty member reports to who are not faculty themselves — a
     // director, a registrar, the HR head. Faculty come from the faculty table
@@ -11085,7 +11402,9 @@
     $('#loginScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
     $('#topUserName').textContent = user.name;
-    $('#topUserRole').textContent = readOnly() ? roleLabel(user.role) + ' · Read Only' : user.role;
+    // the raw role name leaked through here — "course_coordinator" is an
+    // identifier, not something to show a person
+    $('#topUserRole').textContent = roleLabel(user.role) + (readOnly() ? ' · Read Only' : '');
     $('#topUserRole').classList.toggle('role-readonly', readOnly());
     // a read-only session is flagged on <body> so the whole app can style itself
     document.body.classList.toggle('read-only', readOnly());

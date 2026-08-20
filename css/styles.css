@@ -452,6 +452,18 @@ body.sidebar-collapsed .nav-section-mid{font-size:0;padding-top:12px;margin-top:
 a.install-btn{color:var(--primary);box-sizing:border-box}
 a.install-btn:hover{background:var(--primary-light)}
 
+/* ===== REGISTER ATTENDANCE (the class-picker grid) ===== */
+.att-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 14px;
+  padding:4px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.att-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.att-field > span{font-size:12px;font-weight:600;color:var(--muted)}
+.att-field select,.att-field input{width:100%;padding:9px 11px;border:1px solid var(--line);
+  border-radius:8px;background:#fbfcfe;font-size:13.5px}
+.att-field select:focus,.att-field input:focus{outline:none;border-color:var(--primary);background:#fff}
+/* the paper name is filled from the paper code and never typed */
+.att-field input[readonly]{background:var(--bg);color:var(--muted)}
+.att-head-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+
 /* ===== PER-COLUMN FILTER ROW (Manage Students) ===== */
 .tbl-filter .filter-row td{padding:6px 8px;background:var(--bg);border-bottom:1px solid var(--line)}
 .tbl-filter .filter-row input,
