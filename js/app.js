@@ -256,7 +256,8 @@
     ],
     // manages the placement cell end to end; read-only on the student records it recruits from
     placement_officer: [
-      ['dashboard','📊','Dashboard'], ['plstudents','🎓','Students'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'],
+      ['plstudents','🎓','Placement Students'],
       ['syllabus','🧾','Subjects by Semester'],
       ['companies','🏢','Companies'], ['drives','🚀','Placement Drives'],
       ['applications','📨','Applications'], ['interviews','🎤','Interviews'],
@@ -267,7 +268,7 @@
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
     center_head: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','Students'], ['faculty','👨‍🏫','Faculty'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'], ['faculty','👨‍🏫','Faculty'],
       ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Branches'],
       ['syllabus','🧾','Subjects by Semester'],
       ['attendance','✅','Attendance'], ['timetable','🗓️','Timetable'],
@@ -282,7 +283,8 @@
       ['events','🔔','Notifications'], EMP_ATTENDANCE, ['profile','👤','Profile'],
     ],
     accountant: [
-      ['dashboard','📊','Dashboard'], ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'],
+      ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'],
       ['fixedfee','📋','Fixed Fee'], ['semfee','📆','Semester-wise Fee'], ['feecollect','💰','Fee Collection'],
       ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'], ['requisitions','📦','Requisitions'],
       ['finreports','📈','Reports'], EMP_ATTENDANCE, ['profile','👤','Profile'],
@@ -380,7 +382,7 @@
   }
 
   const TITLES = {
-    dashboard:'Dashboard', students:'Students', faculty:'Faculty', courses:'Courses',
+    dashboard:'Dashboard', students:'Manage Students', faculty:'Faculty', courses:'Courses',
     attendance:'Attendance', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
@@ -959,6 +961,14 @@
   }
 
   // ---- STUDENTS ----
+  /* Options for a column filter, built from the values actually present so
+     the dropdown never offers a branch or a batch nobody is in. */
+  function colFilterOptions(rows, key, label) {
+    const seen = [...new Set(rows.map(r => String(r[key] ?? '').trim()).filter(Boolean))].sort();
+    return `<option value="">${label}</option>` +
+      seen.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  }
+
   function viewStudents() {
     const canEdit = user.role === 'admin';
     // librarians and the center head can't edit students, but they do need each
@@ -966,52 +976,100 @@
     const canSeeBooks = ['admin', 'librarian', 'center_head'].includes(user.role);
     // printing an ID card / marksheet reads data, so a monitoring role may do it
     const canPrintDocs = canEdit || readOnly();
-    const showActions = canEdit || canSeeBooks || canPrintDocs;
     const deptBranch = user.role === 'faculty' ? facultyDeptBranch() : null;
-    let html = `<div class="panel"><div class="panel-head">
-      <h3>${deptBranch ? deptBranch + ' Department Students' : 'All Students'}</h3>
+    const all = rosterStudents();
+
+    const html = `<div class="panel"><div class="panel-head">
+      <h3>${deptBranch ? deptBranch + ' Department Students' : 'Manage Students'}</h3>
       <div class="panel-tools">
-        <input class="search-box" id="stuSearch" placeholder="Search name / reg no..." />
-        ${deptBranch ? '' : `<select class="filter-sel" id="stuBranch">
-          <option value="">All Branches</option>${branchOptions()}
-        </select>`}
+        <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
         ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
         <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
-        ${readOnly() ? `<button class="btn-outline btn-sm" id="stuPrint">🖨 Print</button>
-          <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
-          <button class="btn-primary btn-sm" id="stuXls">⬇ Excel</button>` : ''}
+        <button class="btn-outline btn-sm" id="stuPrint">🖨 PDF</button>
+        <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
+        <button class="btn-primary btn-sm" id="stuXls">⬇ Excel</button>
       </div></div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th></th><th>Reg No</th><th>Name</th><th>Email</th><th>Phone</th><th>Branch</th><th>Year</th><th>Sem</th><th>Sec</th>
-        ${showActions ? '<th>Actions</th>' : ''}
-      </tr></thead><tbody id="stuBody"></tbody></table></div><div id="stuPager"></div></div>`;
+      <div class="tbl-wrap"><table class="tbl-filter"><thead>
+        <tr>
+          <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
+          <th>Branch</th><th>Section</th><th>House</th><th>Batch</th><th>Course</th>
+          <th>Phone No.</th><th>Status</th><th></th>
+        </tr>
+        <tr class="filter-row">
+          <td></td>
+          <td><input data-f="roll"></td>
+          <td><input data-f="firstName"></td>
+          <td><input data-f="middleName"></td>
+          <td><input data-f="lastName"></td>
+          <td><select data-f="branch">${colFilterOptions(all, 'branch', '')}</select></td>
+          <td><select data-f="section">${colFilterOptions(all, 'section', '')}</select></td>
+          <td><select data-f="house">${colFilterOptions(all, 'house', '')}</select></td>
+          <td><select data-f="batch">${colFilterOptions(all, 'batch', '')}</select></td>
+          <td><select data-f="course">${colFilterOptions(all, 'course', '')}</select></td>
+          <td><input data-f="phone"></td>
+          <td><select data-f="status">${colFilterOptions(all, 'status', '')}</select></td>
+          <td></td>
+        </tr>
+      </thead><tbody id="stuBody"></tbody></table></div><div id="stuPager"></div></div>`;
+
     viewStudents.after = () => {
       let page = 1;
-      const draw = () => {
+      const filters = () => {
+        const out = {};
+        $('#view').querySelectorAll('[data-f]').forEach(el => {
+          const v = (el.value || '').trim();
+          if (v) out[el.dataset.f] = v.toLowerCase();
+        });
+        return out;
+      };
+      const matching = () => {
         const q = ($('#stuSearch').value || '').toLowerCase();
-        const b = $('#stuBranch') ? $('#stuBranch').value : '';
-        const rows = rosterStudents().filter(s =>
-          (!q || s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q)) &&
-          (!b || s.branch === b));
+        const f = filters();
+        return all.filter(s => {
+          if (q && !(String(s.name || '').toLowerCase().includes(q)
+                  || String(s.roll || '').toLowerCase().includes(q))) return false;
+          // a text filter matches anywhere in the cell; a dropdown is exact
+          return Object.entries(f).every(([k, v]) => {
+            const cell = String(s[k] ?? '').toLowerCase();
+            const isSelect = ['branch', 'section', 'house', 'batch', 'course', 'status'].includes(k);
+            return isSelect ? cell === v : cell.includes(v);
+          });
+        });
+      };
+
+      const draw = () => {
+        const rows = matching();
         page = Math.min(page, pageCount(rows.length));
         const pageRows = pageSlice(rows, page);
-        $('#stuBody').innerHTML = pageRows.length ? pageRows.map(s => `<tr>
-          <td>${avatarHtml(s.photo, s.name)}</td>
-          <td>${esc(s.roll)}</td><td>${esc(s.name)}</td><td>${esc(s.email)}</td><td>${esc(s.phone)}</td>
-          <td>${esc(s.branch)}</td><td>${s.year}</td><td>${s.semester}</td><td>${esc(s.section)}</td>
-          ${showActions ? `<td><div class="row-actions">
-            ${readOnly() ? `<button class="btn-sm btn-outline" data-profile="${s.id}" title="Full student profile">👁 View</button>` : ''}
-            ${canSeeBooks ? `<button class="btn-sm btn-outline" data-books="${s.id}" title="Book issue / return history">📖 Books</button>` : ''}
-            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>` : ''}
-            ${canPrintDocs ? `<button class="btn-sm btn-outline" data-id="${s.id}" title="Print ID card">🪪 ID</button>
-            <button class="btn-sm btn-outline" data-sheet="${s.id}" title="Print marksheet">📄 Sheet</button>` : ''}
-            ${canEdit ? `<button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}</div></td>` : ''}
-        </tr>`).join('') : `<tr><td colspan="${showActions?10:9}" class="empty">No students found.</td></tr>`;
+        const from = (page - 1) * PAGE_SIZE;
+        $('#stuBody').innerHTML = pageRows.length ? pageRows.map((s, i) => `<tr>
+          <td>${from + i + 1}</td>
+          <td>${esc(s.roll)}</td>
+          <td>${esc(s.firstName || s.name || '')}</td>
+          <td>${esc(s.middleName || '')}</td>
+          <td>${esc(s.lastName || '')}</td>
+          <td>${esc(s.branch || '')}</td>
+          <td>${esc(s.section || '')}</td>
+          <td>${esc(s.house || 'N/A')}</td>
+          <td>${esc(s.batch || '—')}</td>
+          <td>${esc(s.course || '—')}</td>
+          <td>${esc(s.phone || '')}</td>
+          <td><span class="pill ${String(s.status || 'Active') === 'Active' ? 'green' : 'red'}">${
+            esc(s.status || 'Active')}</span></td>
+          <td><div class="row-actions">
+            <button class="btn-sm btn-outline" data-profile="${s.id}" title="Full student profile">🔍</button>
+            ${canSeeBooks ? `<button class="btn-sm btn-outline" data-books="${s.id}" title="Book issue / return history">📖</button>` : ''}
+            ${canPrintDocs ? `<button class="btn-sm btn-outline" data-id="${s.id}" title="Print ID card">🪪</button>
+            <button class="btn-sm btn-outline" data-sheet="${s.id}" title="Print marksheet">📄</button>` : ''}
+            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>
+            <button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
+          </div></td>
+        </tr>`).join('') : `<tr><td colspan="13" class="empty">No students found.</td></tr>`;
+
+        $('#stuBody').querySelectorAll('[data-profile]').forEach(b =>
+          b.onclick = () => studentProfileModal(b.dataset.profile));
         if (canSeeBooks) {
           $('#stuBody').querySelectorAll('[data-books]').forEach(b => b.onclick = () => studentBooksModal(b.dataset.books));
-        }
-        if (readOnly()) {
-          $('#stuBody').querySelectorAll('[data-profile]').forEach(b => b.onclick = () => studentProfileModal(b.dataset.profile));
         }
         if (canPrintDocs) {
           $('#stuBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printIdCard(b.dataset.id));
@@ -1024,24 +1082,20 @@
         $('#stuPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#stuPager'), rows.length, page, (p) => page = p, draw);
       };
+
       $('#stuSearch').oninput = () => { page = 1; draw(); };
-      if ($('#stuBranch')) $('#stuBranch').onchange = () => { page = 1; draw(); };
+      $('#view').querySelectorAll('[data-f]').forEach(el => {
+        const ev = el.tagName === 'SELECT' ? 'onchange' : 'oninput';
+        el[ev] = () => { page = 1; draw(); };
+      });
       if (canEdit) {
         $('#addStu').onclick = () => studentForm();
         $('#impStu').onclick = () => bulkImportModal('students');
       }
-      if (readOnly()) {
-        const report = () => {
-          const q = ($('#stuSearch').value || '').toLowerCase();
-          const b = $('#stuBranch') ? $('#stuBranch').value : '';
-          return studentReport(rosterStudents().filter(s =>
-            (!q || s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q)) &&
-            (!b || s.branch === b)));
-        };
-        $('#stuPrint').onclick = () => printReport(report());
-        $('#stuCsv').onclick = () => downloadCsv(report());
-        $('#stuXls').onclick = () => downloadXlsx(report());
-      }
+      const report = () => studentReport(matching());
+      $('#stuPrint').onclick = () => printReport(report());
+      $('#stuCsv').onclick = () => downloadCsv(report());
+      $('#stuXls').onclick = () => downloadXlsx(report());
       draw();
     };
     return html;
@@ -1133,8 +1187,13 @@
     return {
       title: 'Student Report', sheetName: 'Students', subtitle: reportStamp(),
       columns: [
-        { header: 'Reg No', key: 'roll', width: 14 },
-        { header: 'Student Name', key: 'name', width: 26 },
+        { header: 'Student ID', key: 'roll', width: 14 },
+        { header: 'First Name', key: 'firstName', width: 16 },
+        { header: 'Middle Name', key: 'middleName', width: 14 },
+        { header: 'Last Name', key: 'lastName', width: 16 },
+        { header: 'House', key: 'house', width: 10 },
+        { header: 'Batch', key: 'batch', width: 14 },
+        { header: 'Status', key: 'status', width: 10 },
         { header: 'Course', key: 'course', width: 12 },
         { header: 'Branch', key: 'branch', width: 12 },
         { header: 'Year', key: 'year', width: 8, type: 'number' },
@@ -1207,7 +1266,9 @@
     openModal((id ? 'Edit' : 'Add') + ' Student', `<form id="f">
       <div class="form-grid">
         <div class="field"><label>Registration Number</label><input name="roll" id="rollInput" inputmode="numeric" value="${esc(s.roll||'')}" required></div>
-        <div class="field"><label>Full Name</label><input name="name" value="${esc(s.name||'')}" required></div>
+        <div class="field"><label>First Name</label><input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
+        <div class="field"><label>Middle Name</label><input name="middleName" value="${esc(s.middleName||'')}"></div>
+        <div class="field"><label>Last Name</label><input name="lastName" value="${esc(s.lastName||'')}"></div>
         <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(s.email||'')}"></div>
         <div class="field"><label>Phone</label><input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone||'')}"></div>
         <div class="field"><label>Course</label><select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
@@ -1216,6 +1277,10 @@
         <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${s.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(s.section||'A')}"></div>
         <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
+        <div class="field"><label>House</label><input name="house" value="${esc(s.house||'')}" placeholder="e.g. Red — leave blank for N/A"></div>
+        <div class="field"><label>Status</label><select name="status">${
+          ['Active','Inactive'].map(v => `<option ${((s.status||'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
+        }</select></div>
         ${photoField(s.photo)}
       </div>
       <h4 style="font-size:13px;color:var(--primary-dark);margin:18px 0 8px">PLACEMENT ELIGIBILITY</h4>
@@ -1242,6 +1307,10 @@
       if (d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
         toast('CGPA must be between 0 and 10.', 'err'); return;
       }
+      // every other screen — ID card, marksheet, fee receipt, placement list —
+      // prints `name`, so it is composed here rather than taught to each of them
+      d.name = [d.firstName, d.middleName, d.lastName]
+        .map(x => (x || '').trim()).filter(Boolean).join(' ');
       d.year = +d.year; d.semester = +d.semester;
       d.backlogs = d.backlogs === '' ? 0 : +d.backlogs;
       if (id) Store.update('students', id, d);
@@ -1267,9 +1336,12 @@
       keyField: 'roll',
       fileBase: 'NMIET-BSCHOOL-Students-Template',
       columns: [
-        { key:'roll', header:'Registration Number', required:true,
-          aliases:['reg no','regno','reg. no','roll','roll no','registration','registration no'] },
-        { key:'name', header:'Full Name', required:true, aliases:['name','student name'] },
+        { key:'roll', header:'Student ID', required:true,
+          aliases:['reg no','regno','reg. no','roll','roll no','registration',
+                   'registration no','registration number','student id'] },
+        { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
+        { key:'middleName', header:'Middle Name' },
+        { key:'lastName', header:'Last Name', aliases:['surname'] },
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
         { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
         { key:'course', header:'Course' },
@@ -1281,8 +1353,11 @@
         { key:'cgpa', header:'CGPA', aliases:['gpa'] },
         { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
         { key:'batch', header:'Batch' },
+        { key:'house', header:'House' },
+        { key:'status', header:'Status', def:'Active' },
       ],
-      sample: ['25MBA010','Rahul Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A','2026-27','8.2',0,'2025-2027'],
+      sample: ['25MBA010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',1,2,'A',
+               '2026-27','8.2',0,'2025-2027','','Active'],
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
@@ -2533,7 +2608,12 @@
   }
   // students shown on the Students page: admin -> all, faculty -> own department only
   function rosterStudents() {
-    if (collegeWide() || user.role === 'librarian') return Store.all('students');
+    // The offices that read the roll without owning it — accounts, the
+    // placement cell, the library — see every student, the same list the
+    // admin does. What they cannot do is change it, which the server enforces.
+    if (collegeWide() || ['librarian', 'accountant', 'placement_officer'].includes(user.role)) {
+      return Store.all('students');
+    }
     if (user.role === 'faculty') {
       const branch = facultyDeptBranch();
       if (branch) return Store.all('students').filter(s => s.branch === branch);

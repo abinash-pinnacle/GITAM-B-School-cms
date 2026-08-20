@@ -195,6 +195,17 @@ function guard_request(string $resource, string $method): void
         send_json(['error' => 'forbidden'], 403);
     }
 
+    // The student roll is read by the accounts office, the placement cell, the
+    // library and the centre head, and edited by none of them. Until now that
+    // was a UI convention: the Students page simply hid its buttons, while the
+    // API accepted a write from any signed-in role.
+    if ($resource === 'students' && $isWrite && current_role() !== 'admin') {
+        send_json([
+            'error'   => 'forbidden',
+            'message' => 'Only the administrator can add, edit or delete a student record.',
+        ], 403);
+    }
+
     if (in_array($resource, PLACEMENT_COLLECTIONS, true)) {
         $isStudent = current_role() === 'student';
         $studentMayRead = !$isWrite && $isStudent

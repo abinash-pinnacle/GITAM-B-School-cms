@@ -72,15 +72,19 @@ function db_config(): array
 /* Bump when the demo data in seed_data() changes. It rides along in the
    schema signature, so an install still carrying the previous demo set
    re-runs init_db() once and picks the new one up. */
-const SEED_REVISION = '2026-08-15-mba-mca';
+const SEED_REVISION = '2026-08-15-mba-mca-names';
 
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name'],
     // course + academicYear are used by the accounts office (fee structure is per course/year);
     // cgpa/backlogs/batch drive placement eligibility (cgpa falls back to the marks average)
-    'students'   => ['id', 'roll', 'name', 'email', 'phone', 'branch', 'year', 'semester', 'section', 'photo',
-                     'course', 'academicYear', 'cgpa', 'backlogs', 'batch'],
+    /* `name` stays the full name every other screen prints — the ID card, the
+       marksheet, the fee receipt — and is composed from the three parts on
+       save, so nothing downstream had to learn about them. */
+    'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
+                     'email', 'phone', 'branch', 'year', 'semester', 'section', 'photo',
+                     'course', 'academicYear', 'cgpa', 'backlogs', 'batch', 'house', 'status'],
     // reportingTo holds the id of another faculty row — the person this one
     // reports to. Blank for the top of the tree.
     'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
@@ -383,14 +387,15 @@ function seed_data(): array
             ['F04', 'NM-F-1004', 'Dr. Anil Kapoor', 'anil@nmiet.edu', '9876500014', 'MCA', 'Professor', null,
              'Ph.D. (Computer Science)', 'Java, Software Engineering', '24 journal papers, 2 patents'],
         ],
-        // ..., course, academicYear, cgpa, backlogs, batch
+        // id, roll, name, first, middle, last, email, phone, branch, year, semester,
+        // section, photo, course, academicYear, cgpa, backlogs, batch, house, status
         'students' => [
-            ['S01', '25MBA001', 'Aarav Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027'],
-            ['S02', '25MBA002', 'Diya Patel', 'diya@nmiet.in', '9810000002', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027'],
-            ['S03', '25MBA003', 'Rohan Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027'],
-            ['S04', '25MBA004', 'Ananya Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027'],
-            ['S05', '25MCA001', 'Karan Singh', 'karan@nmiet.in', '9810000005', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '7.2', 1, '2025-2027'],
-            ['S06', '25MCA002', 'Ishita Nair', 'ishita@nmiet.in', '9810000006', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '8.0', 0, '2025-2027'],
+            ['S01', '25MBA001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', null, 'Active'],
+            ['S02', '25MBA002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@nmiet.in', '9810000002', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', null, 'Active'],
+            ['S03', '25MBA003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', null, 'Active'],
+            ['S04', '25MBA004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', null, 'Active'],
+            ['S05', '25MCA001', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '7.2', 1, '2025-2027', null, 'Active'],
+            ['S06', '25MCA002', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MCA', 1, 2, 'A', null, 'MCA', '2026-27', '8.0', 0, '2025-2027', null, 'Active'],
         ],
         'accountants' => [
             ['AC01', 'NM-A-2001', 'Sunita Rao', 'sunita.rao@nmiet.edu', '9876500021', 'Senior Accountant', null],

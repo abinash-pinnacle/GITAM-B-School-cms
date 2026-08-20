@@ -221,6 +221,31 @@ function init_db(): void
         }
     }
 
+    /* Students written before the name was split carry only the full name, and
+       the new columns would render as blank cells. Fill them once, here, where
+       every install passes through: first word is the given name, last word the
+       surname, anything between them the middle name. */
+    foreach (fetch_all('SELECT * FROM ' . qi('students')) as $s) {
+        $needsName = trim((string) ($s['firstName'] ?? '')) === '' && trim((string) ($s['name'] ?? '')) !== '';
+        $needsStatus = trim((string) ($s['status'] ?? '')) === '';
+        if (!$needsName && !$needsStatus) {
+            continue;
+        }
+        $patch = [];
+        if ($needsName) {
+            $parts = preg_split('/\s+/', trim((string) $s['name']));
+            $patch['firstName'] = array_shift($parts);
+            $patch['lastName'] = $parts ? array_pop($parts) : '';
+            $patch['middleName'] = $parts ? implode(' ', $parts) : '';
+        }
+        if ($needsStatus) {
+            $patch['status'] = 'Active';
+        }
+        $sets = implode(', ', array_map(fn($f) => qi($f) . ' = ?', array_keys($patch)));
+        run_sql('UPDATE ' . qi('students') . " SET $sets WHERE " . qi('id') . ' = ?',
+                array_merge(array_values($patch), [$s['id']]));
+    }
+
     // course sections: backfill blanks and make sure the demo Section-B class exists
     db()->exec('UPDATE ' . qi('courses') . ' SET ' . qi('section') . "='A'
                 WHERE " . qi('section') . ' IS NULL OR ' . qi('section') . "=''");
