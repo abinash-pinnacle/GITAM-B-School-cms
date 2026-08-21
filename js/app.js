@@ -2839,8 +2839,8 @@
     const classes = teacherCourses();
     return Store.all('students').filter(s => classes.some(c => inCourseClass(s, c)));
   }
-  // faculty's own department, normalized to a programme code (MBA/MCA) so
-  // it can be matched against student.branch — falls back to null if unknown
+  // faculty's own department, normalized to a programme code so it can be
+  // matched against student.branch — falls back to null if unknown
   function facultyDeptBranch() {
     const f = Store.find('faculty', user.refId);
     if (!f || !f.department) return null;
@@ -2850,8 +2850,6 @@
     const map = {
       'management': 'MBA', 'business administration': 'MBA',
       'master of business administration': 'MBA', 'mba': 'MBA',
-      'computer applications': 'MCA', 'computer application': 'MCA',
-      'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[dep.toLowerCase()] || null;
   }
@@ -5087,7 +5085,7 @@
      ========================================================= */
 
   // NMIET B-SCHOOL runs two programmes, both two-year and four-semester
-  const ACADEMIC_COURSES = ['MBA', 'MCA'];
+  const ACADEMIC_COURSES = ['MBA'];
   const FEE_TYPES = ['Tuition Fee', 'Admission Fee', 'Examination Fee', 'Library Fee',
                      'Laboratory Fee', 'Development Fee', 'Other Fee'];
   const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque'];
@@ -7764,7 +7762,7 @@
   }
   /* ---------- branch list: saved by the admin + every branch actually in use ---------- */
   const COURSE_TYPES = ['Core', 'Elective', 'Lab', 'Project'];
-  const DEFAULT_BRANCHES = ['MBA','MCA'];
+  const DEFAULT_BRANCHES = ['MBA'];
   const SET_BRANCHES = 'branchList';
   let BRANCHES = DEFAULT_BRANCHES.slice();     // kept as one array — bindListAddNew holds a reference
 
@@ -7857,12 +7855,11 @@
       used: () => Store.all('books').map(b => b.category)
         .concat(Store.all('requisitions').filter(r => r.type === 'Book').map(r => r.category)),
     },
-    /* The stream inside a department — Marketing under MBA, Data Science under
-       MCA. Editable, because no two institutes run the same set. */
+    /* The stream a student takes inside the MBA — Marketing, Finance, HR and
+       the rest. Editable, because no two institutes run the same set. */
     specialisation: {
       setting: 'specialisationList',
-      defaults: ['Marketing', 'Finance', 'Human Resource', 'Operations', 'Business Analytics',
-                 'Software Engineering', 'Data Science', 'Cloud Computing', 'Networking'],
+      defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics'],
       prompt: 'New specialisation (e.g. Business Analytics):',
       used: () => Store.all('students').map(s => s.specialisation),
     },
@@ -8058,8 +8055,6 @@
     const map = {
       'management': 'MBA', 'business administration': 'MBA',
       'master of business administration': 'MBA', 'mba': 'MBA',
-      'computer applications': 'MCA', 'computer application': 'MCA',
-      'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[d.toLowerCase()] || null;
   }
@@ -8511,7 +8506,7 @@
     return html;
   }
 
-  /** fee roll-up per academic programme (MBA, MCA) */
+  /** fee roll-up per academic programme */
   function courseFeeRows() {
     const groups = {};
     financeRows().forEach(r => {

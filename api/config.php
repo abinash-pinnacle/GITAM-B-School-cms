@@ -72,7 +72,7 @@ function db_config(): array
 /* Bump when the demo data in seed_data() changes. It rides along in the
    schema signature, so an install still carrying the previous demo set
    re-runs init_db() once and picks the new one up. */
-const SEED_REVISION = '2026-08-21-admission';
+const SEED_REVISION = '2026-08-21-mba-only';
 
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
@@ -82,9 +82,9 @@ const COLLECTIONS = [
     /* `name` stays the full name every other screen prints — the ID card, the
        marksheet, the fee receipt — and is composed from the three parts on
        save, so nothing downstream had to learn about them. */
-    /* branch is the department a student belongs to (MBA, MCA); specialisation
-       is the stream inside it (Marketing, Finance, Data Science). Attendance is
-       taken per specialisation, which is why both are recorded. */
+    /* branch is the programme a student belongs to (MBA); specialisation is
+       the stream inside it (Marketing, Finance, HR, Retail, Logistics).
+       Attendance is taken per specialisation, so both are recorded. */
     'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
                      'email', 'phone', 'branch', 'specialisation', 'year', 'semester',
                      'section', 'photo', 'course', 'academicYear', 'cgpa', 'backlogs',
@@ -337,9 +337,10 @@ const SYLLABUS_WRITE_ROLES = ['admin'];
 /* ================= curriculum =================
    programme => semester => [ [code, subject], ... ]
 
-   NMIET B-SCHOOL runs two postgraduate programmes, MBA and MCA. Both are two
-   years — four semesters — which is why SEMESTERS and MAX_SEMESTER stop at 4
-   rather than the eight an engineering scheme would need. */
+   NMIET B-SCHOOL runs one postgraduate programme, the MBA, over two years —
+   four semesters, which is why SEMESTERS and MAX_SEMESTER stop at 4 rather
+   than the eight an engineering scheme would need. What varies between
+   students is the specialisation they take inside it. */
 function curriculum(): array
 {
     return [
@@ -358,21 +359,6 @@ function curriculum(): array
                   ['MBA402', 'International Business'], ['MBA403', 'Entrepreneurship Development'],
                   ['MBA-E2', 'Elective – II'], ['MBA-E3', 'Elective – III'],
                   ['MBA491', 'Dissertation / Project']],
-        ],
-        'MCA' => [
-            1 => [['MCA101', 'Programming with C'], ['MCA102', 'Computer Organisation'],
-                  ['MCA103', 'Discrete Mathematics'], ['MCA104', 'Database Management Systems'],
-                  ['MCA105', 'Operating Systems'], ['MCA191', 'Programming Lab']],
-            2 => [['MCA201', 'Data Structures & Algorithms'],
-                  ['MCA202', 'Object Oriented Programming with Java'],
-                  ['MCA203', 'Computer Networks'], ['MCA204', 'Software Engineering'],
-                  ['MCA291', 'Data Structures Lab'], ['MCA292', 'Java Lab']],
-            3 => [['MCA301', 'Web Technologies'], ['MCA302', 'Machine Learning'],
-                  ['MCA303', 'Cloud Computing'], ['MCA-E1', 'Elective – I'],
-                  ['MCA391', 'Web Technology Lab'], ['MCA392', 'Minor Project']],
-            4 => [['MCA401', 'Big Data Analytics'], ['MCA402', 'Cyber Security'],
-                  ['MCA-E2', 'Elective – II'], ['MCA491', 'Major Project'],
-                  ['MCA492', 'Internship']],
         ],
     ];
 }
@@ -428,10 +414,10 @@ function seed_data(): array
              'Ph.D. (Management)', 'Marketing Management, Consumer Behaviour', '18 journal papers, 6 conference papers'],
             ['F02', 'NM-F-1002', 'Prof. S. Venkat', 'svenkat@nmiet.edu', '9876500012', 'MBA', 'Associate Professor', null,
              'M.Com, MBA (Finance)', 'Financial Management, Investment Analysis', '9 journal papers'],
-            ['F03', 'NM-F-1003', 'Dr. Meera Krishnan', 'meera@nmiet.edu', '9876500013', 'MCA', 'Assistant Professor', null,
-             'Ph.D. (Computer Applications)', 'Data Structures, Database Systems', '12 journal papers'],
-            ['F04', 'NM-F-1004', 'Dr. Anil Kapoor', 'anil@nmiet.edu', '9876500014', 'MCA', 'Professor', null,
-             'Ph.D. (Computer Science)', 'Java, Software Engineering', '24 journal papers, 2 patents'],
+            ['F03', 'NM-F-1003', 'Dr. Meera Krishnan', 'meera@nmiet.edu', '9876500013', 'MBA', 'Assistant Professor', null,
+             'Ph.D. (Management)', 'Retail Management, Consumer Research', '12 journal papers'],
+            ['F04', 'NM-F-1004', 'Dr. Anil Kapoor', 'anil@nmiet.edu', '9876500014', 'MBA', 'Professor', null,
+             'Ph.D. (Operations Management)', 'Logistics, Supply Chain', '24 journal papers, 2 patents'],
         ],
         // id, roll, name, first, middle, last, email, phone, branch, year, semester,
         // section, photo, course, academicYear, cgpa, backlogs, batch, status
@@ -439,9 +425,9 @@ function seed_data(): array
             ['S01', '2025180001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', 'Active'],
             ['S02', '2025180002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@nmiet.in', '9810000002', 'MBA', 'Finance', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', 'Active'],
             ['S03', '2025180003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', 'Active'],
-            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 'Human Resource', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
-            ['S05', '2025190001', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MCA', 'Data Science', 1, 2, 'A', null, 'MCA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
-            ['S06', '2025190002', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MCA', 'Software Engineering', 1, 2, 'A', null, 'MCA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
+            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 'HR', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
+            ['S05', '2025180005', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MBA', 'Retail', 1, 2, 'A', null, 'MBA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
+            ['S06', '2025180006', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MBA', 'Logistics', 1, 2, 'A', null, 'MBA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
         ],
         'accountants' => [
             ['AC01', 'NM-A-2001', 'Sunita Rao', 'sunita.rao@nmiet.edu', '9876500021', 'Senior Accountant', null],
@@ -465,8 +451,8 @@ function seed_data(): array
             ['C01', 'MBA201', 'Marketing Management', 'MBA', 2, 4, 'F01', 'A'],
             ['C02', 'MBA202', 'Financial Management', 'MBA', 2, 4, 'F02', 'A'],
             ['C03', 'MBA203', 'Human Resource Management', 'MBA', 2, 3, 'F01', 'A'],
-            ['C04', 'MCA201', 'Data Structures & Algorithms', 'MCA', 2, 4, 'F03', 'A'],
-            ['C05', 'MCA202', 'Object Oriented Programming with Java', 'MCA', 2, 4, 'F04', 'A'],
+            ['C04', 'MBA204', 'Operations Management', 'MBA', 2, 4, 'F03', 'A'],
+            ['C05', 'MBA205', 'Research Methodology', 'MBA', 2, 4, 'F04', 'A'],
             ['C06', 'MBA201', 'Marketing Management', 'MBA', 2, 4, 'F02', 'B'],
         ],
         'syllabus' => syllabus_seed(),
@@ -495,9 +481,7 @@ function seed_data(): array
             ['FF03', 'MBA', 'MBA', '2026-27', 'Library Fee',        5000, '2026-06-01', 'Active'],
             ['FF04', 'MBA', 'MBA', '2026-27', 'Development Fee',   10000, '2026-06-01', 'Active'],
             ['FF05', 'MBA', 'MBA', '2026-27', 'Placement Fee',     12000, '2026-06-01', 'Active'],
-            ['FF06', 'MCA', 'MCA', '2026-27', 'Tuition Fee',      140000, '2026-06-01', 'Active'],
-            ['FF07', 'MCA', 'MCA', '2026-27', 'Examination Fee',    8000, '2026-06-01', 'Active'],
-            ['FF08', 'MCA', 'MCA', '2026-27', 'Computer Lab Fee',  12000, '2026-06-01', 'Active'],
+            ['FF06', 'MBA', 'MBA', '2026-27', 'Alumni Fee',        3000, '2026-06-01', 'Active'],
         ],
         'assets' => [
             ['AS01', 'Dell OptiPlex Desktop', 'Computer', 40, '2024-07-12', 1800000, 1080000,
@@ -569,12 +553,12 @@ function seed_data(): array
         'drives' => [
             ['DR01', 'CO01', 'Systems Engineer',
              'Entry-level role covering application development, testing and support.',
-             450000, 'Bengaluru', 40, 'MCA', 'MBA,MCA', '6.5', 1,
+             450000, 'Bengaluru', 40, 'MBA', 'MBA', '6.5', 1,
              '2026-09-10', '2026-08-10', '2026-09-05', '2026-09-12',
              'Online Test -> Technical Interview -> HR Interview', 'Published', '2026-08-08'],
             ['DR02', 'CO02', 'Assistant System Engineer',
              'Ninja profile through the TCS National Qualifier Test.',
-             350000, 'Hyderabad', 60, 'MCA', 'MBA,MCA', '6.0', 2,
+             350000, 'Hyderabad', 60, 'MBA', 'MBA', '6.0', 2,
              '2026-09-20', '2026-08-15', '2026-09-15', '2026-09-22',
              'NQT -> Technical Interview -> HR Interview', 'Published', '2026-08-08'],
             ['DR03', 'CO03', 'Management Trainee',
