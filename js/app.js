@@ -9429,8 +9429,15 @@
     // eligible for at least one drive and not placed — the number the cell is
     // actually chasing, which no screen showed
     const unplaced = eligible.filter(s => !placedIds.has(s.id)).length;
+    /* Counted per student rather than per offer: one person who did not turn
+       up is one number, however many offers their file holds. */
+    const endedIds = (which) => new Set(Store.all('offers')
+      .filter(o => o.status === which).map(o => o.studentId));
+    const notJoined = endedIds('Not Joined').size;
+    const left = endedIds('Left').size;
     return {
       students: students.length, eligible: eligible.length, denom, unplaced,
+      notJoined, left,
       companies: Store.all('companies').length,
       drives: Store.all('drives').length, activeDrives: openDrives().length,
       applications: Store.all('applications').length,
@@ -9573,6 +9580,8 @@
         ${statCard('🎯', st.selected, 'Selected Students', 'c3')}
         ${statCard('🏆', st.placed, 'Placed Students', 'c3')}
         ${statCard('🔍', st.unplaced, 'Unplaced Students', 'c4')}
+        ${statCard('🚫', st.notJoined, 'Not Joined', 'c4')}
+        ${statCard('🚪', st.left, 'Left After Joining', 'c4')}
         ${statCard('📈', st.pct + '%', `Placement (of ${st.denom} eligible)`, st.pct >= 50 ? 'c3' : 'c4')}
         ${statCard('💰', money(st.highest), 'Highest Package', 'c3')}
         ${statCard('📊', money(st.average), 'Average Package', 'c2')}
