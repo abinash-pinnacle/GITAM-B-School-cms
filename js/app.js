@@ -602,6 +602,7 @@
     if (user.role === 'accountant') return accountantDashboard();
     if (user.role === 'center_head') return centerHeadDashboard();
     if (user.role === 'placement_officer') return placementDashboard();
+    if (user.role === 'admission') return admissionDashboard();
     const students = Store.all('students');
     const nStu = students.length;
     const nFac = Store.all('faculty').length;
@@ -811,6 +812,105 @@
       $('#qaHist').onclick = () => navigate('attendance');
       $('#qaMarks').onclick = () => navigate('marks');
       $('#qaRep').onclick = () => attendanceReport('');
+    };
+    return html;
+  }
+
+  /* The admissions desk was landing on the admin's dashboard: fee collection,
+     library stock, faculty strength — none of which it can even open. This
+     counts the thing it is responsible for, which is who is on the roll. */
+  function admissionDashboard() {
+    const students = Store.all('students');
+    const active = students.filter(s => (s.status || 'Active') === 'Active');
+    // the same session the student form defaults to
+    const y = new Date().getFullYear();
+    const thisYear = `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+    const admittedThisYear = students.filter(s => (s.academicYear || '') === thisYear);
+
+    const tally = (key) => {
+      const out = {};
+      students.forEach(s => {
+        const v = String(s[key] || '').trim() || 'Not set';
+        out[v] = (out[v] || 0) + 1;
+      });
+      return Object.entries(out).sort((a, b) => b[1] - a[1]);
+    };
+    const byCourse = tally('course');
+    const bySpec = tally('specialisation');
+    const colours = ['#123f8c', '#2f6fed', '#f5a623', '#8b5cf6', '#22b8b8', '#e0414f'];
+    const segments = byCourse.map(([label, value], i) =>
+      ({ label, value, color: colours[i % colours.length] }));
+
+    /* Ids are handed out in order, so the highest are the most recent
+       enrolments — there is no admission date on the record to sort by. */
+    const latest = [...students].sort((a, b) =>
+      String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true })).slice(0, 6);
+    const maxSpec = bySpec.length ? bySpec[0][1] : 0;
+
+    let html = `<div class="welcome-banner">
+      <div class="wb-text">
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <p>Admissions · ${prettyDate()}</p>
+        <div class="wb-chips">
+          <span>🎓 ${students.length} on the roll</span>
+          <span>🆕 ${admittedThisYear.length} admitted in ${esc(thisYear)}</span>
+        </div>
+      </div>
+      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+    </div>`;
+
+    html += `<div class="stat-grid">
+      ${statCard('🎓', students.length, 'Students on the Roll')}
+      ${statCard('🆕', admittedThisYear.length, `Admitted in ${esc(thisYear)}`, 'c3')}
+      ${statCard('✅', active.length, 'Active', 'c3')}
+      ${statCard('⏸️', students.length - active.length, 'Inactive', 'c4')}
+    </div>`;
+
+    html += `<div class="dash-2col">
+      <div class="panel"><div class="panel-head"><h3>Students by Course</h3></div>
+        <div class="lib-donut-wrap">
+          <div class="lib-donut" style="background:${segments.length ? donutGradient(segments) : 'var(--primary-light)'}">
+            <div class="lib-donut-center"><strong>${students.length}</strong><span>Total</span></div>
+          </div>
+          <div class="lib-legend">
+            <div class="lib-legend-head"><span>Course</span><span>Students</span></div>
+            ${segments.length ? segments.map(seg => `<div class="lib-legend-row">
+              <span class="dotlbl"><span class="ldot" style="background:${seg.color}"></span>${esc(seg.label)}</span>
+              <span>${seg.value}</span></div>`).join('')
+              : `<p class="empty">No students on record.</p>`}
+          </div>
+        </div></div>
+
+      <div class="panel"><div class="panel-head"><h3>Students by Specialisation</h3></div>
+          ${bySpec.length ? bySpec.map(([label, n]) => `<div class="dist-row">
+            <span class="dist-label">${esc(label)}</span>
+            <span class="dist-bar"><i style="width:${maxSpec ? Math.round(n / maxSpec * 100) : 0}%"></i></span>
+            <span class="dist-val">${n}</span></div>`).join('')
+          : `<p class="empty">No students on record.</p>`}
+      </div>
+    </div>`;
+
+    html += `<div class="panel"><div class="panel-head"><h3>Latest Admissions</h3>
+        <div class="panel-tools">
+          <button class="btn-outline" id="dashImport">⬆ Bulk Upload</button>
+          <button class="btn-primary" id="dashAdd">+ Add Student</button>
+        </div></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Student ID</th><th>Name</th><th>Course</th><th>Specialisation</th>
+        <th>Batch</th><th>Status</th>
+      </tr></thead><tbody>
+        ${latest.length ? latest.map(s => `<tr>
+          <td class="mono">${esc(s.roll || '—')}</td><td>${esc(s.name || '—')}</td>
+          <td>${esc(s.course || '—')}</td><td>${esc(s.specialisation || '—')}</td>
+          <td>${esc(s.batch || '—')}</td>
+          <td><span class="pill ${(s.status || 'Active') === 'Active' ? 'green' : 'red'}">${
+            esc(s.status || 'Active')}</span></td>
+        </tr>`).join('') : `<tr><td colspan="6" class="empty">Nobody has been admitted yet.</td></tr>`}
+      </tbody></table></div></div>`;
+
+    viewDashboard.after = () => {
+      $('#dashAdd').onclick = () => studentForm();
+      $('#dashImport').onclick = () => bulkImportModal('students');
     };
     return html;
   }
