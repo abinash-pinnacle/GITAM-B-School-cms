@@ -3679,17 +3679,18 @@
         `<button class="btn-primary" id="printFacId">🪪 Print ID Card</button>
          <button class="btn-outline" id="editAcademic">✏️ Edit Academic Details</button>`, f.photo);
     }
+    /* Nobody edits their own staff record from here — an employee id, a
+       designation or a department is the admin's to set, the way the centre
+       head's record already worked. Changing your own password stays. */
     if (user.role === 'accountant') {
       const a = Store.find('accountants', user.refId) || {};
       viewProfile.after = () => {
-        $('#editAcct').onclick = () => accountantForm(a.id, render);
         $('#changePw').onclick = () => changePasswordForm();
         $('#profLogout').onclick = logout;
       };
       return profileCard([['Employee ID',a.empId],['Name',a.name],['Designation',a.designation],
         ['Email',a.email],['Phone',a.phone],['User ID',user.username]],
-        `<button class="btn-primary" id="editAcct">✏️ Edit Profile</button>
-         <button class="btn-outline" id="changePw">🔒 Change Password</button>
+        `<button class="btn-outline" id="changePw">🔒 Change Password</button>
          <button class="btn-outline" id="profLogout">⎋ Logout</button>`, a.photo);
     }
     if (user.role === 'center_head') {
@@ -3707,17 +3708,13 @@
     if (user.role === 'placement_officer') {
       const p = Store.find('placementofficers', user.refId) || {};
       const st = placementStats();
-      viewProfile.after = () => {
-        const e = $('#editPo'); if (e) e.onclick = () => placementOfficerForm(p.id, render);
-        $('#profLogout').onclick = logout;
-      };
+      viewProfile.after = () => { $('#profLogout').onclick = logout; };
       return profileCard([['Employee ID',p.empId],['Name',p.name],['Designation',p.designation||'Placement Officer'],
         ['Department',p.department||'Training & Placement Cell'],['Email',p.email],['Phone',p.phone],
         ['User ID',user.username],
         ['Modules','Companies · Drives · Applications · Interviews · Selections · Offers · Calendar · Reports'],
         ['This session',`${st.companies} companies · ${st.drives} drives · ${st.placed} students placed`]],
-        `${p.id ? `<button class="btn-primary" id="editPo">✏️ Edit Profile</button>` : ''}
-         <button class="btn-outline" id="profLogout">⎋ Logout</button>`, p.photo);
+        `<button class="btn-outline" id="profLogout">⎋ Logout</button>`, p.photo);
     }
     return profileCard([['Username',user.username],['Role',roleLabel(user.role)]]);
   }
