@@ -9423,12 +9423,14 @@
     const placedIds = new Set(placedOffers.map(o => o.studentId));
     const selectedIds = new Set(Store.all('applications').filter(a => a.status === 'Selected').map(a => a.studentId));
     const pkgs = placedOffers.map(o => +o.package || 0).filter(n => n > 0);
-    // a student already placed was eligible by definition, so never divide by
-    // a denominator smaller than the number placed
-    const denom = Math.max(eligible.length, placedIds.size);
+    /* Unplaced is everyone not placed, and the placement rate is out of the
+       whole roll — not out of who happened to qualify for an open drive. The
+       cell reports against its intake, and a student nobody has run a drive
+       for is exactly the one worth counting. */
+    const denom = students.length;
     // eligible for at least one drive and not placed — the number the cell is
     // actually chasing, which no screen showed
-    const unplaced = eligible.filter(s => !placedIds.has(s.id)).length;
+    const unplaced = students.length - placedIds.size;
     /* Counted per student rather than per offer: one person who did not turn
        up is one number, however many offers their file holds. */
     const endedIds = (which) => new Set(Store.all('offers')
@@ -9577,12 +9579,11 @@
         ${statCard('🏢', st.companies, 'Companies', 'c2')}
         ${statCard('🚀', st.activeDrives, `Active Drives (of ${st.drives})`, 'c2')}
         ${statCard('📨', st.applications, 'Applications')}
-        ${statCard('🎯', st.selected, 'Selected Students', 'c3')}
         ${statCard('🏆', st.placed, 'Placed Students', 'c3')}
         ${statCard('🔍', st.unplaced, 'Unplaced Students', 'c4')}
         ${statCard('🚫', st.notJoined, 'Not Joined', 'c4')}
         ${statCard('🚪', st.left, 'Left After Joining', 'c4')}
-        ${statCard('📈', st.pct + '%', `Placement (of ${st.denom} eligible)`, st.pct >= 50 ? 'c3' : 'c4')}
+        ${statCard('📈', st.pct + '%', `Placement (of ${st.denom} students)`, st.pct >= 50 ? 'c3' : 'c4')}
         ${statCard('💰', money(st.highest), 'Highest Package', 'c3')}
         ${statCard('📊', money(st.average), 'Average Package', 'c2')}
       </div>`;
@@ -9708,7 +9709,7 @@
         $('#psStats').innerHTML = `${statCard('🎓', rows.length, 'Students Listed')}
           ${statCard('✅', rows.filter(r => r.eligibleDrives > 0).length, 'Eligible for a Drive', 'c3')}
           ${statCard('🏆', rows.filter(r => ['Placed', 'Joined'].includes(r.status)).length, 'Placed', 'c3')}
-          ${statCard('🔍', rows.filter(r => r.eligibleDrives > 0 && !['Placed', 'Joined'].includes(r.status)).length, 'Unplaced', 'c2')}
+          ${statCard('🔍', rows.filter(r => !['Placed', 'Joined'].includes(r.status)).length, 'Unplaced', 'c2')}
           ${statCard('⏳', rows.filter(r => ['Applied', 'In Process', 'Selected', 'Offer Pending'].includes(r.status)).length, 'In Process', 'c2')}`;
         $('#psBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.branch)}</td>
