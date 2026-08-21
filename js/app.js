@@ -9667,7 +9667,6 @@
           <option>Eligible</option><option>Not Eligible</option></select>
         <button class="btn-outline btn-sm" id="psClear">Clear</button>
       </div>
-      <div id="psStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th style="text-align:right">CGPA</th>
         <th style="text-align:right">Attendance</th><th>Eligibility</th><th>Placement Status</th>
@@ -9701,11 +9700,8 @@
       const draw = () => {
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
-        $('#psStats').innerHTML = `${statCard('🎓', rows.length, 'Students Listed')}
-          ${statCard('✅', rows.filter(r => r.eligibleDrives > 0).length, 'Eligible for a Drive', 'c3')}
-          ${statCard('🏆', rows.filter(r => ['Placed', 'Joined'].includes(r.status)).length, 'Placed', 'c3')}
-          ${statCard('🔍', rows.filter(r => !['Placed', 'Joined'].includes(r.status)).length, 'Unplaced', 'c2')}
-          ${statCard('⏳', rows.filter(r => ['Applied', 'In Process', 'Selected', 'Offer Pending'].includes(r.status)).length, 'In Process', 'c2')}`;
+        /* The counts live on the placement dashboard. Repeating them above the
+           list only pushed the list itself off the screen. */
         $('#psBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.branch)}</td>
           <td>${esc(String(r.semester))}</td>
