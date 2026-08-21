@@ -248,6 +248,16 @@
      instead of routing to a view. Used for services the college runs outside
      this CMS, such as the biometric attendance portal. */
   const NAV_LINK = '>>';
+  /* A [NAV_GROUP, ico, label, key, children] entry is a page with a short list
+     under it. The parent still opens the page unfiltered; each child opens it
+     narrowed to one kind. */
+  const NAV_GROUP = '::';
+  /** the filter a submenu entry opened the page with, '' for the plain page */
+  let viewPreset = '';
+  /* What the cell is running, in its own words: a company visits campus, or
+     recruits off it, or takes summer interns, or comes through the national
+     test. Declared here because the sidebar lists them under Placement Drives. */
+  const DRIVE_TYPES = ['On Campus', 'Off Campus', 'Summer Placement', 'NTA'];
   // the mark-attendance page itself, not the portal root — /emp/ only lands on
   // the login index, which is a step further from what staff actually need
   const EMP_ATTENDANCE_URL = 'https://pinnacle.myattendance.co.in/emp/add_attendance';
@@ -270,7 +280,8 @@
       // the placement cell — the admin gets every one of these too, with full rights
       [NAV_SECTION,'','Placement'],
       ['plstudents','🎓','Placement Students'], ['companies','🏢','Companies'],
-      ['drives','🚀','Placement Drives'], ['applications','📨','Applications'],
+      [NAV_GROUP,'🚀','Placement Drives','drives',DRIVE_TYPES],
+      ['applications','📨','Applications'],
       ['interviews','🎤','Interviews'], ['placements','🏆','Selections'],
       ['offers','📜','Offers'], ['plcalendar','📅','Placement Calendar'],
       ['plreports','📊','Placement Reports'], ['placementofficers','🧑‍💼','Placement Officers'],
@@ -282,7 +293,8 @@
       ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'],
       ['plstudents','🎓','Placement Students'],
       ['syllabus','🧾','Subjects by Semester'],
-      ['companies','🏢','Companies'], ['drives','🚀','Placement Drives'],
+      ['companies','🏢','Companies'],
+      [NAV_GROUP,'🚀','Placement Drives','drives',DRIVE_TYPES],
       ['applications','📨','Applications'], ['interviews','🎤','Interviews'],
       ['placements','🏆','Selections'], ['offers','📜','Offers'],
       ['plcalendar','📅','Placement Calendar'], ['plreports','📊','Reports'],
@@ -357,7 +369,28 @@
                     center_head: 'Center Head · View Only',
                     placement_officer: 'Placement Cell' }[user.role] || 'Menu';
     nav.innerHTML = `<div class="nav-section">${label}</div>`;
-    menuFor(user.role).forEach(([key, ico, txt, url]) => {
+    menuFor(user.role).forEach(([key, ico, txt, url, kids]) => {
+      /* A group renders its own row plus one indented row per child. The
+         child's key carries the filter — "drives::On Campus" — so the router
+         needs no special case and the active highlight still works. */
+      if (key === NAV_GROUP) {
+        const parent = document.createElement('div');
+        parent.className = 'nav-item' + (currentView === url ? ' active' : '');
+        parent.title = txt;
+        parent.innerHTML = `<span class="ico">${ico}</span><span>${txt}</span>`;
+        parent.onclick = () => navigate(url);
+        nav.appendChild(parent);
+        (kids || []).forEach((kid) => {
+          const childKey = `${url}${NAV_GROUP}${kid}`;
+          const child = document.createElement('div');
+          child.className = 'nav-item nav-child' + (currentView === childKey ? ' active' : '');
+          child.title = kid;
+          child.innerHTML = `<span class="ico">•</span><span>${esc(kid)}</span>`;
+          child.onclick = () => navigate(childKey);
+          nav.appendChild(child);
+        });
+        return;
+      }
       if (key === NAV_SECTION) {
         const head = document.createElement('div');
         head.className = 'nav-section nav-section-mid';
@@ -388,8 +421,17 @@
 
   /* Server-side rules are the real gate (see api/index.php); this keeps a role
      from opening a page it has no business seeing even by hand. */
+  /** "drives::On Campus" -> { view: 'drives', preset: 'On Campus' } */
+  function splitViewKey(key) {
+    const at = String(key || '').indexOf(NAV_GROUP);
+    return at === -1 ? { view: key, preset: '' }
+                     : { view: key.slice(0, at), preset: key.slice(at + NAV_GROUP.length) };
+  }
+
   function canView(key) {
-    return menuFor(user.role).some(([k]) => k === key);
+    const { view } = splitViewKey(key);
+    return menuFor(user.role).some(([k, , , url]) =>
+      k === view || (k === NAV_GROUP && url === view));
   }
 
   function navigate(key) {
@@ -444,10 +486,15 @@
   };
 
   function render() {
+    /* A submenu key carries the filter it opens with — the page itself reads
+       it from viewPreset and the title says which kind is being shown. */
+    const { view, preset } = splitViewKey(currentView);
+    viewPreset = preset;
     $('#pageTitle').textContent =
-      (readOnly() && READ_ONLY_TITLES[currentView]) || TITLES[currentView] || 'Dashboard';
+      ((readOnly() && READ_ONLY_TITLES[view]) || TITLES[view] || 'Dashboard')
+      + (preset ? ' — ' + preset : '');
     const v = $('#view');
-    if (currentView !== 'dashboard' && !canView(currentView)) {
+    if (view !== 'dashboard' && !canView(currentView)) {
       v.innerHTML = `<div class="panel"><p class="empty">You do not have access to this page.</p></div>`;
       return;
     }
@@ -471,7 +518,7 @@
       applications: viewApplications, interviews: viewInterviews, placements: viewPlacements,
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers, employees: viewEmployees,
-    }[currentView] || viewDashboard;
+    }[view] || viewDashboard;
     v.innerHTML = fn();
     // every page a read-only role opens says so — views that already carry a
     // banner with a page-specific message keep theirs
@@ -8978,10 +9025,6 @@
   const OFFER_STATUS     = ['Offered', 'Accepted', 'Declined', 'Joined', 'Not Joined', 'Left', 'Revoked'];
   const OFFER_ENDED_STATUS = ['Not Joined', 'Left'];
   const INTERVIEW_MODES  = ['Offline', 'Online', 'Telephonic'];
-  /* What the cell is running, in its own words: a company visits campus, or
-     recruits off it, or takes summer interns, or comes through the national
-     test. An interview is either the real thing or practice for it. */
-  const DRIVE_TYPES      = ['On Campus', 'Off Campus', 'Summer Placement', 'NTA'];
   const INTERVIEW_TYPES  = ['Final', 'Mock'];
   const ENGAGEMENT_TYPES = ['Final Placement', 'Summer Internship'];
   const PL_EVENT_TYPES   = ['Drive', 'Interview', 'Pre-Placement Talk', 'Test', 'Other'];
@@ -9830,6 +9873,8 @@
       <div class="panel-tools fin-filters">
         <input class="search-box" id="drQ" placeholder="Search role / company...">
         <select class="filter-sel" id="drCompany"><option value="">All Companies</option>${companyOptions()}</select>
+        <select class="filter-sel" id="drType"><option value="">All Types</option>${
+          DRIVE_TYPES.map(t => `<option ${t === viewPreset ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
         <select class="filter-sel" id="drStatus"><option value="">All Statuses</option>${optionsFrom(DRIVE_STATUS)}</select>
         <label class="days-field">From <input class="filter-sel" id="drFrom" type="date"></label>
         <label class="days-field">To <input class="filter-sel" id="drTo" type="date"></label>
@@ -9846,7 +9891,7 @@
       let page = 1;
       const rowsFor = () => {
         const q = ($('#drQ').value || '').trim().toLowerCase();
-        const co = $('#drCompany').value, st = $('#drStatus').value;
+        const co = $('#drCompany').value, st = $('#drStatus').value, ty = $('#drType').value;
         const from = $('#drFrom').value, to = $('#drTo').value;
         return Store.all('drives').map(d => {
           const eligible = eligibleStudentsFor(d).length;
@@ -9865,6 +9910,7 @@
         }).filter(d =>
           (!q || [d.id, d.jobRole, d.company, d.location].some(v => String(v || '').toLowerCase().includes(q))) &&
           (!co || d.companyId === co) && (!st || (d.status || 'Draft') === st) &&
+          (!ty || (d.driveType || 'On Campus') === ty) &&
           (!from || (d.driveDate && d.driveDate >= from)) &&
           (!to || (d.driveDate && d.driveDate <= to)))
           .sort((a, b) => String(b.driveDate || '').localeCompare(String(a.driveDate || '')));
@@ -9909,12 +9955,12 @@
         $('#drPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#drPager'), rows.length, page, (p) => page = p, draw);
       };
-      ['drQ', 'drCompany', 'drStatus', 'drFrom', 'drTo'].forEach(id => {
+      ['drQ', 'drCompany', 'drType', 'drStatus', 'drFrom', 'drTo'].forEach(id => {
         const el = $('#' + id);
         el[el.tagName === 'INPUT' && el.type !== 'date' ? 'oninput' : 'onchange'] = () => { page = 1; draw(); };
       });
       $('#drClear').onclick = () => {
-        ['drQ', 'drCompany', 'drStatus', 'drFrom', 'drTo'].forEach(id => { $('#' + id).value = ''; });
+        ['drQ', 'drCompany', 'drType', 'drStatus', 'drFrom', 'drTo'].forEach(id => { $('#' + id).value = ''; });
         page = 1; draw();
       };
       $('#drAdd').onclick = () => driveForm(null, draw);

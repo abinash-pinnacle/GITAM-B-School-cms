@@ -452,6 +452,12 @@ body.sidebar-collapsed .nav-section-mid{font-size:0;padding-top:12px;margin-top:
 a.install-btn{color:var(--primary);box-sizing:border-box}
 a.install-btn:hover{background:var(--primary-light)}
 
+/* a submenu row sits under its parent, quieter and indented */
+.nav-item.nav-child{padding-left:26px;font-size:13px;opacity:.85;margin-bottom:2px}
+.nav-item.nav-child .ico{width:22px;height:22px;font-size:12px;background:transparent}
+.nav-item.nav-child.active{opacity:1}
+.sidebar-collapsed .nav-item.nav-child{display:none}
+
 /* ===== REGISTER ATTENDANCE (the class-picker grid) ===== */
 .att-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 14px;
   padding:4px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
