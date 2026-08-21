@@ -72,7 +72,7 @@ function db_config(): array
 /* Bump when the demo data in seed_data() changes. It rides along in the
    schema signature, so an install still carrying the previous demo set
    re-runs init_db() once and picks the new one up. */
-const SEED_REVISION = '2026-08-20-attendance';
+const SEED_REVISION = '2026-08-21-admission';
 
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
@@ -102,6 +102,8 @@ const COLLECTIONS = [
     /* course coordinators run attendance for a department. They may register a
        class and correct it; they may not touch the master data behind it. */
     'coordinators' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'department', 'photo'],
+    // the admissions desk; the login lives in `users` with role = admission
+    'admissions' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
     // shortName drives the timetable label; facultyId is set from the Assignments page
     'courses'    => ['id', 'code', 'name', 'branch', 'semester', 'credits', 'facultyId', 'section', 'shortName', 'type'],
     /* The curriculum: what a branch studies in each semester. Deliberately not
@@ -208,7 +210,7 @@ const ID_PREFIX = [
     'books' => 'B', 'issues' => 'IS', 'events' => 'EV', 'settings' => 'SET',
     'accountants' => 'AC', 'assets' => 'AS', 'fixedfees' => 'FF', 'payments' => 'PY',
     'requisitions' => 'RQ', 'centerheads' => 'CH', 'placementofficers' => 'PO',
-    'coordinators' => 'CC',
+    'coordinators' => 'CC', 'admissions' => 'AD',
     'companies' => 'CO', 'drives' => 'DR', 'applications' => 'AP',
     'interviews' => 'IV', 'offers' => 'OF', 'placementevents' => 'PE',
     'syllabus' => 'SY',
@@ -233,7 +235,7 @@ const ID_PREFIX = [
  * well, but the server is the gate: a hand-made POST/PUT/DELETE is refused.
  */
 const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
-               'course_coordinator', 'faculty', 'librarian', 'student'];
+               'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
 
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */
 const READ_ONLY_ROLES = ['center_head'];
@@ -256,6 +258,15 @@ const ATTENDANCE_OPTIONAL_ROLES = ['faculty'];
 /** master data a coordinator reads but never writes */
 const COORDINATOR_READONLY = ['students', 'faculty', 'courses', 'syllabus', 'timetable',
                               'settings', 'users', 'coordinators', 'events', 'marks'];
+
+/* ---------------- admissions ----------------
+   The desk that enrols people. It creates and corrects student records, and
+   the login that comes with each one, and touches nothing else — not fees,
+   not marks, not attendance, and not the record of a student already gone,
+   which is why it cannot delete. */
+const ADMISSION_WRITABLE = ['students', 'users'];
+const ADMISSION_READABLE = ['students', 'users', 'courses', 'syllabus', 'settings',
+                            'events', 'admissions'];
 
 /** requisitions: staff raise them, admin/accountant approve them — students never see them */
 const STAFF_COLLECTIONS = ['requisitions'];
@@ -407,6 +418,7 @@ function seed_data(): array
             ['u7', 'centerhead', 'pass123', 'center_head', 'CH01', 'Dr. Anand Rao'],
             ['u8', 'placement', 'pass123', 'placement_officer', 'PO01', 'Ms. Kavita Menon'],
             ['u9', 'coordinator', 'pass123', 'course_coordinator', 'CC01', 'Dr. Sunil Mohanty'],
+            ['u10', 'admission', 'pass123', 'admission', 'AD01', 'Ms. Priya Sahoo'],
         ],
         'faculty' => [
             ['F01', 'NM-F-1001', 'Dr. Rajesh Mehta', 'rmehta@nmiet.edu', '9876500011', 'MBA', 'Professor', null,
@@ -441,6 +453,10 @@ function seed_data(): array
         'coordinators' => [
             ['CC01', 'NM-C-5001', 'Dr. Sunil Mohanty', 'sunil.mohanty@nmiet.edu', '9876500051',
              'Course Coordinator', 'MBA', null],
+        ],
+        'admissions' => [
+            ['AD01', 'NM-AD-6001', 'Ms. Priya Sahoo', 'priya.sahoo@nmiet.edu', '9876500061',
+             'Admission Officer', null],
         ],
         'courses' => [
             ['C01', 'MBA201', 'Marketing Management', 'MBA', 2, 4, 'F01', 'A'],

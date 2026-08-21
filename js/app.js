@@ -144,6 +144,7 @@
   const ROLE_LABEL = {
     admin: 'Admin', accountant: 'Accountant', center_head: 'Center Head',
     placement_officer: 'Placement Officer', course_coordinator: 'Course Coordinator',
+    admission: 'Admission Officer',
     faculty: 'Faculty', librarian: 'Librarian', student: 'Student',
   };
   /** the placement cell — the admin runs everything, the officer runs placement */
@@ -164,11 +165,16 @@
       Store.setReadOnly(true, { attendance: ['add', 'update', 'remove'] });
       return;
     }
+    // the admissions desk adds and corrects; removing a student is not its call
+    if (user && user.role === 'admission') {
+      Store.setReadOnly(true, { students: ['add', 'update'], users: ['add', 'update'] });
+      return;
+    }
     Store.setReadOnly(readOnly(), readOnlyWritable());
   }
   /** true for a role that may look at the master data but never change it */
   function viewsMasterOnly() {
-    return readOnly() || (!!user && user.role === 'course_coordinator');
+    return readOnly() || (!!user && ['course_coordinator', 'admission'].includes(user.role));
   }
   /** roles whose scope is the whole college: the admin runs it, the center head watches it */
   function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
@@ -335,6 +341,13 @@
       ['timetable','🗓️','Timetable'], ['syllabus','🧾','Subjects by Semester'],
       ['mybooks','📖','My Library'], ['myfees','💳','My Fees'],
       ['myplacement','🏆','My Placement'], ['profile','👤','My Profile'],
+    ],
+    /* The admissions desk enrols students and corrects them. Courses and the
+       scheme are there because an admission has to be put on one. */
+    admission: [
+      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
+      ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
+      ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
     ],
     /* The coordinator runs attendance and reads what it is built from. Nothing
        here writes master data — the server refuses it either way. */
@@ -1058,7 +1071,9 @@
   }
 
   function viewStudents() {
-    const canEdit = user.role === 'admin';
+    // the admissions desk enrols and corrects; only the admin removes a record
+    const canEdit = ['admin', 'admission'].includes(user.role);
+    const canDelete = user.role === 'admin';
     // librarians and the center head can't edit students, but they do need each
     // student's book history
     const canSeeBooks = ['admin', 'librarian', 'center_head'].includes(user.role);
@@ -1149,8 +1164,8 @@
             ${canSeeBooks ? `<button class="btn-sm btn-outline" data-books="${s.id}" title="Book issue / return history">📖</button>` : ''}
             ${canPrintDocs ? `<button class="btn-sm btn-outline" data-id="${s.id}" title="Print ID card">🪪</button>
             <button class="btn-sm btn-outline" data-sheet="${s.id}" title="Print marksheet">📄</button>` : ''}
-            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>
-            <button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
+            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>` : ''}
+            ${canDelete ? `<button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
           </div></td>
         </tr>`).join('') : `<tr><td colspan="13" class="empty">No students found.</td></tr>`;
 
@@ -1165,6 +1180,8 @@
         }
         if (canEdit) {
           $('#stuBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => studentForm(b.dataset.edit));
+        }
+        if (canDelete) {
           $('#stuBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('students', b.dataset.del, 'student', draw));
         }
         $('#stuPager').innerHTML = pagerHtml(rows.length, page);
@@ -2743,7 +2760,7 @@
     // The offices that read the roll without owning it — accounts, the
     // placement cell, the library — see every student, the same list the
     // admin does. What they cannot do is change it, which the server enforces.
-    if (collegeWide() || ['librarian', 'accountant', 'placement_officer'].includes(user.role)) {
+    if (collegeWide() || ['librarian', 'accountant', 'placement_officer', 'admission'].includes(user.role)) {
       return Store.all('students');
     }
     /* A coordinator calls the register for their department, so the roll they
@@ -3690,6 +3707,19 @@
       };
       return profileCard([['Employee ID',a.empId],['Name',a.name],['Designation',a.designation],
         ['Email',a.email],['Phone',a.phone],['User ID',user.username]],
+        `<button class="btn-outline" id="changePw">🔒 Change Password</button>
+         <button class="btn-outline" id="profLogout">⎋ Logout</button>`, a.photo);
+    }
+    if (user.role === 'admission') {
+      const a = Store.find('admissions', user.refId) || {};
+      viewProfile.after = () => {
+        $('#changePw').onclick = () => changePasswordForm();
+        $('#profLogout').onclick = logout;
+      };
+      return profileCard([['Employee ID',a.empId],['Name',a.name],
+        ['Designation',a.designation||'Admission Officer'],['Email',a.email],['Phone',a.phone],
+        ['User ID',user.username],
+        ['Access','Add and edit student records · view courses and the scheme']],
         `<button class="btn-outline" id="changePw">🔒 Change Password</button>
          <button class="btn-outline" id="profLogout">⎋ Logout</button>`, a.photo);
     }

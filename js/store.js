@@ -8,7 +8,8 @@ const Store = {
           attendance: [], marks: [], fees: [], fixedfees: [], payments: [],
           assets: [], requisitions: [], timetable: [], books: [], issues: [],
           events: [], settings: [], placementofficers: [], companies: [], drives: [],
-          applications: [], interviews: [], offers: [], placementevents: [] },
+          applications: [], interviews: [], offers: [], placementevents: [],
+          coordinators: [], admissions: [] },
 
   /* The backend restricts financial collections to admin/accountant. It works
      out who is calling from this header, so every request carries it. */

@@ -245,11 +245,45 @@ function guard_request(string $resource, string $method): void
         ], 403);
     }
 
+    /* The admissions desk enrols students and corrects them; it may not
+       remove one, and outside students and their logins it may not write at
+       all. Reads are narrowed to what enrolling needs. */
+    if (current_role() === 'admission') {
+        if ($isWrite && !in_array($resource, ADMISSION_WRITABLE, true)) {
+            send_json([
+                'error'   => 'forbidden',
+                'message' => 'The admissions desk can add and edit students, nothing else.',
+            ], 403);
+        }
+        if ($method === 'DELETE') {
+            send_json([
+                'error'   => 'forbidden',
+                'message' => 'A student record is removed by the administrator, not the admissions desk.',
+            ], 403);
+        }
+        // a login it creates is a student's; it does not mint staff accounts
+        if ($isWrite && $resource === 'users') {
+            $rows = body();
+            $rows = (array_is_list($rows) && $rows !== []) ? $rows : [$rows];
+            foreach ($rows as $row) {
+                if (($row['role'] ?? 'student') !== 'student') {
+                    send_json(['error' => 'forbidden',
+                               'message' => 'The admissions desk can only create student logins.'], 403);
+                }
+            }
+        }
+        if (!$isWrite && $resource !== '' && isset(COLLECTIONS[$resource])
+            && !in_array($resource, ADMISSION_READABLE, true)) {
+            send_json(['error' => 'forbidden'], 403);
+        }
+    }
+
     // The student roll is read by the accounts office, the placement cell, the
     // library and the centre head, and edited by none of them. Until now that
     // was a UI convention: the Students page simply hid its buttons, while the
     // API accepted a write from any signed-in role.
-    if ($resource === 'students' && $isWrite && current_role() !== 'admin') {
+    if ($resource === 'students' && $isWrite
+        && !in_array(current_role(), ['admin', 'admission'], true)) {
         send_json([
             'error'   => 'forbidden',
             'message' => 'Only the administrator can add, edit or delete a student record.',
