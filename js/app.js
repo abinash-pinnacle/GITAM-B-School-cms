@@ -617,7 +617,7 @@
 
     // branch distribution
     const byBranch = {};
-    students.forEach(s => { byBranch[s.branch] = (byBranch[s.branch] || 0) + 1; });
+    students.forEach(s => { const k = specOf(s) || 'Not set'; byBranch[k] = (byBranch[k] || 0) + 1; });
     const branchRows = Object.entries(byBranch).sort((a, b) => b[1] - a[1]);
     const maxBranch = Math.max(1, ...branchRows.map(r => r[1]));
 
@@ -1865,7 +1865,7 @@
       <div class="panel-tools fin-filters">
         <input class="search-box" id="bsQ" placeholder="Search name / reg no...">
         <select class="filter-sel" id="bsCourse"><option value="">All Courses</option>${listOptions('course')}</select>
-        <select class="filter-sel" id="bsBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+        <select class="filter-sel" id="bsBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
         <select class="filter-sel" id="bsSem"><option value="">All Semesters</option>${semesterOptions()}</select>
         <select class="filter-sel" id="bsSection"><option value="">All Sections</option></select>
         <select class="filter-sel" id="bsYear"><option value="">All Academic Years</option>${optionsFrom(academicYearList())}</select>
@@ -1916,7 +1916,7 @@
         return Store.all('students').filter(s =>
           (!q || [s.name, s.roll].some(v => String(v || '').toLowerCase().includes(q))) &&
           (!course || s.course === course) &&
-          (!branch || s.branch === branch) &&
+          (!branch || specOf(s) === branch) &&
           (!sem || String(s.semester) === sem) &&
           (!sec || s.section === sec) &&
           (!yr || s.academicYear === yr))
@@ -2469,13 +2469,13 @@
       <h3>Courses</h3><div class="panel-tools">
         <input class="search-box" id="couSearch" placeholder="Search code / name...">
         ${canEdit ? `<button class="btn-primary" id="addCou">+ Add Course</button>` : `
-          <select class="filter-sel" id="couBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+          <select class="filter-sel" id="couBranch"><option value="">All Courses</option>${branchOptions()}</select>
           <select class="filter-sel" id="couSem"><option value="">All Semesters</option>${semesterOptions()}</select>
           <button class="btn-outline btn-sm" id="couPrint">🖨 Print</button>
           <button class="btn-outline btn-sm" id="couCsv">📑 CSV</button>
           <button class="btn-primary btn-sm" id="couXls">⬇ Excel</button>`}</div></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Code</th><th>Course Name</th><th>Type</th><th>Specialisation</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
+        <th>Code</th><th>Course Name</th><th>Type</th><th>Course</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
         ${canEdit ? '<th>Actions</th>' : '<th style="text-align:right">Students</th>'}
       </tr></thead><tbody id="couBody"></tbody></table></div><div id="couPager"></div></div>`;
     viewCourses.after = () => {
@@ -2535,7 +2535,7 @@
         { header: 'Code', key: 'code', width: 12 },
         { header: 'Course Name', key: 'name', width: 32 },
         { header: 'Type', key: 'type', width: 12 },
-        { header: 'Specialisation', key: 'branch', width: 12 },
+        { header: 'Course', key: 'branch', width: 12 },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
         { header: 'Credits', key: 'credits', width: 9, type: 'number' },
@@ -2604,7 +2604,7 @@
       <h3>Subjects — Semester wise</h3>
       <div class="panel-tools">
         <input class="search-box" id="sylQ" placeholder="Search subject / code...">
-        <select class="filter-sel" id="sylBranch"><option value="">All Specialisations</option>
+        <select class="filter-sel" id="sylBranch"><option value="">All Courses</option>
           ${syllabusBranches().map(b =>
             `<option ${b === myBranch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
         <select class="filter-sel" id="sylSem"><option value="">All Semesters</option>${semesterOptions(mySem)}</select>
@@ -2623,7 +2623,7 @@
         return {
           title: 'Curriculum — Subjects by Semester', sheetName: 'Syllabus', subtitle: reportStamp(),
           columns: [
-            { header: 'Specialisation', key: 'branch', width: 12 },
+            { header: 'Course', key: 'branch', width: 12 },
             { header: 'Semester', key: 'semester', width: 10, type: 'number' },
             { header: 'Code', key: 'code', width: 12 },
             { header: 'Subject Name', key: 'name', width: 40 },
@@ -2781,7 +2781,7 @@
       <div class="form-grid">
         <div class="field"><label>Course Code</label><input name="code" value="${esc(c.code||'')}" required></div>
         <div class="field"><label>Course Name</label><input name="name" value="${esc(c.name||'')}" required></div>
-        <div class="field"><label>Specialisation</label><select name="branch" id="courseFormBranch">${branchOptions(c.branch, true)}</select></div>
+        <div class="field"><label>Course</label><select name="branch" id="courseFormBranch">${branchOptions(c.branch, true)}</select></div>
         <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${c.semester||1}"></div>
         <div class="field"><label>Section</label><input name="section" value="${esc(c.section||'A')}" placeholder="e.g. A"></div>
         <div class="field"><label>Credits</label><input name="credits" type="number" min="1" max="6" value="${c.credits||3}"></div>
@@ -3582,7 +3582,7 @@
         { header: 'Time', key: 'time', width: 20 },
         { header: 'Code', key: 'code', width: 12 },
         { header: 'Subject', key: 'subject', width: 32 },
-        { header: 'Specialisation', key: 'branch', width: 10 },
+        { header: 'Course', key: 'branch', width: 10 },
         { header: 'Semester', key: 'semester', width: 10, type: 'number' },
         { header: 'Section', key: 'section', width: 9 },
         { header: 'Faculty', key: 'faculty', width: 24 },
@@ -3601,7 +3601,7 @@
     const selEnd = draft.endTime || '09:30';
     const selCourse = opts.presetCourse || draft.courseId || '';
     openModal('Add Timetable Slot', `<form id="f"><div class="form-grid">
-      <div class="field"><label>Specialisation</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
+      <div class="field"><label>Course</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
       <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${draft.semester||2}"></div>
       <div class="field"><label>Section</label><input name="section" value="${esc(draft.section||'A')}"></div>
       <div class="field"><label>Day</label><select name="day" id="slotDay">${DAYS.map(d=>`<option ${d===selDay?'selected':''}>${d}</option>`).join('')}${listExtraOpts()}</select></div>
@@ -4251,7 +4251,7 @@
         title: b.title || '(deleted book)', author: b.author || '', isbn: b.isbn || '',
         category: b.category || 'Others',
         roll: s.roll || '', student: s.name || '(deleted student)',
-        branch: s.branch || '', year: s.year || '', semester: s.semester || '',
+        branch: specOf(s), year: s.year || '', semester: s.semester || '',
         section: s.section || '', phone: s.phone || '', email: s.email || '',
         issueDate: i.issueDate || '', dueDate: i.dueDate || '', returnDate: i.returnDate || '',
         daysKept: returned ? Math.max(0, dayDiff(i.issueDate, i.returnDate)) : Math.max(0, dayDiff(i.issueDate, td)),
@@ -5104,6 +5104,10 @@
   function courseList() { return listValues('course'); }
   function specialisationList() { return listValues('specialisation'); }
   function specialisationOptions(sel, withExtras) { return listOptions('specialisation', sel, withExtras); }
+  /* One programme is run, so what tells students apart is the specialisation.
+     `branch` still holds the programme code on older rows, so it is the
+     fallback rather than the source. */
+  function specOf(x) { return String((x && (x.specialisation || x.branch)) || '').trim(); }
   function courseOptions(sel, withExtras) { return listOptions('course', sel, withExtras); }
   // rolling window around the current session, plus anything already on record
   function academicYearList() {
@@ -5154,7 +5158,7 @@
         .map(f => f.dueDate).filter(Boolean).sort();
       return {
         sid: s.id, roll: s.roll || '', name: s.name || '', course: s.course || '—',
-        branch: s.branch || '—', semester: s.semester || '', academicYear: s.academicYear || '—',
+        branch: specOf(s) || '—', semester: s.semester || '', academicYear: s.academicYear || '—',
         total, paid, pending: Math.max(0, total - paid),
         dueDate: openDues[0] || '—', status: feeStatusOf(total, paid).label,
         pill: feeStatusOf(total, paid).pill, student: s, rows,
@@ -5181,10 +5185,11 @@
   }
   // the fee structure that applies to a student — used to pre-fill a new fee record
   function structureTotalFor(course, branch, academicYear) {
+    const wholeIntake = (v) => !v || String(v).trim().toUpperCase() === 'MBA';
     return Store.all('fixedfees').filter(f =>
       (f.status || 'Active') === 'Active' &&
       (!course || f.course === course) &&
-      (!branch || f.branch === branch) &&
+      (!branch || wholeIntake(f.branch) || f.branch === branch) &&
       (!academicYear || f.academicYear === academicYear))
       .reduce((a, f) => a + (+f.amount || 0), 0);
   }
@@ -5217,7 +5222,7 @@
     return `<div class="panel-tools fin-filters">
       <input class="search-box" id="${p}Q" placeholder="${esc(o.placeholder || 'Search student / reg no...')}">
       ${o.noCourse ? '' : `<select class="filter-sel" id="${p}Course"><option value="">All Courses</option>${optionsFrom(courseList())}</select>`}
-      ${o.noBranch ? '' : `<select class="filter-sel" id="${p}Branch"><option value="">All Specialisations</option>${branchOptions()}</select>`}
+      ${o.noBranch ? '' : `<select class="filter-sel" id="${p}Branch"><option value="">All Specialisations</option>${specialisationOptions()}</select>`}
       ${o.noSem ? '' : `<select class="filter-sel" id="${p}Sem"><option value="">All Semesters</option>${semesterOptions()}</select>`}
       ${o.noYear ? '' : `<select class="filter-sel" id="${p}Year"><option value="">All Academic Years</option>${optionsFrom(academicYearList())}</select>`}
       ${o.dates ? `<label class="days-field">From <input class="filter-sel" id="${p}From" type="date"></label>
@@ -5226,11 +5231,11 @@
       <button class="btn-outline btn-sm" id="${p}Clear">Clear</button>
     </div>`;
   }
-  const FIN_FILTER_IDS = ['Q', 'Course', 'Specialisation', 'Sem', 'Year', 'From', 'To'];
+  const FIN_FILTER_IDS = ['Q', 'Course', 'Branch', 'Sem', 'Year', 'From', 'To'];
   function finFilterValues(p, extraIds) {
     const val = (suffix) => { const el = $('#' + p + suffix); return el ? el.value : ''; };
     const out = {
-      q: (val('Q') || '').trim().toLowerCase(), course: val('Course'), branch: val('Specialisation'),
+      q: (val('Q') || '').trim().toLowerCase(), course: val('Course'), branch: val('Branch'),
       semester: val('Sem'), year: val('Year'), from: val('From'), to: val('To'),
     };
     (extraIds || []).forEach(s => { out[s.toLowerCase()] = val(s); });
@@ -5974,7 +5979,8 @@
     const r = id ? (Store.find('fixedfees', id) || {}) : {};
     openModal((id ? 'Edit' : 'Add') + ' Fixed Fee', `<form id="f"><div class="form-grid">
       <div class="field"><label>Course</label><select name="course" id="ffFormCourse">${listOptions('course', r.course, true)}</select></div>
-      <div class="field"><label>Specialisation</label><select name="branch" id="ffFormBranch">${branchOptions(r.branch, true)}</select></div>
+      <div class="field"><label>Specialisation</label><select name="branch" id="ffFormBranch">
+        <option value="">All specialisations</option>${specialisationOptions(r.branch, true)}</select></div>
       <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(r.academicYear)}</select></div>
       <div class="field"><label>Fee Type</label><select name="feeType" id="ffFormType">${listOptions('feeType', r.feeType, true)}</select></div>
       <div class="field"><label>Fixed Amount (₹)</label><input name="amount" id="ffAmt" inputmode="numeric" value="${r.amount || ''}" required></div>
@@ -5985,7 +5991,7 @@
       <button type="submit" class="btn-primary">Save Fixed Fee</button></div></form>`);
     $('#cx').onclick = closeModal;
     bindAmountInput($('#ffAmt'));
-    bindBranchSelect($('#ffFormBranch'));
+    bindCustomList($('#ffFormBranch'), 'specialisation');
     bindCustomList($('#ffFormCourse'), 'course');
     bindCustomList($('#ffFormType'), 'feeType');
     $('#f').onsubmit = (e) => {
@@ -6034,7 +6040,7 @@
         const st = feeStatusOf(f.total, f.paid);
         return {
           id: f.id, sid: f.studentId, name: s.name || 'Unknown student', roll: s.roll || '—',
-          course: s.course || '—', branch: s.branch || '—',
+          course: s.course || '—', branch: specOf(s) || '—',
           semester: f.semester || s.semester || '', academicYear: f.academicYear || s.academicYear || '—',
           total: +f.total || 0, paid: Math.min(+f.total || 0, +f.paid || 0), pending,
           dueDate: f.dueDate || '—', status: st.label, pill: st.pill,
@@ -6414,7 +6420,7 @@
       const fee = Store.find('fees', p.feeId) || {};
       return {
         id: p.id, receiptNo: p.receiptNo || '—', sid: p.studentId, roll: s.roll || '—',
-        name: s.name || 'Unknown student', course: s.course || '—', branch: s.branch || '—',
+        name: s.name || 'Unknown student', course: s.course || '—', branch: specOf(s) || '—',
         semester: fee.semester || s.semester || '', academicYear: fee.academicYear || s.academicYear || '—',
         amount: +p.amount || 0, mode: p.mode || '—', txnId: p.txnId || '—',
         date: p.date || '', status: p.status || 'Success',
@@ -6830,7 +6836,7 @@
         const paid = Math.min(+fee.total || 0, +fee.paid || 0);
         return {
           roll: s.roll || '—', name: s.name || 'Unknown student', course: s.course || '—',
-          branch: s.branch || '—', semester: fee.semester || s.semester || '',
+          branch: specOf(s) || '—', semester: fee.semester || s.semester || '',
           academicYear: fee.academicYear || s.academicYear || '—',
           total: +fee.total || 0, paid, pending: Math.max(0, (+fee.total || 0) - paid),
           dueDate: fee.dueDate || '—', status: feeStatusOf(fee.total, fee.paid).label,
@@ -7861,7 +7867,10 @@
       setting: 'specialisationList',
       defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics'],
       prompt: 'New specialisation (e.g. Business Analytics):',
-      used: () => Store.all('students').map(s => s.specialisation),
+      // fee heads can be set per specialisation, so one in use there counts too
+      used: () => Store.all('students').map(s => s.specialisation)
+        .concat(Store.all('fixedfees').map(f => f.branch)
+          .filter(v => String(v || '').trim().toUpperCase() !== 'MBA')),
     },
     // People a faculty member reports to who are not faculty themselves — a
     // director, a registrar, the HR head. Faculty come from the faculty table
@@ -8085,26 +8094,26 @@
   }
 
   /** one row per branch: students, courses, faculty, attendance, fees */
+  /* Subjects and staff belong to the programme, not to a stream inside it,
+     so this counts what a specialisation actually has of its own: students,
+     the semesters they sit in, their attendance and their fees. */
   function branchSummaryRows() {
-    refreshBranches();
     const students = Store.all('students');
-    const used = [...new Set(BRANCHES.concat(students.map(s => s.branch)).filter(Boolean))].sort();
+    const used = [...new Set(specialisationList().concat(students.map(specOf)).filter(Boolean))].sort();
     const fin = financeRows();
     return used.map(b => {
-      const mine = students.filter(s => s.branch === b);
-      const courses = Store.all('courses').filter(c => c.branch === b);
-      const faculty = Store.all('faculty').filter(f => branchOfDepartment(f.department) === b);
+      const mine = students.filter(s => specOf(s) === b);
       const att = attendanceOf(mine.map(s => s.id));
       const rows = fin.filter(r => r.branch === b);
       return {
-        branch: b, students: mine.length, courses: courses.length, faculty: faculty.length,
+        branch: b, students: mine.length,
         semesters: [...new Set(mine.map(s => s.semester))].filter(v => v !== '' && v != null).sort((x, y) => x - y).join(', ') || '—',
         attendance: att.pct === null ? '—' : att.pct,
         feeTotal: rows.reduce((a, r) => a + r.total, 0),
         feePaid: rows.reduce((a, r) => a + r.paid, 0),
         feePending: rows.reduce((a, r) => a + r.pending, 0),
       };
-    }).filter(r => r.students || r.courses || r.faculty);
+    }).filter(r => r.students);
   }
 
   /** one row per semester: headcount, attendance and the fee roll-up */
@@ -8147,7 +8156,7 @@
       const sessions = Store.all('attendance').filter(a => s.id in (a.records || {}));
       const present = sessions.filter(a => a.records[s.id] === 'P').length;
       return {
-        roll: s.roll || '', name: s.name || '', course: s.course || '—', branch: s.branch || '—',
+        roll: s.roll || '', name: s.name || '', course: s.course || '—', branch: specOf(s) || '—',
         semester: s.semester || '', section: s.section || 'A',
         held: sessions.length, present, absent: sessions.length - present,
         attendance: sessions.length ? Math.round(present / sessions.length * 100) : '—',
@@ -8177,7 +8186,8 @@
       const n = sessionCounts(a);
       return {
         date: a.date || '', code: c.code || '—', name: c.name || '—',
-        branch: c.branch || '—', semester: c.semester || '—', section: c.section || 'A',
+        branch: a.specialisation || c.branch || '—',
+        semester: a.semester || c.semester || '—', section: c.section || 'A',
         faculty: facultyName(c.facultyId),
         present: n.present, absent: n.absent, total: n.total, attendance: n.pct,
       };
@@ -8551,7 +8561,7 @@
           `<button class="fin-tab ${key === chAttTab ? 'active' : ''}" data-att="${key}">${label}</button>`).join('')}</div>
         <div class="panel-tools fin-filters">
           <input class="search-box" id="caQ" placeholder="Search student / subject / faculty...">
-          <select class="filter-sel" id="caBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+          <select class="filter-sel" id="caBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
           <select class="filter-sel" id="caSem"><option value="">All Semesters</option>${semesterOptions()}</select>
           <label class="days-field">From <input class="filter-sel" id="caFrom" type="date"></label>
           <label class="days-field">To <input class="filter-sel" id="caTo" type="date"></label>
@@ -8681,14 +8691,14 @@
     if (kind === 'courses') {
       const rows = courseAttendanceRows().filter(r =>
         hit(r, ['code', 'name', 'faculty', 'branch']) &&
-        (!f.branch || r.branch === f.branch) &&
         (!f.semester || String(r.semester) === String(f.semester)));
       return {
         title: 'Course-wise Attendance Report', sheetName: 'Course Attendance', subtitle: stamp,
-        note: 'Attendance for every course, from the sessions recorded against it.',
+        note: 'Attendance for every course, from the sessions recorded against it. '
+          + 'Courses belong to the programme, so the specialisation filter does not apply here.',
         columns: [
           { header: 'Code', key: 'code', width: 12 }, { header: 'Course', key: 'name', width: 30 },
-          { header: 'Specialisation', key: 'branch', width: 10 },
+          { header: 'Programme', key: 'branch', width: 10 },
           { header: 'Semester', key: 'semester', width: 10, type: 'number' },
           { header: 'Section', key: 'section', width: 9 }, { header: 'Faculty', key: 'faculty', width: 24 },
           { header: 'Students', key: 'students', width: 10, type: 'number' },
@@ -8705,10 +8715,10 @@
       const rows = departmentRows().filter(r => hit(r, ['department', 'branch']));
       return {
         title: 'Department-wise Attendance Report', sheetName: 'Dept Attendance', subtitle: stamp,
-        note: 'Attendance rolled up per department, through the branch each department teaches.',
+        note: 'Attendance rolled up per department, through the programme each department teaches.',
         columns: [
           { header: 'Department', key: 'department', width: 24 },
-          { header: 'Specialisation', key: 'branch', width: 10 },
+          { header: 'Programme', key: 'branch', width: 10 },
           { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
           { header: 'Courses', key: 'courses', width: 10, type: 'number' },
           { header: 'Students', key: 'students', width: 10, type: 'number' },
@@ -8815,10 +8825,10 @@
 
   /* =========================== BRANCHES =========================== */
   function viewBranches() {
-    const html = readOnlyBanner('Branches come from the master list the admin maintains, plus every branch in use.') +
+    const html = readOnlyBanner('Specialisations come from the master list the admin maintains, plus every one in use.') +
       `<div class="panel"><div class="panel-head"><h3>Specialisations</h3>
         <div class="panel-tools">
-          <input class="search-box" id="brQ" placeholder="Search branch...">
+          <input class="search-box" id="brQ" placeholder="Search specialisation...">
           ${exportButtons('br')}
         </div></div>
         <div id="brStats" class="stat-grid" style="margin:6px 0 18px"></div>
@@ -8838,8 +8848,6 @@
           columns: [
             { header: 'Specialisation', key: 'branch', width: 12 },
             { header: 'Students', key: 'students', width: 10, type: 'number' },
-            { header: 'Courses', key: 'courses', width: 10, type: 'number' },
-            { header: 'Faculty', key: 'faculty', width: 10, type: 'number' },
             { header: 'Semesters Running', key: 'semesters', width: 20 },
             { header: 'Attendance %', key: 'attendance', width: 14 },
             { header: 'Total Fee', key: 'feeTotal', width: 15, money: true },
@@ -8849,8 +8857,6 @@
           rows,
           totals: {
             branch: 'TOTAL', students: rows.reduce((a, r) => a + r.students, 0),
-            courses: rows.reduce((a, r) => a + r.courses, 0),
-            faculty: rows.reduce((a, r) => a + r.faculty, 0),
             feeTotal: rows.reduce((a, r) => a + r.feeTotal, 0),
             feePaid: rows.reduce((a, r) => a + r.feePaid, 0),
             feePending: rows.reduce((a, r) => a + r.feePending, 0),
@@ -8861,9 +8867,8 @@
         const r = report();
         $('#brStats').innerHTML = `${statCard('🌿', r.rows.length, 'Specialisations')}
           ${statCard('🎓', r.totals.students, 'Students', 'c2')}
-          ${statCard('📚', r.totals.courses, 'Courses', 'c3')}
           ${statCard('💰', money(r.totals.feePaid), 'Fees Collected', 'c3')}`;
-        $('#brTable').innerHTML = reportTableHtml(r.columns, r.rows, 'No branches found.');
+        $('#brTable').innerHTML = reportTableHtml(r.columns, r.rows, 'No specialisations in use yet.');
 
         // branch × semester headcount grid
         const students = Store.all('students');
@@ -8872,7 +8877,7 @@
           <thead><tr><th>Specialisation</th>${sems.map(s => `<th style="text-align:right">Sem ${s}</th>`).join('')}
             <th style="text-align:right">Total</th></tr></thead>
           <tbody>${r.rows.map(b => {
-            const cells = sems.map(s => students.filter(x => x.branch === b.branch && +x.semester === s).length);
+            const cells = sems.map(s => students.filter(x => specOf(x) === b.branch && +x.semester === s).length);
             return `<tr><td>${esc(b.branch)}</td>${cells.map(n =>
               `<td style="text-align:right">${n || '—'}</td>`).join('')}
               <td style="text-align:right;font-weight:600">${b.students}</td></tr>`;
@@ -9210,7 +9215,7 @@
       if ((+s.backlogs || 0) > +maxB) reasons.push(`${+s.backlogs || 0} backlogs (max ${maxB})`);
     }
     const branches = csvList(d.eligibleBranches);
-    if (branches.length && !branches.includes(s.branch)) reasons.push('Branch not eligible');
+    if (branches.length && !branches.includes(specOf(s))) reasons.push('Specialisation not eligible');
     const courses = csvList(d.eligibleCourses);
     if (courses.length && !courses.includes(s.course)) reasons.push('Course not eligible');
     return { ok: reasons.length === 0, reasons };
@@ -9658,7 +9663,7 @@
       <div class="panel-tools">${exportButtons('ps')}</div></div>
       <div class="panel-tools fin-filters">
         <input class="search-box" id="psQ" placeholder="Search name / reg no...">
-        <select class="filter-sel" id="psBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+        <select class="filter-sel" id="psBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
         <select class="filter-sel" id="psDrive"><option value="">Eligibility: any drive</option>${driveOptions()}</select>
         <select class="filter-sel" id="psStatus"><option value="">All Placement Statuses</option>
           <option>Placed</option><option>Joined</option><option>Offer Pending</option>
@@ -9684,7 +9689,7 @@
           const open = drivesOpenToStudent(s);
           const el = drive ? driveEligibility(s, drive) : null;
           return {
-            sid: s.id, roll: s.roll || '', name: s.name || '', branch: s.branch || '—',
+            sid: s.id, roll: s.roll || '', name: s.name || '', branch: specOf(s) || '—',
             semester: s.semester || '', cgpa: studentCgpa(s) ?? '—', backlogs: +s.backlogs || 0,
             attendance: studentAttendancePct(s.id),
             eligibleDrives: open.length, status: status.label, pill: status.pill, detail: status.detail,
@@ -10160,7 +10165,7 @@
         <div class="field"><label>Minimum CGPA</label><input name="minCgpa" type="number" step="0.1" min="0" max="10" value="${esc(d.minCgpa || '')}"></div>
         <div class="field"><label>Maximum Backlogs</label><input name="maxBacklogs" type="number" min="0" value="${esc(d.maxBacklogs === '' || d.maxBacklogs === null || d.maxBacklogs === undefined ? '' : d.maxBacklogs)}"></div>
         <div class="field full"><label>Eligible Specialisations <small style="color:var(--muted);font-weight:400">(none ticked = open to all)</small></label>
-          <div class="chk-grid">${refreshBranches().map(b => `<label class="chk">
+          <div class="chk-grid">${specialisationList().map(b => `<label class="chk">
             <input type="checkbox" name="branch_${b}" ${selBranches.includes(b) ? 'checked' : ''}> ${esc(b)}</label>`).join('')}</div></div>
         <div class="field full"><label>Eligible Courses <small style="color:var(--muted);font-weight:400">(none ticked = open to all)</small></label>
           <div class="chk-grid">${courseList().map(c => `<label class="chk">
@@ -10235,7 +10240,7 @@
       <div class="tbl-wrap"><table><tbody>
         ${row('Minimum CGPA', d.minCgpa || 'No minimum')}
         ${row('Maximum Backlogs', (d.maxBacklogs === '' || d.maxBacklogs === null || d.maxBacklogs === undefined) ? 'No limit' : d.maxBacklogs)}
-        ${row('Eligible Specialisations', csvList(d.eligibleBranches).join(', ') || 'All branches')}
+        ${row('Eligible Specialisations', csvList(d.eligibleBranches).join(', ') || 'All specialisations')}
         ${row('Eligible Courses', csvList(d.eligibleCourses).join(', ') || 'All courses')}
       </tbody></table></div>
       <h4 class="ro-sub">Eligible Students Who Have Not Applied (${notApplied.length})</h4>
@@ -10266,7 +10271,7 @@
         <input class="search-box" id="apQ" placeholder="Search student / reg no / role...">
         <select class="filter-sel" id="apDrive"><option value="">All Drives</option>${driveOptions(preset)}</select>
         <select class="filter-sel" id="apStatus"><option value="">All Statuses</option>${optionsFrom(APP_STATUS)}</select>
-        <select class="filter-sel" id="apBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+        <select class="filter-sel" id="apBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
         <button class="btn-outline btn-sm" id="apClear">Clear</button>
       </div>
       <div id="apStats" class="stat-grid" style="margin:6px 0 18px"></div>
@@ -10284,7 +10289,7 @@
           const s = Store.find('students', a.studentId) || {};
           const d = Store.find('drives', a.driveId) || {};
           return Object.assign({}, a, {
-            name: s.name || 'Unknown student', roll: s.roll || '—', branch: s.branch || '—',
+            name: s.name || 'Unknown student', roll: s.roll || '—', branch: specOf(s) || '—',
             cgpa: s.id ? (studentCgpa(s) ?? '—') : '—',
             drive: driveLabel(a.driveId), jobRole: d.jobRole || '—', company: companyName(d.companyId),
             package: +d.package || 0,
@@ -10490,7 +10495,7 @@
           const s = Store.find('students', i.studentId) || {};
           const d = Store.find('drives', i.driveId) || {};
           return Object.assign({}, i, {
-            name: s.name || 'Unknown student', roll: s.roll || '—', branch: s.branch || '—',
+            name: s.name || 'Unknown student', roll: s.roll || '—', branch: specOf(s) || '—',
             company: companyName(d.companyId), jobRole: d.jobRole || '—',
             when: `${i.date || '—'}${i.time ? ' ' + i.time : ''}`,
           });
@@ -10620,7 +10625,7 @@
       <div class="panel-tools fin-filters">
         <input class="search-box" id="plQ" placeholder="Search student / company / role...">
         <select class="filter-sel" id="plCompany"><option value="">All Companies</option>${companyOptions()}</select>
-        <select class="filter-sel" id="plBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+        <select class="filter-sel" id="plBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
         <select class="filter-sel" id="plStatus"><option value="">All Statuses</option>${optionsFrom(OFFER_STATUS)}</select>
         <button class="btn-outline btn-sm" id="plClear">Clear</button>
       </div>
@@ -10690,7 +10695,7 @@
       const s = Store.find('students', o.studentId) || {};
       const d = Store.find('drives', o.driveId) || {};
       return Object.assign({}, o, {
-        name: s.name || 'Unknown student', roll: s.roll || '—', branch: s.branch || '—',
+        name: s.name || 'Unknown student', roll: s.roll || '—', branch: specOf(s) || '—',
         semester: s.semester || '', batch: s.batch || '—', email: s.email || '',
         company: companyName(o.companyId || d.companyId),
         companyId: o.companyId || d.companyId,
@@ -11130,7 +11135,7 @@
         `<button class="fin-tab ${key === plReport ? 'active' : ''}" data-rep="${key}">${label}</button>`).join('')}</div>
       <div class="panel-tools fin-filters">
         <input class="search-box" id="prQ" placeholder="Search...">
-        <select class="filter-sel" id="prBranch"><option value="">All Specialisations</option>${branchOptions()}</select>
+        <select class="filter-sel" id="prBranch"><option value="">All Specialisations</option>${specialisationOptions()}</select>
         <select class="filter-sel" id="prCompany"><option value="">All Companies</option>${companyOptions()}</select>
         <label class="days-field">From <input class="filter-sel" id="prFrom" type="date"></label>
         <label class="days-field">To <input class="filter-sel" id="prTo" type="date"></label>
@@ -11261,7 +11266,7 @@
     if (kind === 'branch') {
       const groups = {};
       Store.all('students').forEach(s => {
-        const b = s.branch || '—';
+        const b = specOf(s) || '—';
         groups[b] = groups[b] || { branch: b, students: 0, eligible: 0, applied: 0, selected: 0,
                                    placed: 0, total: 0, highest: 0 };
         const g = groups[b];
@@ -11283,7 +11288,7 @@
         .sort((a, b) => b.placed - a.placed);
       return {
         title: 'Specialisation-wise Placement Report', sheetName: 'By Branch', subtitle: stamp,
-        note: 'Headcount, eligibility and placement outcome for each branch.',
+        note: 'Headcount, eligibility and placement outcome for each specialisation.',
         stats: [
           statCard('🌿', rows.length, 'Specialisations'),
           statCard('🎓', rows.reduce((a, g) => a + g.students, 0), 'Students', 'c2'),
@@ -11398,7 +11403,7 @@
         const s = Store.find('students', a.studentId) || {};
         const d = Store.find('drives', a.driveId) || {};
         return {
-          id: a.id, roll: s.roll || '—', name: s.name || 'Unknown student', branch: s.branch || '—',
+          id: a.id, roll: s.roll || '—', name: s.name || 'Unknown student', branch: specOf(s) || '—',
           cgpa: s.id ? (studentCgpa(s) ?? '—') : '—',
           company: companyName(d.companyId), jobRole: d.jobRole || '—',
           package: +d.package || 0, appliedOn: a.appliedOn || '—',
@@ -11447,7 +11452,7 @@
           const ended = o.exitDate ? new Date(o.exitDate) : null;
           const days = joined && ended ? Math.round((ended - joined) / 86400000) : null;
           return {
-            roll: stu.roll || '—', name: stu.name || '—', branch: stu.branch || '—',
+            roll: stu.roll || '—', name: stu.name || '—', branch: specOf(stu) || '—',
             company: companyName(o.companyId), jobRole: o.jobRole || '—',
             package: +o.package || 0, joiningDate: o.joiningDate || '—',
             status: o.status, days: days === null ? '—' : days,
@@ -11488,7 +11493,7 @@
       const apps = studentApplications(s.id);
       const open = drivesOpenToStudent(s);
       return {
-        roll: s.roll || '—', name: s.name || '', branch: s.branch || '—',
+        roll: s.roll || '—', name: s.name || '', branch: specOf(s) || '—',
         semester: s.semester || '', cgpa: studentCgpa(s) ?? '—', backlogs: +s.backlogs || 0,
         eligibleDrives: open.length, applications: apps.length,
         shortlisted: apps.filter(a => a.status === 'Shortlisted').length,
