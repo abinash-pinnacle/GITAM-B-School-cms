@@ -290,7 +290,7 @@
     ],
     // manages the placement cell end to end; read-only on the student records it recruits from
     placement_officer: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
       ['plstudents','🎓','Placement Students'],
       ['syllabus','🧾','Subjects by Semester'],
       ['companies','🏢','Companies'],
@@ -303,7 +303,7 @@
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
     center_head: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'], ['faculty','👨‍🏫','Faculty'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'], ['faculty','👨‍🏫','Faculty'],
       ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Specialisations'],
       ['syllabus','🧾','Subjects by Semester'],
       ['attendance','✅','Attendance'], ['timetable','🗓️','Timetable'],
@@ -318,7 +318,7 @@
       ['events','🔔','Notifications'], EMP_ATTENDANCE, ['profile','👤','Profile'],
     ],
     accountant: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','Manage Students'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
       ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'],
       ['fixedfee','📋','Fixed Fee'], ['semfee','📆','Semester-wise Fee'], ['feecollect','💰','Fee Collection'],
       ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'], ['requisitions','📦','Requisitions'],
@@ -457,7 +457,7 @@
   }
 
   const TITLES = {
-    dashboard:'Dashboard', students:'Manage Students', faculty:'Faculty', courses:'Courses',
+    dashboard:'Dashboard', students:'All Students', faculty:'Faculty', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
@@ -1068,7 +1068,7 @@
     const all = rosterStudents();
 
     const html = `<div class="panel"><div class="panel-head">
-      <h3>${deptBranch ? deptBranch + ' Department Students' : 'Manage Students'}</h3>
+      <h3>${deptBranch ? deptBranch + ' Department Students' : 'All Students'}</h3>
       <div class="panel-tools">
         <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
         ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
