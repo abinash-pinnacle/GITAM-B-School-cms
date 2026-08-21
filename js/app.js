@@ -9916,6 +9916,8 @@
             { header: 'Industry', key: 'industry', width: 22 }, { header: 'Location', key: 'location', width: 16 },
             { header: 'HR Name', key: 'hrName', width: 20 }, { header: 'HR Email', key: 'hrEmail', width: 26 },
             { header: 'HR Phone', key: 'hrPhone', width: 14 },
+            { header: 'College Coordinator', key: 'coordinatorName', width: 22 },
+            { header: 'Coordinator Mobile', key: 'coordinatorPhone', width: 16 },
             { header: 'Drives', key: 'driveCount', width: 10, type: 'number' },
             { header: 'Students Placed', key: 'placed', width: 15, type: 'number' },
           ],
@@ -9944,17 +9946,25 @@
         <div class="field"><label>HR Name</label><input name="hrName" value="${esc(c.hrName || '')}"></div>
         <div class="field"><label>HR Email</label><input name="hrEmail" type="email" value="${esc(c.hrEmail || '')}"></div>
         <div class="field"><label>HR Phone</label><input name="hrPhone" id="coPhone" inputmode="numeric" placeholder="10-digit number" value="${esc(c.hrPhone || '')}"></div>
+        <div class="field"><label>College Coordinator</label>
+          <input name="coordinatorName" placeholder="who handles this company for us" value="${esc(c.coordinatorName || '')}"></div>
+        <div class="field"><label>Coordinator Mobile</label>
+          <input name="coordinatorPhone" id="coCoordPhone" inputmode="numeric" placeholder="10-digit number" value="${esc(c.coordinatorPhone || '')}"></div>
         <div class="field full"><label>About</label><textarea name="description" rows="3">${esc(c.description || '')}</textarea></div>
       </div>
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#coPhone'));
+    bindPhoneInput($('#coCoordPhone'));
     $('#f').onsubmit = (e) => {
       e.preventDefault();
       const d = formData(e.target);
       if (!d.name) { toast('Company name is required.', 'err'); return; }
       if (!phoneValid(d.hrPhone)) { toast('HR phone must be exactly 10 digits.', 'err'); return; }
+      if (!phoneValid(d.coordinatorPhone)) {
+        toast('Coordinator mobile must be exactly 10 digits.', 'err'); return;
+      }
       // one HR number belongs to one company — a repeat almost always means
       // the same company entered twice under a slightly different name
       const phoneClash = Store.all('companies').find(x =>
@@ -9986,7 +9996,10 @@
       <div class="tbl-wrap"><table><tbody>
         ${row('Company ID', c.id)}${row('Industry', c.industry)}${row('Location', c.location)}
         ${row('Website', c.website)}${row('HR Name', c.hrName)}${row('HR Email', c.hrEmail)}
-        ${row('HR Phone', c.hrPhone)}${row('About', c.description)}
+        ${row('HR Phone', c.hrPhone)}
+        ${row('College Coordinator', c.coordinatorName)}
+        ${row('Coordinator Mobile', c.coordinatorPhone)}
+        ${row('About', c.description)}
       </tbody></table></div>
       <h4 class="ro-sub">Drives by this Company</h4>
       <div class="tbl-wrap"><table><thead><tr><th>Role</th><th style="text-align:right">Package</th>

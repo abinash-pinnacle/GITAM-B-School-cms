@@ -486,7 +486,7 @@ function guard_student_application(array $d): array
 const PHONE_FIELDS = [
     'students' => ['phone'], 'faculty' => ['phone'], 'accountants' => ['phone'],
     'centerheads' => ['phone'], 'placementofficers' => ['phone'],
-    'coordinators' => ['phone'], 'companies' => ['hrPhone'],
+    'coordinators' => ['phone'], 'companies' => ['hrPhone', 'coordinatorPhone'],
 ];
 
 /**

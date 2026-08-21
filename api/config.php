@@ -149,9 +149,12 @@ const COLLECTIONS = [
        One shared set of tables for the admin and the placement officer. Student
        identity is never copied here — every row points at an existing
        `students` / `courses` record by id. */
-    // engagementType: whether this company takes final-year hires or summer interns
+    /* engagementType: whether this company takes final-year hires or summer
+       interns. coordinatorName/Phone is the person on our side who owns the
+       relationship — the cell rings them, not the company's HR. */
     'companies'  => ['id', 'name', 'logo', 'industry', 'website', 'location',
-                     'hrName', 'hrEmail', 'hrPhone', 'description', 'engagementType'],
+                     'hrName', 'hrEmail', 'hrPhone', 'description', 'engagementType',
+                     'coordinatorName', 'coordinatorPhone'],
     // a recruitment drive by one company, with the eligibility rule it enforces
     'drives'     => ['id', 'companyId', 'jobRole', 'jobDescription', 'package', 'location', 'openings',
                      'eligibleCourses', 'eligibleBranches', 'minCgpa', 'maxBacklogs',
