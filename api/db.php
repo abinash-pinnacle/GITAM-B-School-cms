@@ -205,8 +205,14 @@ function init_db(): void
         }
     }
 
-    // seed each table only when it is empty
-    foreach (seed_data() as $col => $rows) {
+    /* Demo data goes in once, on a database that has never held anything.
+       It used to go in whenever a table happened to be empty, which meant an
+       institute that cleared the demo students to type in its own found them
+       back the next time COLLECTIONS changed and the migration re-ran. A table
+       emptied on purpose stays empty. */
+    $seedDone = meta_value('seeded') !== null || meta_value('schema') !== null;
+
+    foreach ($seedDone ? [] : seed_data() as $col => $rows) {
         $count = (int) fetch_one('SELECT COUNT(*) AS c FROM ' . qi($col))['c'];
         if ($count > 0) {
             continue;
@@ -246,17 +252,23 @@ function init_db(): void
                 array_merge(array_values($patch), [$s['id']]));
     }
 
-    // course sections: backfill blanks and make sure the demo Section-B class exists
+    // a class with no section is a class in Section A
     db()->exec('UPDATE ' . qi('courses') . ' SET ' . qi('section') . "='A'
                 WHERE " . qi('section') . ' IS NULL OR ' . qi('section') . "=''");
-    upsert('courses', [
-        'id' => 'C06', 'code' => 'MBA201', 'name' => 'Marketing Management',
-        'branch' => 'MBA', 'semester' => 2, 'credits' => 4, 'facultyId' => 'F02', 'section' => 'B',
-    ]);
 
-    seed_accountant_login();
-    seed_center_head_login();
-    seed_staff_login('placement_officer', 'placementofficers', 'placement');
+    /* The logins below belong to the demo set too: they exist so a database
+       created before a role was invented still has one account to sign in
+       with. On a database that has been used, a deleted account stays deleted. */
+    if (!$seedDone) {
+        upsert('courses', [
+            'id' => 'C06', 'code' => 'MBA201', 'name' => 'Marketing Management',
+            'branch' => 'MBA', 'semester' => 2, 'credits' => 4, 'facultyId' => 'F02', 'section' => 'B',
+        ]);
+        seed_accountant_login();
+        seed_center_head_login();
+        seed_staff_login('placement_officer', 'placementofficers', 'placement');
+        meta_set('seeded', date('c'));
+    }
     mark_schema_ready();
 }
 
@@ -335,6 +347,27 @@ function seed_staff_login(string $role, string $table, string $username): void
 function schema_signature(): string
 {
     return substr(md5(json_encode(COLLECTIONS) . '|' . SEED_REVISION), 0, 16);
+}
+
+/** Has this database ever been seeded, or written to at all? */
+function meta_value(string $key): ?string
+{
+    try {
+        $row = fetch_one('SELECT ' . qi('v') . ' AS v FROM ' . qi('_meta') . ' WHERE ' . qi('k') . ' = ?', [$key]);
+        return $row ? (string) $row['v'] : null;
+    } catch (PDOException $e) {
+        return null;   // _meta not there yet -> brand new database
+    }
+}
+
+function meta_set(string $key, string $value): void
+{
+    $t = qi('_meta');
+    $kType = driver() === 'mysql' ? 'VARCHAR(64)' : 'TEXT';
+    $vType = driver() === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('k') . " $kType PRIMARY KEY, " . qi('v') . " $vType)");
+    run_sql('DELETE FROM ' . $t . ' WHERE ' . qi('k') . ' = ?', [$key]);
+    run_sql('INSERT INTO ' . $t . ' (' . qi('k') . ', ' . qi('v') . ') VALUES (?, ?)', [$key, $value]);
 }
 
 function mark_schema_ready(): void
