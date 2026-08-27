@@ -1,6 +1,6 @@
 {
   "packageId": "in.nmiet.bschool.cms",
-  "host": "nmiet-cms.onrender.com",
+  "host": "cmsnmietbschool.in",
   "name": "NMIET B-SCHOOL CMS",
   "launcherName": "NMIET B-SCHOOL",
   "display": "standalone",
@@ -13,18 +13,18 @@
   "backgroundColor": "#FFFFFF",
   "enableNotifications": false,
   "startUrl": "/",
-  "iconUrl": "https://nmiet-cms.onrender.com/assets/icons/icon-512.png",
-  "maskableIconUrl": "https://nmiet-cms.onrender.com/assets/icons/maskable-512.png",
+  "iconUrl": "https://cmsnmietbschool.in/assets/icons/icon-512.png",
+  "maskableIconUrl": "https://cmsnmietbschool.in/assets/icons/maskable-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "/work/android.keystore",
     "alias": "nmiet"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
+  "appVersionName": "1.1.0",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://nmiet-cms.onrender.com/manifest.webmanifest",
+  "webManifestUrl": "https://cmsnmietbschool.in/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,12 +33,12 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://nmiet-cms.onrender.com/",
+  "fullScopeUrl": "https://cmsnmietbschool.in/",
   "minSdkVersion": 21,
   "orientation": "portrait",
   "fingerprints": [],
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.0.0"
+  "appVersion": "1.1.0"
 }
