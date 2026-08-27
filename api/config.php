@@ -88,7 +88,7 @@ const COLLECTIONS = [
     'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
                      'email', 'phone', 'branch', 'specialisation', 'year', 'semester',
                      'section', 'photo', 'course', 'academicYear', 'cgpa', 'backlogs',
-                     'batch', 'status',
+                     'batch', 'status', 'specialisation2',
                      /* the rest of the file. The columns below are the ones other
                         screens read — an ID card wants the date of birth and the
                         blood group, the admissions dashboard wants the date. */

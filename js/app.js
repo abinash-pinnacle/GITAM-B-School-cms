@@ -1422,7 +1422,8 @@
         ${infoRow('Mentor', esc(s.mentor || '—'))}
         ${infoRow('Course', esc(s.course || '—'))}
         ${infoRow('Batch', esc(s.batch || '—'))}
-        ${infoRow('Specialisation', esc(specOf(s) || '—'))}
+        ${infoRow('Specialisation I', esc(specOf(s) || '—'))}
+        ${infoRow('Specialisation II', esc(s.specialisation2 || '—'))}
         ${infoRow('Section', esc(s.section || '—'))}
         ${infoRow('Domain Email ID', esc(s.domainEmail || '—'))}
         ${infoRow('Email ID', esc(s.email || '—'))}
@@ -1509,12 +1510,13 @@
         : `<tr><td colspan="4" class="empty">No previous qualifications on record.</td></tr>`;
       return `<h4 class="ro-sub">Academic Details</h4>` + infoTable(`
         ${infoRow2('Course', esc(s.course || '—'), 'Batch', esc(s.batch || '—'))}
-        ${infoRow2('Specialisation', esc(specOf(s) || '—'), 'Section', esc(s.section || '—'))}
+        ${infoRow2('Specialisation I', esc(specOf(s) || '—'), 'Specialisation II', esc(s.specialisation2 || '—'))}
+        ${infoRow2('Section', esc(s.section || '—'), 'Academic Year', esc(s.academicYear || '—'))}
         ${infoRow2('House', esc(s.house || '—'), 'Lab Group', esc(aca.labGroup || '—'))}
         ${infoRow2('Honors', esc(aca.honors || '—'), 'Minor', esc(aca.minor || '—'))}
         ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
         ${infoRow2('Value added course 1', esc(aca.vac1 || '—'), 'Value added course 2', esc(aca.vac2 || '—'))}
-        ${infoRow2('Value added course 3', esc(aca.vac3 || '—'), 'Academic Year', esc(s.academicYear || '—'))}
+        ${infoRow('Value added course 3', esc(aca.vac3 || '—'))}
         ${infoRow2('Admission Date', esc(s.admissionDate || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
         ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
@@ -1938,10 +1940,10 @@
             <select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
           <div class="field"><label>Department</label>
             <select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
-          <div class="field"><label>Specialisation</label>
+          <div class="field"><label>Specialisation I</label>
             <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
-          <div class="field"><label>Year</label>
-            <input name="year" type="number" min="1" max="2" value="${s.year || 1}"></div>
+          <div class="field"><label>Specialisation II</label>
+            <select name="specialisation2" id="stuFormSpec2">${specialisationOptions(s.specialisation2, true)}</select></div>
           <div class="field"><label>Semester</label>
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
@@ -2062,6 +2064,7 @@
     bindPhoneInput($('#phoneInput'));
     bindBranchSelect($('#stuFormBranch'));
     bindCustomList($('#stuFormSpec'), 'specialisation');
+    bindCustomList($('#stuFormSpec2'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
     bindPhotoField();
 
@@ -2214,7 +2217,8 @@
       // prints `name`, so it is composed here rather than taught to each of them
       d.name = [d.firstName, d.middleName, d.lastName]
         .map(x => (x || '').trim()).filter(Boolean).join(' ');
-      d.year = +d.year; d.semester = +d.semester;
+      d.semester = +d.semester;
+      d.year = yearForSemester(d.semester);
       d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
@@ -2284,7 +2288,8 @@
         { key:'whatsapp', header:'WhatsApp No', aliases:['whatsapp'] },
         { key:'course', header:'Course' },
         { key:'branch', header:'Department', aliases:['dept','branch'] },
-        { key:'specialisation', header:'Specialisation', aliases:['stream','spec'] },
+        { key:'specialisation', header:'Specialisation I', aliases:['stream','spec','specialisation'] },
+        { key:'specialisation2', header:'Specialisation II', aliases:['second specialisation','spec 2'] },
         { key:'year', header:'Year', number:true, def:1 },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
@@ -2347,7 +2352,7 @@
         { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
       ],
       sample: ['2025180010','Rahul','Kumar','Das','10','rahul@nmiet.in','rahul@nmiet.edu.in',
-               '9810000010','9810000010','MBA','MBA','Marketing',1,2,'A','ANAND','2025-2027',
+               '9810000010','9810000010','MBA','MBA','Marketing','Finance',1,2,'A','ANAND','2025-2027',
                '2026-27','2025-08-17','Dr. Rajesh Mehta','8.2',0,'Active',
                'Mr.','Male','2003-05-14','B+','General','OBC','Hindu','Indian','Cuttack','123456789012',
                'Odia, Hindi, English','Cricket, Reading',
