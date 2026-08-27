@@ -187,7 +187,7 @@ function guard_request(string $resource, string $method): void
 {
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 
-    if ($isWrite && $resource !== 'login' && is_read_only_role()
+    if ($isWrite && $resource !== 'login' && $resource !== 'change-password' && is_read_only_role()
         && !read_only_write_allowed($resource, $method)) {
         send_json([
             'error'   => 'read-only',
@@ -538,6 +538,41 @@ function api_login(): void
     send_json(row_out('users', $rows[0]));
 }
 
+/**
+ * Anybody signed in may change their own password, and only their own: the
+ * account is taken from the caller's header, never from the request body, so
+ * a hand-made payload cannot aim this at somebody else. The current password
+ * has to be right, which is what stops a borrowed unlocked screen from
+ * becoming a permanent takeover.
+ */
+const MIN_PASSWORD_LENGTH = 6;
+
+function api_change_password(): void
+{
+    $me = current_user();
+    if (!$me) {
+        send_json(['error' => 'unauthorised', 'message' => 'Please sign in again.'], 401);
+    }
+    $d = body();
+    $current = (string) ($d['current'] ?? '');
+    $next = (string) ($d['next'] ?? '');
+
+    if ((string) ($me['password'] ?? '') !== $current) {
+        send_json(['error' => 'wrong-password', 'message' => 'Your current password is not right.'], 403);
+    }
+    if (strlen($next) < MIN_PASSWORD_LENGTH) {
+        send_json(['error' => 'too-short',
+                   'message' => 'The new password must be at least ' . MIN_PASSWORD_LENGTH . ' characters.'], 422);
+    }
+    if ($next === $current) {
+        send_json(['error' => 'unchanged', 'message' => 'That is the password you already have.'], 422);
+    }
+
+    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
+        ->execute([$next, $me['id']]);
+    send_json(['ok' => true]);
+}
+
 function api_create(string $col): void
 {
     $d = body();
@@ -651,6 +686,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'login') {
         api_login();
+    }
+    if ($method === 'POST' && $resource === 'change-password') {
+        api_change_password();
     }
     if ($method === 'POST' && $isCollection) {
         api_create($resource);

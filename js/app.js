@@ -12944,11 +12944,46 @@
     startDashboardPolling();
   }
 
+  /* Everybody signed in can change their own password — the office should not
+     be handing out replacements, and a shared demo password is only a demo
+     password until somebody's real record is behind it. The current password
+     is checked on the server, so the form cannot be talked out of it. */
+  function changePasswordModal() {
+    openModal('Change Password', `<form id="f">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
+        Signed in as <b>${esc(user.username)}</b>. The new password needs at least 6 characters.</p>
+      <div class="form-grid">
+        <div class="field full"><label>Current Password</label>
+          <input name="current" type="password" autocomplete="current-password" required></div>
+        <div class="field full"><label>New Password</label>
+          <input name="next" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="field full"><label>Confirm New Password</label>
+          <input name="confirm" type="password" autocomplete="new-password" minlength="6" required></div>
+      </div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary" id="pwSave">Change Password</button></div></form>`);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const d = formData(e.target);
+      if (d.next !== d.confirm) { toast('The two new passwords do not match.', 'err'); return; }
+      if (d.next.length < 6) { toast('The new password must be at least 6 characters.', 'err'); return; }
+      const btn = $('#pwSave');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      const res = await Store.changePassword(d.current, d.next);
+      btn.disabled = false; btn.textContent = 'Change Password';
+      if (res.error) { toast(res.error, 'err'); return; }
+      closeModal();
+      toast('Password changed. Use the new one next time you sign in.');
+    };
+  }
+
   async function init() {
     $('#year').textContent = new Date().getFullYear();
     $('#appYear').textContent = new Date().getFullYear();
     $('#loginForm').onsubmit = doLogin;
     $('#logoutBtn').onclick = logout;
+    $('#pwdBtn').onclick = changePasswordModal;
     $('#modalClose').onclick = closeModal;
     $('#modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
     $('#menuToggle').onclick = toggleSidebar;

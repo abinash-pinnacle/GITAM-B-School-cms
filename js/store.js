@@ -75,6 +75,24 @@ const Store = {
     return data;
   },
 
+  /* Changing your own password. The account is the one in the header, so this
+     can only ever change the caller's own — and the current password is
+     checked on the server, not here. Resolves to { ok } or { error }. */
+  async changePassword(current, next) {
+    try {
+      const res = await fetch(`${API}/change-password`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify({ current, next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: (data && data.message) || 'That could not be saved.' };
+      return { ok: true };
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
+
   // ---- read (sync, from cache) ----
   all(col) { return this.data[col] || []; },
   find(col, id) { return this.all(col).find(x => x.id === id); },
