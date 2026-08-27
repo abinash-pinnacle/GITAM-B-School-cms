@@ -2257,6 +2257,10 @@
      created and what will be skipped and why. */
   const DEFAULT_IMPORT_PASSWORD = 'pass123';
 
+  /* Columns marked `into` are collected into one of the record's JSON blobs —
+     `into:'personal', as:'title'` writes personal.title. `into:'guardian'`
+     builds the single guardian a sheet can carry; the form takes as many as
+     you like. `into:'current'` / `'permanent'` build the two addresses. */
   const IMPORT_SPECS = {
     students: {
       title: 'Students',
@@ -2270,47 +2274,169 @@
         { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
         { key:'middleName', header:'Middle Name' },
         { key:'lastName', header:'Last Name', aliases:['surname'] },
+        { key:'serialNo', header:'Serial No' },
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
-        { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
+        { key:'domainEmail', header:'Domain Email', aliases:['college email','institute email'] },
+        { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
+        { key:'whatsapp', header:'WhatsApp No', aliases:['whatsapp'] },
         { key:'course', header:'Course' },
         { key:'branch', header:'Department', aliases:['dept','branch'] },
         { key:'specialisation', header:'Specialisation', aliases:['stream','spec'] },
         { key:'year', header:'Year', number:true, def:1 },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
+        { key:'house', header:'House' },
+        { key:'batch', header:'Batch' },
         { key:'academicYear', header:'Academic Year', aliases:['session'] },
+        { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
+        { key:'mentor', header:'Mentor' },
         { key:'cgpa', header:'CGPA', aliases:['gpa'] },
         { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
-        { key:'batch', header:'Batch' },
         { key:'status', header:'Status', def:'Active' },
+
+        // ---- personal ----
+        { key:'title', header:'Title', into:'personal', as:'title' },
+        { key:'gender', header:'Gender' },
+        { key:'dob', header:'Date of Birth', aliases:['dob'] },
+        { key:'bloodGroup', header:'Blood Group', aliases:['blood'] },
+        { key:'admissionCategory', header:'Admission Category', into:'personal', as:'admissionCategory',
+          aliases:['category','quota'] },
+        { key:'caste', header:'Caste', into:'personal', as:'caste' },
+        { key:'religion', header:'Religion', into:'personal', as:'religion' },
+        { key:'nationality', header:'Nationality', into:'personal', as:'nationality' },
+        { key:'birthplace', header:'Birthplace', into:'personal', as:'birthplace', aliases:['birth place'] },
+        { key:'aadhaar', header:'Aadhaar No', aliases:['aadhar','aadhaar','adhaar'] },
+        { key:'languages', header:'Languages Known', into:'personal', as:'languages', aliases:['languages'] },
+        { key:'hobbies', header:'Hobbies', into:'personal', as:'hobbies' },
+
+        // ---- schooling ----
+        { key:'q10Institute', header:'Class 10 School', into:'qual10', as:'institute' },
+        { key:'q10Year', header:'Class 10 Year', into:'qual10', as:'year' },
+        { key:'q10Marks', header:'Class 10 Marks', into:'qual10', as:'marks' },
+        { key:'q12Institute', header:'Class 12 School', into:'qual12', as:'institute' },
+        { key:'q12Year', header:'Class 12 Year', into:'qual12', as:'year' },
+        { key:'q12Marks', header:'Class 12 Marks', into:'qual12', as:'marks' },
+        { key:'entranceExam', header:'Entrance Exam', into:'academicInfo', as:'entranceExam' },
+        { key:'entranceRank', header:'Entrance Rank', into:'academicInfo', as:'entranceRank' },
+
+        // ---- guardian ----
+        { key:'gName', header:'Guardian Name', into:'guardian', as:'name', aliases:['father name','parent name'] },
+        { key:'gRelation', header:'Guardian Relation', into:'guardian', as:'relation', aliases:['relation'] },
+        { key:'gOccupation', header:'Guardian Occupation', into:'guardian', as:'occupation', aliases:['occupation'] },
+        { key:'gMobile', header:'Guardian Mobile', into:'guardian', as:'mobile', aliases:['parent mobile'] },
+        { key:'gIncome', header:'Guardian Income', into:'guardian', as:'income', aliases:['annual income','income'] },
+        { key:'gEmail', header:'Guardian Email', into:'guardian', as:'email' },
+
+        // ---- address ----
+        { key:'address', header:'Address', into:'current', as:'address' },
+        { key:'city', header:'City', into:'current', as:'city' },
+        { key:'state', header:'State', into:'current', as:'state' },
+        { key:'country', header:'Country', into:'current', as:'country' },
+        { key:'pincode', header:'Pincode', into:'current', as:'pincode', aliases:['pin','pin code'] },
+        { key:'permAddress', header:'Permanent Address', into:'permanent', as:'address' },
+        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
+        { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
+        { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
+
+        // ---- health ----
+        { key:'emergencyName', header:'Emergency Contact', into:'health', as:'emergencyName' },
+        { key:'emergencyPhone', header:'Emergency Phone', into:'health', as:'emergencyPhone' },
+        { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
       ],
-      sample: ['2025180010','Rahul','Kumar','Das','rahul@nmiet.in','9810000010','MBA','MBA',
-               'Marketing',1,2,'A','2026-27','8.2',0,'2025-2027','Active'],
+      sample: ['2025180010','Rahul','Kumar','Das','10','rahul@nmiet.in','rahul@nmiet.edu.in',
+               '9810000010','9810000010','MBA','MBA','Marketing',1,2,'A','ANAND','2025-2027',
+               '2026-27','2025-08-17','Dr. Rajesh Mehta','8.2',0,'Active',
+               'Mr.','Male','2003-05-14','B+','General','OBC','Hindu','Indian','Cuttack','123456789012',
+               'Odia, Hindi, English','Cricket, Reading',
+               'Saraswati Vidya Mandir','2019','88.4','Kendriya Vidyalaya','2021','79.2','CAT','4521',
+               'Bhikari Das','Father','Farmer','7978851886','240000','bhikari@example.com',
+               'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','India','752054',
+               'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','752054',
+               'Bhikari Das','7978851886','None'],
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
     faculty: {
-      title: 'Faculty',
+      title: 'Employees',
       collection: 'faculty',
       keyField: 'empId',
-      fileBase: 'NMIET-BSCHOOL-Faculty-Template',
+      fileBase: 'NMIET-BSCHOOL-Employees-Template',
       columns: [
         { key:'empId', header:'Employee ID', required:true, aliases:['emp id','employee no','staff id'] },
-        { key:'name', header:'Full Name', required:true, aliases:['name','faculty name'] },
+        { key:'name', header:'Full Name', required:true, aliases:['name','faculty name','employee name'] },
+        { key:'bputRegdNo', header:'BPUT Regd No', aliases:['bput'] },
         { key:'department', header:'Department', aliases:['dept'] },
         { key:'designation', header:'Designation' },
+        { key:'category', header:'Category', def:'Teaching', aliases:['staff category'] },
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
-        { key:'phone', header:'Phone', aliases:['mobile','phone number','contact'] },
+        { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
+        { key:'joiningDate', header:'Joining Date', aliases:['doj','date of joining'] },
+        { key:'status', header:'Status', def:'Active' },
         { key:'qualification', header:'Qualification' },
-        { key:'expertise', header:'Areas of Expertise', aliases:['expertise'] },
-        { key:'publications', header:'Publications' },
+        { key:'expertise', header:'Specialization', aliases:['expertise','areas of expertise'] },
+        { key:'publications', header:'Papers Published', aliases:['publications'] },
         { key:'reportingTo', header:'Reporting To', store:false,
           aliases:['reports to','reporting','manager','hod','supervisor'] },
+
+        // ---- personal ----
+        { key:'title', header:'Title', into:'personal', as:'title' },
+        { key:'gender', header:'Gender' },
+        { key:'dob', header:'Date of Birth', aliases:['dob'] },
+        { key:'bloodGroup', header:'Blood Group', aliases:['blood'] },
+        { key:'maritalStatus', header:'Marital Status' },
+        { key:'birthplace', header:'Birth Place', into:'personal', as:'birthplace' },
+        { key:'experience', header:'Total Experience', into:'personal', as:'experience' },
+        { key:'caste', header:'Caste', into:'personal', as:'caste' },
+        { key:'religion', header:'Religion', into:'personal', as:'religion' },
+        { key:'nationality', header:'Nationality', into:'personal', as:'nationality' },
+
+        // ---- other info ----
+        { key:'attendanceCardId', header:'Attendance Card ID' },
+        { key:'aadhaar', header:'Aadhaar No', aliases:['aadhar','aadhaar','adhaar'] },
+        { key:'pan', header:'PAN No', into:'otherInfo', as:'pan' },
+        { key:'voterId', header:'Voter ID', into:'otherInfo', as:'voterId' },
+        { key:'bankAccount', header:'Bank Account No', into:'otherInfo', as:'bankAccount' },
+        { key:'bankName', header:'Bank Name', into:'otherInfo', as:'bankName' },
+        { key:'ifsc', header:'IFSC Code', into:'otherInfo', as:'ifsc' },
+        { key:'motherName', header:'Mother Name', into:'otherInfo', as:'motherName' },
+        { key:'languages', header:'Languages', into:'otherInfo', as:'languages' },
+        { key:'hobbies', header:'Hobbies', into:'otherInfo', as:'hobbies' },
+
+        // ---- guardian ----
+        { key:'gName', header:'Guardian Name', into:'guardian', as:'name' },
+        { key:'gRelation', header:'Guardian Relation', into:'guardian', as:'relation' },
+        { key:'gMobile', header:'Guardian Mobile', into:'guardian', as:'mobile' },
+
+        // ---- address ----
+        { key:'address', header:'Address', into:'current', as:'address' },
+        { key:'city', header:'City', into:'current', as:'city' },
+        { key:'state', header:'State', into:'current', as:'state' },
+        { key:'country', header:'Country', into:'current', as:'country' },
+        { key:'pincode', header:'Pincode', into:'current', as:'pincode', aliases:['pin','pin code'] },
+        { key:'permAddress', header:'Permanent Address', into:'permanent', as:'address' },
+        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
+        { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
+        { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
+
+        // ---- health ----
+        { key:'emergencyName', header:'Emergency Contact', into:'health', as:'emergencyName' },
+        { key:'emergencyPhone', header:'Emergency Phone', into:'health', as:'emergencyPhone' },
+
+        // ---- login ----
         { key:'username', header:'Username', store:false },
         { key:'password', header:'Password', store:false },
       ],
-      sample: ['NM-F-1010','Dr. Meena Sahu','MBA','Assistant Professor','meena@nmiet.edu',
-               '9876500010','Ph.D. (Management)','Marketing Analytics','4 journal papers','NM-F-1001','meena','pass123'],
+      sample: ['NM-F-1010','Dr. Meena Sahu','BPUT-2015-1010','MBA','Assistant Professor','Teaching',
+               'meena@nmiet.edu','9876500010','2019-07-01','Active','Ph.D. (Management)',
+               'Marketing Analytics','4 journal papers','NM-F-1001',
+               'Dr.','Female','1985-02-11','O+','Married','Cuttack','9 years','General','Hindu','Indian',
+               '1010','559343140635','PSUPS3169H','','34986453071','SBI','SBIN0008214','Prativa Sahu',
+               'Odia, English','Gardening',
+               'Prativa Sahu','Mother','7978851886',
+               'Plot 45, Patia','Bhubaneswar','Odisha','India','751024',
+               'Plot 45, Patia','Bhubaneswar','Odisha','751024',
+               'Prativa Sahu','7978851886',
+               'meena','pass123'],
       login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
                          role: 'faculty', name: row.name }),
     },
@@ -2358,6 +2484,14 @@
       const missing = spec.columns.filter((c) => c.required && !raw[c.key]).map((c) => c.header);
       if (missing.length) return { raw, error: 'Missing ' + missing.join(', ') };
 
+      /* A sheet carries the three name parts, but the ID card, the marksheet,
+         the fee receipt and the placement list all print `name` — and so does
+         the login this row creates, which is why it is composed before it. */
+      if (spec.collection === 'students') {
+        raw.name = [raw.firstName, raw.middleName, raw.lastName]
+          .map((x) => (x || '').trim()).filter(Boolean).join(' ');
+      }
+
       const key = raw[spec.keyField].toLowerCase();
       if (existingKeys.has(key)) return { raw, error: 'Already exists' };
       if (seen.has(key)) return { raw, error: 'Duplicate in this file' };
@@ -2368,6 +2502,9 @@
       }
 
       if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
+      if (raw.whatsapp && !phoneValid(raw.whatsapp)) return { raw, error: 'WhatsApp must be 10 digits' };
+      if (raw.gMobile && !phoneValid(raw.gMobile)) return { raw, error: 'Guardian mobile must be 10 digits' };
+      if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
       if (raw.cgpa && (isNaN(+raw.cgpa) || +raw.cgpa < 0 || +raw.cgpa > 10)) {
         return { raw, error: 'CGPA must be 0-10' };
       }
@@ -2387,13 +2524,39 @@
         // of people report to a director or a registrar who is not on it
         data.reportingTo = facultyIdByRef(raw.reportingTo) || raw.reportingTo;
       }
+      /* Flat columns on one side, the record's shape on the other: anything
+         carrying `into` is collected here rather than written as a column. */
+      const parts = {};
       spec.columns.forEach((c) => {
         if (c.store === false || data[c.key] !== undefined) return;
         let v = raw[c.key];
         if (c.number) v = v === '' ? (c.def ?? 0) : +v;
         else if (v === '' && c.def !== undefined) v = c.def;
+        if (c.into) {
+          if (v === '' || v == null) return;
+          (parts[c.into] = parts[c.into] || {})[c.as || c.key] = v;
+          return;
+        }
         data[c.key] = v;
       });
+
+      if (parts.personal) data.personal = parts.personal;
+      if (parts.otherInfo) data.otherInfo = parts.otherInfo;
+      if (parts.health) data.health = parts.health;
+      if (parts.academicInfo) data.academicInfo = parts.academicInfo;
+      if (parts.current || parts.permanent) {
+        data.addressInfo = { current: parts.current || {}, permanent: parts.permanent || {} };
+      }
+      if (parts.guardian) data.guardians = [parts.guardian];
+      if (raw.name && !data.name) data.name = raw.name;
+      // schooling arrives as two sets of three columns and is filed as the
+      // qualification rows the profile page prints
+      const quals = [];
+      if (parts.qual10) quals.push(Object.assign({ level: '10th' }, parts.qual10));
+      if (parts.qual12) quals.push(Object.assign({ level: '12th' }, parts.qual12));
+      if (quals.length) {
+        data.academicInfo = Object.assign({}, data.academicInfo, { qualifications: quals });
+      }
 
       seen.add(key);
       usedUsers.add(uname);
