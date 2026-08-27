@@ -101,7 +101,15 @@ const COLLECTIONS = [
     // reportingTo holds the id of another faculty row — the person this one
     // reports to. Blank for the top of the tree.
     'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
-                     'qualification', 'expertise', 'publications', 'reportingTo'],
+                     'qualification', 'expertise', 'publications', 'reportingTo',
+                     /* the columns the rest of the app reads directly — an ID
+                        card wants the blood group, payroll wants the joining
+                        date, the roll wants to know who is still on staff */
+                     'category', 'joiningDate', 'dob', 'gender', 'bloodGroup',
+                     'maritalStatus', 'bputRegdNo', 'attendanceCardId', 'aadhaar', 'status',
+                     /* and these six hold the tabs */
+                     'personal', 'guardians', 'addressInfo', 'otherInfo',
+                     'health', 'documents'],
     // accounts-office staff record; the login lives in `users` with role = accountant
     'accountants' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
     // centre-monitoring staff record; the login lives in `users` with role = center_head
@@ -196,6 +204,8 @@ const JSON_FIELDS = [
     /* Decoded on the way out and encoded on the way in, so the app works with
        objects and the database keeps one column per tab. */
     'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
+                     'health', 'documents'],
+    'faculty'    => ['personal', 'guardians', 'addressInfo', 'otherInfo',
                      'health', 'documents'],
 ];
 

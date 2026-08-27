@@ -446,6 +446,7 @@
     /* A student's file is reached from the roll rather than from the sidebar,
        so it is open to whoever may open the roll itself. */
     if (view === 'stuprofile') return canView('students');
+    if (view === 'facprofile') return canView('faculty');
     return menuFor(user.role).some(([k, , , url]) =>
       k === view || (k === NAV_GROUP && url === view));
   }
@@ -474,7 +475,7 @@
 
   const TITLES = {
     dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
-    faculty:'Faculty', courses:'Courses',
+    faculty:'Faculty', facprofile:'Employee Profile', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
@@ -535,7 +536,7 @@
       applications: viewApplications, interviews: viewInterviews, placements: viewPlacements,
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers, employees: viewEmployees,
-      stuprofile: viewStudentProfile,
+      stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     // every page a read-only role opens says so — views that already carry a
@@ -1317,13 +1318,15 @@
   /* The six JSON columns arrive as objects, but a record written before they
      existed has none, and a bulk upload can leave a string behind. */
   function stuPart(s, key) {
-    const empty = (key === 'guardians' || key === 'documents') ? [] : {};
-    const v = s && s[key];
-    if (!v) return empty;
+    /* A column nobody has written yet comes back as {} whatever it will
+       eventually hold, so the shape is decided here rather than trusted. */
+    const wantsList = key === 'guardians' || key === 'documents';
+    let v = s && s[key];
     if (typeof v === 'string') {
-      try { const parsed = JSON.parse(v); return parsed || empty; } catch (e) { return empty; }
+      try { v = JSON.parse(v); } catch (e) { v = null; }
     }
-    return v;
+    if (wantsList) return Array.isArray(v) ? v : [];
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
   }
 
   const STU_TABS = [
@@ -1343,8 +1346,11 @@
   }
 
   /** one label/value line inside a tab */
+  /* The value spans the remaining three cells, so a table that mixes single
+     and paired rows still lines up on one grid. */
   function infoRow(k, v) {
-    return `<tr><th style="width:34%">${esc(k)}</th><td>${v == null || v === '' ? '—' : v}</td></tr>`;
+    return `<tr><th style="width:22%">${esc(k)}</th>
+      <td colspan="3">${v == null || v === '' ? '—' : v}</td></tr>`;
   }
   /** two label/value pairs on one line, the way the reference lays them out */
   function infoRow2(k1, v1, k2, v2) {
@@ -2735,24 +2741,24 @@
         const pageRows = pageSlice(rows, page);
         $('#facBody').innerHTML = pageRows.length ? pageRows.map(f => `<tr>
           <td>${avatarHtml(f.photo, f.name)}</td>
-          <td>${esc(f.empId)}</td><td>${esc(f.name)}</td><td>${esc(f.department)}</td>
+          <td>${esc(f.empId)}</td>
+          <td><button class="linkish" data-profile="${f.id}">${esc(f.name)}</button></td>
+          <td>${esc(f.department)}</td>
           <td>${esc(f.designation)}</td><td>${esc(reportingToName(f) || '—')}</td>
           <td>${esc(f.email)}</td><td>${esc(f.phone)}</td>
           <td><div class="row-actions">
-            ${canEdit
-              ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>`
-              : `<button class="btn-sm btn-outline" data-profile="${f.id}" title="Full faculty profile">👁 View</button>`}
+            <button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>
+            ${canEdit ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>` : ''}
             <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${f.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${f.id}">Delete</button>` : ''}</div></td></tr>`).join('')
-          : `<tr><td colspan="9" class="empty">No faculty found.</td></tr>`;
+          : `<tr><td colspan="9" class="empty">No employees found.</td></tr>`;
         $('#facBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printFacultyIdCard(b.dataset.id));
+        $('#facBody').querySelectorAll('[data-profile]').forEach(b => b.onclick = () => openFacultyProfile(b.dataset.profile));
         if (canEdit) {
           $('#facBody').querySelectorAll('[data-classes]').forEach(b => b.onclick = () => facultyClassesModal(b.dataset.classes, draw));
           $('#facBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => facultyForm(b.dataset.edit));
           $('#facBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('faculty', b.dataset.del, 'faculty', draw));
-        } else {
-          $('#facBody').querySelectorAll('[data-profile]').forEach(b => b.onclick = () => facultyProfileModal(b.dataset.profile));
         }
         $('#facPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#facPager'), rows.length, page, (p) => page = p, draw);
@@ -2847,6 +2853,185 @@
     if (!f || !f.reportingTo) return '';
     const boss = Store.find('faculty', f.reportingTo);
     return boss ? boss.name : f.reportingTo;
+  }
+
+  const FAC_TABS = [
+    ['personal', '👤 Personal'], ['guardians', '👪 Guardians'], ['address', '🏠 Address'],
+    ['other', '⚙️ Other Info'], ['documents', '📄 Documents'], ['health', '🩺 Health'],
+  ];
+  let profileFacultyId = null;
+  let facTab = 'personal';
+
+  function openFacultyProfile(fid) {
+    profileFacultyId = fid;
+    facTab = 'personal';
+    navigate('facprofile');
+  }
+
+  function viewFacultyProfile() {
+    const f = Store.find('faculty', profileFacultyId);
+    if (!f) return `<div class="panel"><p class="empty">That employee is no longer on the staff list.</p></div>`;
+    const canEdit = !viewsMasterOnly();
+
+    const side = `<div class="panel stu-side">
+      <div class="stu-photo">${f.photo
+        ? `<img src="${esc(f.photo)}" alt="${esc(f.name || '')}">`
+        : `<span>${esc((f.name || '?').trim()[0] || '?')}</span>`}</div>
+      <div class="tbl-wrap"><table class="info-tbl"><tbody>
+        ${infoRow('Employee ID', `<span class="mono">${esc(f.empId || '—')}</span>`)}
+        ${infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—'))}
+        ${infoRow('Name', esc(f.name || '—'))}
+        ${infoRow('Department', esc(f.department || '—'))}
+        ${infoRow('Designation', esc(f.designation || '—'))}
+        ${infoRow('Category', esc(f.category || '—'))}
+        ${infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—'))}
+        ${infoRow('Mobile No', esc(f.phone || '—'))}
+        ${infoRow('Email ID', esc(f.email || '—'))}
+        ${infoRow('Status', `<span class="pill ${(f.status || 'Active') === 'Active' ? 'green' : 'red'}">${
+          esc(f.status || 'Active')}</span>`)}
+      </tbody></table></div>
+    </div>`;
+
+    const html = `<div class="panel-tools" style="margin-bottom:14px">
+        <button class="btn-outline btn-sm" id="fpBack">← Faculty</button>
+        ${canEdit ? `<button class="btn-primary btn-sm" id="fpEdit">✎ Edit Employee</button>` : ''}
+        <button class="btn-outline btn-sm" id="fpCard">🪪 ID Card</button>
+        <button class="btn-outline btn-sm" id="fpPdf">📄 Generate PDF</button>
+      </div>
+      <div class="stu-profile">
+        ${side}
+        <div class="panel stu-main">
+          <div class="fin-tabs" id="fpTabs">${FAC_TABS.map(([k, label]) =>
+            `<button class="fin-tab ${k === facTab ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
+          <div id="fpBody">${facultyTabHtml(f, facTab)}</div>
+        </div>
+      </div>`;
+
+    viewFacultyProfile.after = () => {
+      $('#fpBack').onclick = () => navigate('faculty');
+      const edit = $('#fpEdit');
+      if (edit) edit.onclick = () => facultyForm(f.id);
+      $('#fpCard').onclick = () => printFacultyIdCard(f.id);
+      $('#fpPdf').onclick = () => printFacultyProfile(f.id);
+      $('#fpTabs').querySelectorAll('[data-tab]').forEach(b => {
+        b.onclick = () => {
+          facTab = b.dataset.tab;
+          $('#fpTabs').querySelectorAll('.fin-tab').forEach(x => x.classList.toggle('active', x === b));
+          $('#fpBody').innerHTML = facultyTabHtml(f, facTab);
+        };
+      });
+    };
+    return html;
+  }
+
+  function facultyTabHtml(f, tab) {
+    const per = stuPart(f, 'personal');
+    const other = stuPart(f, 'otherInfo');
+    const addr = stuPart(f, 'addressInfo');
+    const health = stuPart(f, 'health');
+    const guardians = stuPart(f, 'guardians');
+    const docs = stuPart(f, 'documents');
+
+    if (tab === 'personal') {
+      return `<h4 class="ro-sub">Personal Details</h4>` + infoTable(`
+        ${infoRow('Title', esc(per.title || '—'))}
+        ${infoRow2('First Name', esc(per.firstName || (f.name || '').split(' ')[0] || '—'),
+                   'Last Name', esc(per.lastName || '—'))}
+        ${infoRow2('Middle Name', esc(per.middleName || '—'), 'Name Alias', esc(per.alias || '—'))}
+        ${infoRow2('Joining Date', esc(f.joiningDate || '—'), 'Date of Birth', esc(f.dob || '—'))}
+        ${infoRow2('Gender', esc(f.gender || '—'), 'Birth Place', esc(per.birthplace || '—'))}
+        ${infoRow2('Department', esc(f.department || '—'), 'Designation', esc(f.designation || '—'))}
+        ${infoRow2('Category', esc(f.category || '—'), 'Total Experience', esc(per.experience || '—'))}
+        ${infoRow2('Blood Group', esc(f.bloodGroup || '—'), 'Marital Status', esc(f.maritalStatus || '—'))}
+        ${infoRow2('Caste', esc(per.caste || '—'), 'Nationality', esc(per.nationality || '—'))}
+        ${infoRow2('Religion', esc(per.religion || '—'), 'Thumb', esc(per.thumb || '—'))}
+        ${infoRow2('Lunch', esc(per.lunch || '—'), 'Transport', esc(per.transport || '—'))}
+        ${infoRow2('Breakfast', esc(per.breakfast || '—'), 'Dinner', esc(per.dinner || '—'))}`);
+    }
+
+    if (tab === 'guardians') {
+      if (!guardians.length) return `<h4 class="ro-sub">Guardian Info</h4><p class="empty">No guardian recorded.</p>`;
+      return `<h4 class="ro-sub">Guardian Info</h4>` + guardians.map((g, i) => `
+        ${guardians.length > 1 ? `<h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${i + 1} · ${esc(g.name || 'Guardian')}</h4>` : ''}
+        ${infoTable(`
+          ${infoRow('Guardian Name', esc(g.name || '—'))}
+          ${infoRow('Qualification', esc(g.qualification || '—'))}
+          ${infoRow2('Relation', esc(g.relation || '—'), 'Occupation', esc(g.occupation || '—'))}
+          ${infoRow2('Total Income', g.income ? '₹' + esc(g.income) : '—', 'Mobile No', esc(g.mobile || '—'))}
+          ${infoRow2('Phone No', esc(g.phone || '—'), 'Email ID', esc(g.email || '—'))}
+          ${infoRow('Office Address', esc(g.officeAddress || '—'))}
+          ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
+    }
+
+    if (tab === 'address') {
+      const block = (title, a) => `<h4 class="ro-sub">${title}</h4>` + infoTable(`
+        ${infoRow('Address', esc(a.address || '—'))}
+        ${infoRow2('City/Town', esc(a.city || '—'), 'State/Province', esc(a.state || '—'))}
+        ${infoRow2('Country', esc(a.country || '—'), 'House No', esc(a.houseNo || '—'))}
+        ${infoRow2('Pincode', esc(a.pincode || '—'), 'Phone No', esc(a.phone || '—'))}`);
+      return `<h4 class="ro-sub">Address Info</h4>`
+        + block('Current Address', addr.current || {})
+        + block('Permanent Address', addr.permanent || {});
+    }
+
+    if (tab === 'other') {
+      return `<h4 class="ro-sub">Other Info</h4>` + infoTable(`
+        ${infoRow('Attendance Card ID', esc(f.attendanceCardId || '—'))}
+        ${infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—'))}
+        ${infoRow('AADHAAR No.', esc(f.aadhaar || '—'))}
+        ${infoRow('PAN No.', esc(other.pan || '—'))}
+        ${infoRow('Voter ID', esc(other.voterId || '—'))}
+        ${infoRow('Driving License No.', esc(other.drivingLicense || '—'))}
+        ${infoRow('Bank Account No', esc(other.bankAccount || '—'))}
+        ${infoRow2('Bank Name', esc(other.bankName || '—'), 'IFSC Code', esc(other.ifsc || '—'))}
+        ${infoRow('Mother Name', esc(other.motherName || '—'))}
+        ${infoRow('Reference', esc(other.reference || '—'))}
+        ${infoRow2('Qualification', esc(f.qualification || '—'), 'Specialization', esc(f.expertise || '—'))}
+        ${infoRow('Papers Published', esc(f.publications || '—'))}
+        ${infoRow('Books Written', esc(other.books || '—'))}
+        ${infoRow('R & D Project Undertaken', esc(other.rndProjects || '—'))}
+        ${infoRow('Membership of any Professional Society', esc(other.memberships || '—'))}
+        ${infoRow('Workshops Attended', esc(other.workshops || '—'))}
+        ${infoRow2('National Conferences Attended', esc(other.nationalConferences || '—'),
+                   'International Conferences Attended', esc(other.internationalConferences || '—'))}
+        ${infoRow2('Languages', esc(other.languages || '—'), 'Hobbies', esc(other.hobbies || '—'))}`);
+    }
+
+    if (tab === 'documents') {
+      const rows = docs.length ? docs.map(d => `<tr>
+          <td>${esc(d.name || '—')}</td><td>${esc(d.type || '—')}</td>
+          <td class="mono">${esc(d.number || '—')}</td><td>${esc(d.issued || '—')}</td>
+          <td>${d.file ? `<a href="${esc(d.file)}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+        </tr>`).join('')
+        : `<tr><td colspan="5" class="empty">No documents on record.</td></tr>`;
+      return `<h4 class="ro-sub">Documents</h4>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Document</th><th>Type</th><th>Number</th><th>Issued On</th><th>File</th>
+        </tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+
+    return `<h4 class="ro-sub">Health Record</h4>` + infoTable(`
+      ${infoRow2('Blood Group', esc(f.bloodGroup || '—'), 'Height', health.height ? esc(health.height) + ' cm' : '—')}
+      ${infoRow2('Weight', health.weight ? esc(health.weight) + ' kg' : '—', 'Last Check-up', esc(health.lastCheckup || '—'))}
+      ${infoRow('Allergies', esc(health.allergies || '—'))}
+      ${infoRow('Medical Conditions', esc(health.conditions || '—'))}
+      ${infoRow('Regular Medication', esc(health.medication || '—'))}
+      ${infoRow2('Emergency Contact', esc(health.emergencyName || '—'), 'Emergency Phone', esc(health.emergencyPhone || '—'))}
+      ${infoRow('Notes', esc(health.notes || '—'))}`);
+  }
+
+  /* "Generate PDF" is the browser's own print dialog — every tab on one sheet,
+     which is what an office actually files. */
+  function printFacultyProfile(fid) {
+    const f = Store.find('faculty', fid);
+    if (!f) return;
+    const section = (title, body) => `<h3 style="margin:18px 0 6px;color:#123f8c">${title}</h3>${body}`;
+    const inner = `<h2 style="margin:0 0 4px">${esc(f.name || '')}</h2>
+      <p style="margin:0 0 14px;color:#555">${esc(f.designation || '')} · ${esc(f.department || '')}
+        · ${esc(f.empId || '')}</p>
+      ${FAC_TABS.map(([key, label]) =>
+        section(label.replace(/^[^ ]+ /, ''), facultyTabHtml(f, key))).join('')}`;
+    printDoc('Employee Profile - ' + (f.empId || f.name), inner);
   }
 
   function facultyProfileModal(fid) {
@@ -2968,62 +3153,304 @@
       lastSession: dates[dates.length - 1] || '',
     };
   }
+  const STAFF_CATEGORIES = ['Teaching', 'Non-Teaching', 'Administrative', 'Support'];
+  const MARITAL_STATUS = ['Unmarried', 'Married', 'Widowed', 'Divorced'];
+
   function facultyForm(id, after) {
     const f = id ? Store.find('faculty', id) : {};
     // existing login account linked to this faculty (for edit)
     const acct = id ? Store.all('users').find(u => u.refId === id && u.role === 'faculty') : null;
-    openModal((id?'Edit':'Add')+' Faculty', `<form id="f">
-      <div class="form-grid">
-        <div class="field"><label>Employee ID</label><input name="empId" value="${esc(f.empId||'')}" required></div>
-        <div class="field"><label>Full Name</label><input name="name" value="${esc(f.name||'')}" required></div>
-        <div class="field"><label>Department</label><input name="department" value="${esc(f.department||'')}"></div>
-        <div class="field"><label>Designation</label><input name="designation" value="${esc(f.designation||'')}"></div>
-        <div class="field"><label>Reporting To</label>
-          <select name="reportingTo">${reportingToOptions(f.reportingTo, id)}</select></div>
-        <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(f.email||'')}"></div>
-        <div class="field"><label>Phone</label><input name="phone" id="facPhoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(f.phone||'')}"></div>
-        <div class="field full"><label>Qualification</label><input name="qualification" placeholder="e.g. Ph.D. (Computer Science)" value="${esc(f.qualification||'')}"></div>
-        <div class="field full"><label>Areas of Expertise</label><input name="expertise" placeholder="e.g. Algorithms, Machine Learning" value="${esc(f.expertise||'')}"></div>
-        <div class="field full"><label>Publications</label><textarea name="publications" rows="3" placeholder="Papers, books, patents...">${esc(f.publications||'')}</textarea></div>
-        ${photoField(f.photo)}
+    const per = stuPart(f, 'personal');
+    const other = stuPart(f, 'otherInfo');
+    const addr = stuPart(f, 'addressInfo');
+    const health = stuPart(f, 'health');
+    const guardians = stuPart(f, 'guardians');
+    const docs = stuPart(f, 'documents');
+    const cur = addr.current || {};
+    const perm = addr.permanent || {};
+
+    const TABS = [['basic', 'Basic'], ['personal', 'Personal'], ['guardians', 'Guardians'],
+                  ['address', 'Address'], ['other', 'Other Info'],
+                  ['health', 'Health'], ['docs', 'Documents']];
+
+    const addressBlock = (prefix, a) => `<div class="form-grid">
+      ${fArea(prefix + '_address', 'Address', a.address)}
+      ${fText(prefix + '_houseNo', 'House No', a.houseNo)}
+      ${fText(prefix + '_city', 'City/Town', a.city)}
+      ${fText(prefix + '_state', 'State/Province', a.state)}
+      ${fText(prefix + '_country', 'Country', a.country || 'India')}
+      ${fText(prefix + '_pincode', 'Pincode', a.pincode, 'inputmode="numeric" maxlength="6"')}
+      ${fText(prefix + '_phone', 'Phone No', a.phone, 'inputmode="numeric"')}
+    </div>`;
+
+    openModal((id ? 'Edit' : 'Add') + ' Employee', `<form id="f">
+      <div class="fin-tabs" id="ffTabs">${TABS.map(([k, label], i) =>
+        `<button type="button" class="fin-tab ${i ? '' : 'active'}" data-pane="${k}">${label}</button>`).join('')}</div>
+
+      <div class="sf-pane" data-pane="basic">
+        <div class="form-grid">
+          <div class="field"><label>Employee ID</label>
+            <input name="empId" value="${esc(f.empId || '')}" required></div>
+          ${fText('bputRegdNo', 'BPUT Regd No.', f.bputRegdNo)}
+          <div class="field"><label>Full Name</label>
+            <input name="name" value="${esc(f.name || '')}" required></div>
+          ${fText('department', 'Department', f.department)}
+          ${fText('designation', 'Designation', f.designation)}
+          ${fSel('category', 'Category', f.category || 'Teaching', STAFF_CATEGORIES, false)}
+          <div class="field"><label>Reporting To</label>
+            <select name="reportingTo">${reportingToOptions(f.reportingTo, id)}</select></div>
+          ${fText('email', 'Email ID', f.email, 'type="email" placeholder="name@example.com"')}
+          <div class="field"><label>Mobile No</label>
+            <input name="phone" id="facPhoneInput" inputmode="numeric" placeholder="10-digit number"
+                   value="${esc(f.phone || '')}"></div>
+          ${fDate('joiningDate', 'Joining Date', f.joiningDate)}
+          ${fSel('status', 'Status', f.status || 'Active', ['Active', 'Inactive'], false)}
+          ${photoField(f.photo)}
+        </div>
+        <h4 class="ro-sub">Login Account</h4>
+        <div class="form-grid">
+          <div class="field"><label>Username</label>
+            <input name="username" value="${esc(acct ? acct.username : '')}" required></div>
+          <div class="field"><label>Password</label>
+            <input name="password" type="text" value=""
+                   placeholder="${id ? 'leave blank to keep current' : 'set a password'}" ${id ? '' : 'required'}></div>
+        </div>
       </div>
-      <h4 style="font-size:13px;color:var(--primary-dark);margin:18px 0 8px">LOGIN ACCOUNT</h4>
-      <div class="form-grid">
-        <div class="field"><label>Username</label><input name="username" value="${esc(acct?acct.username:'')}" required></div>
-        <div class="field"><label>Password</label><input name="password" type="text" value="" placeholder="${id?'leave blank to keep current':'set a password'}" ${id?'':'required'}></div>
+
+      <div class="sf-pane hidden" data-pane="personal">
+        <div class="form-grid">
+          ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
+          ${fText('per_firstName', 'First Name', per.firstName)}
+          ${fText('per_middleName', 'Middle Name', per.middleName)}
+          ${fText('per_lastName', 'Last Name', per.lastName)}
+          ${fText('per_alias', 'Name Alias', per.alias)}
+          ${fDate('dob', 'Date of Birth', f.dob)}
+          ${fSel('gender', 'Gender', f.gender, GENDERS)}
+          ${fText('per_birthplace', 'Birth Place', per.birthplace)}
+          ${fText('per_experience', 'Total Experience', per.experience, 'placeholder="e.g. 6 years"')}
+          ${fSel('bloodGroup', 'Blood Group', f.bloodGroup, BLOOD_GROUPS)}
+          ${fSel('maritalStatus', 'Marital Status', f.maritalStatus, MARITAL_STATUS)}
+          ${fText('per_caste', 'Caste', per.caste)}
+          ${fText('per_nationality', 'Nationality', per.nationality || 'Indian')}
+          ${fText('per_religion', 'Religion', per.religion)}
+          ${fText('per_thumb', 'Thumb', per.thumb)}
+          ${fSel('per_lunch', 'Lunch', per.lunch || 'No', YES_NO, false)}
+          ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
+          ${fSel('per_breakfast', 'Breakfast', per.breakfast || 'No', YES_NO, false)}
+          ${fSel('per_dinner', 'Dinner', per.dinner || 'No', YES_NO, false)}
+        </div>
       </div>
+
+      <div class="sf-pane hidden" data-pane="guardians">
+        <div id="ffGuardians">${(guardians.length ? guardians : [{}]).map(guardianCard).join('')}</div>
+        <button type="button" class="btn-outline btn-sm" id="ffAddGuardian">+ Add Guardian</button>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="address">
+        <h4 class="ro-sub">Current Address</h4>
+        ${addressBlock('cur', cur)}
+        <h4 class="ro-sub">Permanent Address
+          <button type="button" class="btn-outline btn-sm" id="ffSameAddr" style="float:right">
+            Copy from current</button></h4>
+        ${addressBlock('perm', perm)}
+      </div>
+
+      <div class="sf-pane hidden" data-pane="other">
+        <div class="form-grid">
+          ${fText('attendanceCardId', 'Attendance Card ID', f.attendanceCardId)}
+          ${fText('aadhaar', 'AADHAAR No.', f.aadhaar, 'inputmode="numeric" maxlength="12"')}
+          ${fText('oth_pan', 'PAN No.', other.pan)}
+          ${fText('oth_voterId', 'Voter ID', other.voterId)}
+          ${fText('oth_drivingLicense', 'Driving License No.', other.drivingLicense)}
+          ${fText('oth_bankAccount', 'Bank Account No', other.bankAccount)}
+          ${fText('oth_bankName', 'Bank Name', other.bankName)}
+          ${fText('oth_ifsc', 'IFSC Code', other.ifsc)}
+          ${fText('oth_motherName', 'Mother Name', other.motherName)}
+          ${fText('oth_reference', 'Reference', other.reference)}
+          ${fText('qualification', 'Qualification', f.qualification, 'placeholder="e.g. Ph.D. (Management)"')}
+          ${fText('expertise', 'Specialization', f.expertise, 'placeholder="e.g. Marketing, Consumer Research"')}
+          ${fText('oth_languages', 'Languages', other.languages)}
+          ${fText('oth_hobbies', 'Hobbies', other.hobbies)}
+          ${fArea('publications', 'Papers Published', f.publications, 3)}
+          ${fArea('oth_books', 'Books Written', other.books)}
+          ${fArea('oth_rndProjects', 'R & D Project Undertaken', other.rndProjects)}
+          ${fArea('oth_memberships', 'Membership of any Professional Society', other.memberships)}
+          ${fArea('oth_workshops', 'Workshops Attended', other.workshops)}
+          ${fArea('oth_nationalConferences', 'National Conferences Attended', other.nationalConferences)}
+          ${fArea('oth_internationalConferences', 'International Conferences Attended', other.internationalConferences)}
+        </div>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="health">
+        <div class="form-grid">
+          ${fText('h_height', 'Height (cm)', health.height, 'inputmode="numeric"')}
+          ${fText('h_weight', 'Weight (kg)', health.weight, 'inputmode="numeric"')}
+          ${fDate('h_lastCheckup', 'Last Check-up', health.lastCheckup)}
+          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
+          ${fText('h_emergencyPhone', 'Emergency Contact Phone', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
+          ${fArea('h_allergies', 'Allergies', health.allergies)}
+          ${fArea('h_conditions', 'Medical Conditions', health.conditions)}
+          ${fArea('h_medication', 'Regular Medication', health.medication)}
+          ${fArea('h_notes', 'Notes', health.notes)}
+        </div>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="docs">
+        <div id="ffDocs">${docs.map(documentRow).join('')}</div>
+        <button type="button" class="btn-outline btn-sm" id="ffAddDoc">+ Add Document</button>
+      </div>
+
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Save</button></div></form>`);
+        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+
+    /* ---- wiring ---- */
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#facPhoneInput'));
     bindReportingTo($('select[name="reportingTo"]'), id);
     bindPhotoField();
+
+    $('#ffTabs').querySelectorAll('[data-pane]').forEach(btn => {
+      btn.onclick = () => {
+        $('#ffTabs').querySelectorAll('.fin-tab').forEach(b => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.sf-pane').forEach(pane =>
+          pane.classList.toggle('hidden', pane.dataset.pane !== btn.dataset.pane));
+      };
+    });
+
+    const renumber = (sel, word) => {
+      document.querySelectorAll(sel).forEach((card, i) => {
+        const h = card.querySelector('.sub-card-head strong');
+        if (h) h.textContent = `${word} ${i + 1}`;
+      });
+    };
+    const bindGuardianRemovals = () => {
+      document.querySelectorAll('[data-remove-guardian]').forEach(b => {
+        b.onclick = () => {
+          if (document.querySelectorAll('[data-guardian]').length === 1) {
+            toast('At least one guardian block stays on the form.', 'err'); return;
+          }
+          b.closest('[data-guardian]').remove();
+          renumber('[data-guardian]', 'Guardian');
+        };
+      });
+    };
+    const bindDocRemovals = () => {
+      document.querySelectorAll('[data-remove-document]').forEach(b => {
+        b.onclick = () => { b.closest('[data-document]').remove(); renumber('[data-document]', 'Document'); };
+      });
+    };
+    const bindDocFiles = () => {
+      document.querySelectorAll('[data-doc-file]').forEach(input => {
+        input.onchange = () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+          if (file.size > 1024 * 1024) {
+            toast('That file is over 1 MB — attach a smaller scan.', 'err');
+            input.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const card = input.closest('[data-document]');
+            card.querySelector('[data-doc-value]').value = reader.result;
+            card.querySelector('[data-doc-note]').textContent = 'Attached: ' + file.name;
+          };
+          reader.readAsDataURL(file);
+        };
+      });
+    };
+    bindGuardianRemovals(); bindDocRemovals(); bindDocFiles();
+
+    $('#ffAddGuardian').onclick = () => {
+      const wrap = $('#ffGuardians');
+      wrap.insertAdjacentHTML('beforeend', guardianCard({}, wrap.children.length));
+      bindGuardianRemovals();
+    };
+    $('#ffAddDoc').onclick = () => {
+      const wrap = $('#ffDocs');
+      wrap.insertAdjacentHTML('beforeend', documentRow({}, wrap.children.length));
+      bindDocRemovals(); bindDocFiles();
+    };
+    $('#ffSameAddr').onclick = () => {
+      ['address', 'houseNo', 'city', 'state', 'country', 'pincode', 'phone'].forEach(k => {
+        const from = document.querySelector(`[name="cur_${k}"]`);
+        const to = document.querySelector(`[name="perm_${k}"]`);
+        if (from && to) to.value = from.value;
+      });
+      toast('Copied from the current address.');
+    };
+
+    /* ---- save ---- */
     $('#f').onsubmit = (e) => {
       e.preventDefault();
-      const d = formData(e.target);
-      if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
-      const username = (d.username||'').trim();
-      const password = (d.password||'').trim();
+      const form = e.target;
+      const d = formData(form);
+      if (!phoneValid(d.phone)) { toast('Mobile number must be exactly 10 digits.', 'err'); return; }
+      if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
+        toast('AADHAAR number must be exactly 12 digits.', 'err'); return;
+      }
+      const username = (d.username || '').trim();
+      const password = (d.password || '').trim();
       delete d.username; delete d.password;
 
       // username must be unique across all login accounts
       const clash = Store.all('users').find(u =>
-        (u.username||'').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
-      if (clash) { toast('Username "'+username+'" already taken.'); return; }
+        (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
+      if (clash) { toast('Username "' + username + '" already taken.', 'err'); return; }
+
+      const take = (prefix) => {
+        const out = {};
+        Object.keys(d).forEach(k => {
+          if (k.startsWith(prefix)) { out[k.slice(prefix.length)] = d[k]; delete d[k]; }
+        });
+        return out;
+      };
+      const personal = take('per_');
+      const otherInfo = take('oth_');
+      const health = take('h_');
+      const current = take('cur_');
+      const permanent = take('perm_');
+      Object.keys(d).forEach(k => { if (k.startsWith('g_') || k.startsWith('d_')) delete d[k]; });
+
+      const guardianRows = [...form.querySelectorAll('[data-guardian]')].map(card => {
+        const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
+        return { name: val('name'), relation: val('relation'), occupation: val('occupation'),
+                 mobile: val('mobile'), phone: val('phone'), income: val('income'),
+                 email: val('email'), qualification: val('qualification'),
+                 emergency: val('emergency'), homeAddress: val('homeAddress'),
+                 officeAddress: val('officeAddress') };
+      }).filter(g => g.name);
+      const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
+      if (badGuardian) {
+        toast(`${badGuardian.name}'s mobile number must be exactly 10 digits.`, 'err'); return;
+      }
+
+      const documents = [...form.querySelectorAll('[data-document]')].map(card => {
+        const val = (n) => (card.querySelector(`[name="d_${n}"]`).value || '').trim();
+        return { name: val('name'), type: val('type'), number: val('number'), issued: val('issued'),
+                 file: card.querySelector('[data-doc-value]').value || '' };
+      }).filter(x => x.name || x.number || x.file);
+
+      d.personal = personal;
+      d.otherInfo = otherInfo;
+      d.addressInfo = { current, permanent };
+      d.health = health;
+      d.guardians = guardianRows;
+      d.documents = documents;
 
       let newId = id;
       if (id) {
         Store.update('faculty', id, d);
-        const patch = { username, role:'faculty', refId:id, name:d.name };
+        const patch = { username, role: 'faculty', refId: id, name: d.name };
         if (password) patch.password = password;
         if (acct) Store.update('users', acct.id, patch);
-        else Store.add('users', { username, password: password||'pass123', role:'faculty', refId:id, name:d.name });
+        else Store.add('users', { username, password: password || 'pass123', role: 'faculty', refId: id, name: d.name });
       } else {
         const fac = Store.add('faculty', d);
         newId = fac.id;
-        Store.add('users', { username, password, role:'faculty', refId: fac.id, name: fac.name });
+        Store.add('users', { username, password, role: 'faculty', refId: fac.id, name: fac.name });
       }
-      closeModal(); toast('Faculty saved.');
+      closeModal(); toast('Employee saved.');
       if (after) after(newId); else render();
     };
   }

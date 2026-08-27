@@ -644,3 +644,13 @@ a.install-btn:hover{background:var(--primary-light)}
 .idc-fields label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
   color:var(--muted)}
 .idc-fields strong{font-weight:600;word-break:break-word}
+
+/* a name in a table that opens the record behind it */
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--primary);cursor:pointer;
+  text-align:left;text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px;
+  text-decoration-color:color-mix(in srgb, var(--primary) 35%, transparent)}
+.linkish:hover{color:var(--primary-dark);text-decoration-color:currentColor}
+
+/* The side card is a narrow column, so its labels need more of it than the
+   22% a wide tab table gives them — otherwise "Employee ID" wraps. */
+.stu-side .info-tbl th{width:46% !important}
