@@ -1186,6 +1186,9 @@
     // printing an ID card / marksheet reads data, so a monitoring role may do it
     const canPrintDocs = canEdit || readOnly();
     const deptBranch = user.role === 'faculty' ? facultyDeptBranch() : null;
+    // only for the dropdowns in the filter row — the list itself reads the
+    // roll again on every redraw, or a deleted student would sit there until
+    // the page was reloaded
     const all = rosterStudents();
 
     const html = `<div class="panel"><div class="panel-head">
@@ -1234,7 +1237,7 @@
       const matching = () => {
         const q = ($('#stuSearch').value || '').toLowerCase();
         const f = filters();
-        return all.filter(s => {
+        return rosterStudents().filter(s => {
           if (q && !(String(s.name || '').toLowerCase().includes(q)
                   || String(s.roll || '').toLowerCase().includes(q))) return false;
           // a text filter matches anywhere in the cell; a dropdown is exact
@@ -9259,12 +9262,35 @@
       openCreate();
     };
   }
+  /* A person and the login that belongs to them go together. Left behind, the
+     login still signs in — against a record that no longer exists — and it
+     holds the registration number hostage, because a username is unique. */
+  const COLLECTIONS_WITH_LOGIN = ['students', 'faculty', 'accountants', 'centerheads',
+                                  'placementofficers', 'coordinators', 'admissions'];
+  function removeLinkedLogins(col, id) {
+    if (!COLLECTIONS_WITH_LOGIN.includes(col)) return 0;
+    const owned = Store.all('users').filter(u => u.refId === id);
+    owned.forEach(u => Store.remove('users', u.id));
+    return owned.length;
+  }
+
   function delConfirm(col, id, label, after) {
-    openModal('Delete ' + label, `<p>Are you sure you want to delete this ${label}? This action cannot be undo.</p>
+    const logins = COLLECTIONS_WITH_LOGIN.includes(col)
+      ? Store.all('users').filter(u => u.refId === id) : [];
+    openModal('Delete ' + label, `<p>Are you sure you want to delete this ${label}?
+        This action cannot be undone.</p>
+      ${logins.length ? `<p style="color:var(--muted);font-size:13px">
+        Their login <b>${esc(logins[0].username || '')}</b> is removed with them.</p>` : ''}
       <div class="form-actions"><button class="btn-outline" id="cx">Cancel</button>
         <button class="btn-primary" style="background:var(--red)" id="ok">Delete</button></div>`);
     $('#cx').onclick = closeModal;
-    $('#ok').onclick = () => { Store.remove(col, id); closeModal(); toast(label+' deleted.','err'); after ? after() : render(); };
+    $('#ok').onclick = () => {
+      const removed = removeLinkedLogins(col, id);
+      Store.remove(col, id);
+      closeModal();
+      toast(label + (removed ? ' and their login deleted.' : ' deleted.'), 'err');
+      after ? after() : render();
+    };
   }
   function today() { const d = new Date(); return d.toISOString().slice(0,10); }
   function addDays(dateStr, n) {
