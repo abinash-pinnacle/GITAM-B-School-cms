@@ -10523,8 +10523,13 @@
   function eligibleStudentsFor(d) {
     return Store.all('students').filter(s => driveEligibility(s, d).ok);
   }
-  /** eligible for at least one drive that is still open */
-  function drivesOpenToStudent(s) {
+  /* Every open drive is open to every student — the criteria are shown, not
+     enforced, so the cell decides who goes forward. */
+  function drivesOpenToStudent() {
+    return openDrives();
+  }
+  /** the ones whose criteria this student actually meets — for reporting */
+  function drivesStudentMeets(s) {
     return openDrives().filter(d => driveEligibility(s, d).ok);
   }
 
@@ -10560,9 +10565,9 @@
     if (apps.some(a => a.status === 'Selected')) return { label: 'Selected', pill: 'green', detail: 'Selected, offer not issued' };
     if (apps.some(a => a.status === 'Shortlisted')) return { label: 'In Process', pill: 'amber', detail: 'Shortlisted' };
     if (apps.length) return { label: 'Applied', pill: 'blue', detail: `${apps.length} application(s)` };
-    const open = drivesOpenToStudent(Store.find('students', sid) || {});
-    if (open.length) return { label: 'Eligible', pill: 'blue', detail: `${open.length} open drive(s)` };
-    return { label: 'Not Eligible', pill: 'red', detail: 'No open drive matches' };
+    const open = openDrives();
+    if (open.length) return { label: 'Not Applied', pill: 'blue', detail: `${open.length} open drive(s)` };
+    return { label: 'No Drives Open', pill: 'red', detail: 'No drive is open right now' };
   }
 
   /* ==================== MY PLACEMENT (student) ====================
@@ -10593,8 +10598,6 @@
       if (appliedTo.has(d.id)) {
         const mine = apps.find(a => a.driveId === d.id);
         action = `<span class="pill ${APP_PILL[mine.status] || 'blue'}">${esc(mine.status || 'Applied')}</span>`;
-      } else if (!el.ok) {
-        action = `<span class="pl-why">Not eligible</span>`;
       } else if (closed) {
         action = `<span class="pl-why">Closed</span>`;
       } else {
@@ -10606,8 +10609,8 @@
         <td>${d.package ? money(d.package) : '—'}</td>
         <td>${esc(d.location || '—')}</td>
         <td>${esc(d.appEndDate || d.driveDate || '—')}</td>
-        <td>${el.ok ? `<span class="pill green">Eligible</span>`
-          : `<span class="pill red">Not eligible</span>
+        <td>${el.ok ? `<span class="pill green">Meets criteria</span>`
+          : `<span class="pill amber">Below criteria</span>
              <div class="pl-why">${esc(el.reasons.join(' · '))}</div>`}</td>
         <td>${action}</td>
       </tr>`;
@@ -10645,12 +10648,13 @@
         ${statCard('📨', apps.length, 'Applications')}
         ${statCard('🎤', ivs.length, 'Interviews', 'c2')}
         ${statCard('📜', offers.length, 'Offers', 'c3')}
-        ${statCard('🚀', drivesOpenToStudent(s).length, 'Drives You Qualify For', 'c2')}
+        ${statCard('🚀', openDrives().length, 'Open Drives', 'c2')}
       </div></div>
 
-    <div class="panel"><div class="panel-head"><h3>Your Eligibility</h3></div>
-      <p class="pl-detail">These are the figures every drive is matched against. A wrong
-        CGPA or backlog count is corrected by the office, not here.</p>
+    <div class="panel"><div class="panel-head"><h3>Your Figures</h3></div>
+      <p class="pl-detail">These are the figures a drive's criteria are read against. They do
+        not stop you applying — the placement cell decides who goes forward. A wrong CGPA or
+        backlog count is corrected by the office, not here.</p>
       <div class="tbl-wrap"><table><tbody>
         <tr><td style="font-weight:600;width:200px">CGPA</td><td>${cg === null ? '— (not on record)' : cg}</td></tr>
         <tr><td style="font-weight:600">Active Backlogs</td><td>${+s.backlogs || 0}</td></tr>
@@ -10715,7 +10719,7 @@
   /* ---------- one place every placement number comes from ---------- */
   function placementStats() {
     const students = Store.all('students');
-    const eligible = students.filter(s => drivesOpenToStudent(s).length > 0);
+    const eligible = students.filter(s => drivesStudentMeets(s).length > 0);
     const placedOffers = Store.all('offers').filter(o => PLACED_OFFER_STATUS.includes(o.status));
     const placedIds = new Set(placedOffers.map(o => o.studentId));
     const selectedIds = new Set(Store.all('applications').filter(a => a.status === 'Selected').map(a => a.studentId));
@@ -10966,12 +10970,12 @@
           <option>Placed</option><option>Joined</option><option>Offer Pending</option>
           <option>Selected</option><option>In Process</option><option>Applied</option>
           <option>Not Joined</option><option>Left</option>
-          <option>Eligible</option><option>Not Eligible</option></select>
+          <option>Not Applied</option><option>No Drives Open</option></select>
         <button class="btn-outline btn-sm" id="psClear">Clear</button>
       </div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th style="text-align:right">CGPA</th>
-        <th style="text-align:right">Attendance</th><th>Eligibility</th><th>Placement Status</th>
+        <th style="text-align:right">Attendance</th><th>Meets Criteria</th><th>Placement Status</th>
         <th>Actions</th><th style="text-align:right">Backlogs</th>
       </tr></thead><tbody id="psBody"></tbody></table></div><div id="psPager"></div></div>`;
 
@@ -10983,7 +10987,7 @@
         const drive = driveId ? Store.find('drives', driveId) : null;
         return Store.all('students').map(s => {
           const status = placementStatusOf(s.id);
-          const open = drivesOpenToStudent(s);
+          const open = drivesStudentMeets(s);
           const el = drive ? driveEligibility(s, drive) : null;
           return {
             sid: s.id, roll: s.roll || '', name: s.name || '', branch: specOf(s) || '—',
@@ -11009,7 +11013,7 @@
           <td>${esc(String(r.semester))}</td>
           <td style="text-align:right">${esc(String(r.cgpa))}</td>
           <td style="text-align:right">${r.attendance === null ? '—' : r.attendance + '%'}</td>
-          <td><span class="pill ${r.eligibleDrives ? 'green' : 'red'}">${r.eligibleDrives} drive(s)</span></td>
+          <td><span class="pill ${r.eligibleDrives ? 'green' : 'amber'}">${r.eligibleDrives} drive(s)</span></td>
           <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
             <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Placement history">👁 History</button>
@@ -11088,7 +11092,7 @@
       <td style="text-align:right">${money(d.package)}</td><td>${esc(d.driveDate || '—')}</td>
       <td>${apps.some(a => a.driveId === d.id)
         ? '<span class="pill green">Applied</span>' : '<span class="pill blue">Not applied</span>'}</td></tr>`).join('')
-      : `<tr><td colspan="5" class="empty">No open drive matches this student.</td></tr>`;
+      : `<tr><td colspan="5" class="empty">No drive is open right now.</td></tr>`;
 
     openModal('Placement — ' + s.name, `
       <div style="display:flex;gap:18px;align-items:center;margin-bottom:18px">
@@ -11103,7 +11107,7 @@
         ${statCard('📨', apps.length, 'Applications', 'c2')}
         ${statCard('🏆', status.label, 'Status', status.pill === 'green' ? 'c3' : status.pill === 'red' ? 'c4' : 'c2')}
       </div>
-      <h4 class="ro-sub">Placement Eligibility — Open Drives</h4>
+      <h4 class="ro-sub">Open Drives</h4>
       <div class="tbl-wrap"><table><thead><tr><th>Company</th><th>Role</th>
         <th style="text-align:right">Package</th><th>Drive Date</th><th>Applied?</th>
       </tr></thead><tbody>${eligRows}</tbody></table></div>
@@ -12568,7 +12572,7 @@
                                    placed: 0, total: 0, highest: 0 };
         const g = groups[b];
         g.students++;
-        if (drivesOpenToStudent(s).length) g.eligible++;
+        if (drivesStudentMeets(s).length) g.eligible++;
         const apps = studentApplications(s.id);
         if (apps.length) g.applied++;
         if (apps.some(a => a.status === 'Selected')) g.selected++;
@@ -12788,7 +12792,7 @@
     // unplaced
     const rows = Store.all('students').filter(s => !isPlaced(s.id)).map(s => {
       const apps = studentApplications(s.id);
-      const open = drivesOpenToStudent(s);
+      const open = drivesStudentMeets(s);
       return {
         roll: s.roll || '—', name: s.name || '', branch: specOf(s) || '—',
         semester: s.semester || '', cgpa: studentCgpa(s) ?? '—', backlogs: +s.backlogs || 0,

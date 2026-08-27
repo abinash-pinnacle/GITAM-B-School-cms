@@ -369,64 +369,9 @@ function api_bootstrap(): void
 }
 
 /* ---------------- a student applying to a drive ----------------
-   Mirrors the eligibility the page shows, on the server, because the page is
-   only a suggestion. Same rule as driveEligibility() in app.js, including the
-   fallback to the average of internal marks when no CGPA has been entered. */
-
-/** The student's CGPA, or the GPA implied by their internal marks, or null. */
-function student_cgpa(array $s): ?float
-{
-    $raw = trim((string) ($s['cgpa'] ?? ''));
-    if ($raw !== '' && is_numeric($raw)) {
-        return (float) $raw;
-    }
-    $marks = fetch_all('SELECT * FROM ' . qi('marks') . ' WHERE ' . qi('studentId') . ' = ?', [$s['id']]);
-    if (!$marks) {
-        return null;
-    }
-    $points = 0.0;
-    $credits = 0.0;
-    foreach ($marks as $m) {
-        if (($m['internal'] ?? '') === '' || $m['internal'] === null) {
-            continue;
-        }
-        $course = fetch_one('SELECT * FROM ' . qi('courses') . ' WHERE ' . qi('id') . ' = ?', [$m['courseId']]);
-        $credit = (float) ($course['credits'] ?? 0);
-        $pct = round(((float) $m['internal'] / INTERNAL_MAX) * 100);
-        $grade = $pct >= 90 ? 10 : ($pct >= 80 ? 9 : ($pct >= 70 ? 8 :
-                 ($pct >= 60 ? 7 : ($pct >= 50 ? 6 : ($pct >= 40 ? 5 : 0)))));
-        $points += $grade * $credit;
-        $credits += $credit;
-    }
-    return $credits > 0 ? round($points / $credits, 2) : null;
-}
-
-/** Reasons this student does not qualify for this drive; empty means they do. */
-function drive_blockers(array $s, array $d): array
-{
-    $out = [];
-    $min = trim((string) ($d['minCgpa'] ?? ''));
-    if ($min !== '' && is_numeric($min) && (float) $min > 0) {
-        $cg = student_cgpa($s);
-        if ($cg === null) {
-            $out[] = 'no CGPA on record';
-        } elseif ($cg < (float) $min) {
-            $out[] = "CGPA $cg is below $min";
-        }
-    }
-    $maxB = $d['maxBacklogs'] ?? '';
-    if ($maxB !== '' && $maxB !== null && is_numeric($maxB)
-        && (int) ($s['backlogs'] ?? 0) > (int) $maxB) {
-        $out[] = 'too many backlogs';
-    }
-    foreach ([['eligibleBranches', 'branch', 'branch'], ['eligibleCourses', 'course', 'course']] as [$f, $sf, $label]) {
-        $list = array_filter(array_map('trim', explode(',', (string) ($d[$f] ?? ''))));
-        if ($list && !in_array((string) ($s[$sf] ?? ''), $list, true)) {
-            $out[] = "this drive is not open to your $label";
-        }
-    }
-    return $out;
-}
+   A drive's CGPA, backlog and specialisation criteria are shown to the student
+   and to the placement cell, but they decide nothing: the cell puts people
+   forward. So nothing here reads them. */
 
 /**
  * The only write a student is allowed to make. Returns the row to store —
@@ -461,11 +406,11 @@ function guard_student_application(array $d): array
         send_json(['error' => 'duplicate', 'message' => 'You have already applied to this drive.'], 409);
     }
 
-    $blockers = drive_blockers($student, $drive);
-    if ($blockers) {
-        send_json(['error' => 'not-eligible',
-                   'message' => 'You do not meet this drive\'s requirements: ' . implode('; ', $blockers) . '.'], 403);
-    }
+    /* A drive's CGPA, backlog and specialisation criteria are not a gate. They
+       are shown to the student and to the cell, and the cell decides who goes
+       forward — so an application is taken either way. What is still enforced
+       is that the drive is open, its closing date has not passed, and nobody
+       applies to the same drive twice. */
 
     return [
         'studentId' => $sid,
