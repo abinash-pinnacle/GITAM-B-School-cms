@@ -443,6 +443,9 @@
 
   function canView(key) {
     const { view } = splitViewKey(key);
+    /* A student's file is reached from the roll rather than from the sidebar,
+       so it is open to whoever may open the roll itself. */
+    if (view === 'stuprofile') return canView('students');
     return menuFor(user.role).some(([k, , , url]) =>
       k === view || (k === NAV_GROUP && url === view));
   }
@@ -470,7 +473,8 @@
   }
 
   const TITLES = {
-    dashboard:'Dashboard', students:'All Students', faculty:'Faculty', courses:'Courses',
+    dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
+    faculty:'Faculty', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
@@ -531,6 +535,7 @@
       applications: viewApplications, interviews: viewInterviews, placements: viewPlacements,
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers, employees: viewEmployees,
+      stuprofile: viewStudentProfile,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     // every page a read-only role opens says so — views that already carry a
@@ -1270,7 +1275,7 @@
         </tr>`).join('') : `<tr><td colspan="13" class="empty">No students found.</td></tr>`;
 
         $('#stuBody').querySelectorAll('[data-profile]').forEach(b =>
-          b.onclick = () => studentProfileModal(b.dataset.profile));
+          b.onclick = () => openStudentProfile(b.dataset.profile));
         if (canSeeBooks) {
           $('#stuBody').querySelectorAll('[data-books]').forEach(b => b.onclick = () => studentBooksModal(b.dataset.books));
         }
@@ -1309,6 +1314,345 @@
   /* ---------- read-only student profile (center head) ----------
      Everything the admin can see about a student, on one screen, with no
      control that could change any of it. */
+  /* The six JSON columns arrive as objects, but a record written before they
+     existed has none, and a bulk upload can leave a string behind. */
+  function stuPart(s, key) {
+    const empty = (key === 'guardians' || key === 'documents') ? [] : {};
+    const v = s && s[key];
+    if (!v) return empty;
+    if (typeof v === 'string') {
+      try { const parsed = JSON.parse(v); return parsed || empty; } catch (e) { return empty; }
+    }
+    return v;
+  }
+
+  const STU_TABS = [
+    ['personal', '👤 Personal'], ['academic', '🎓 Academic'], ['guardians', '👪 Guardians'],
+    ['address', '🏠 Address'], ['documents', '📄 Documents'], ['fees', '₹ Fees'],
+    ['attendance', '📅 Attendance'], ['health', '🩺 Health'], ['idcard', '🪪 ID Card'],
+  ];
+  let profileStudentId = null;
+  let stuTab = 'personal';
+  let stuAttSubjectWise = false;
+
+  function openStudentProfile(sid) {
+    profileStudentId = sid;
+    stuTab = 'personal';
+    stuAttSubjectWise = false;
+    navigate('stuprofile');
+  }
+
+  /** one label/value line inside a tab */
+  function infoRow(k, v) {
+    return `<tr><th style="width:34%">${esc(k)}</th><td>${v == null || v === '' ? '—' : v}</td></tr>`;
+  }
+  /** two label/value pairs on one line, the way the reference lays them out */
+  function infoRow2(k1, v1, k2, v2) {
+    return `<tr><th style="width:22%">${esc(k1)}</th><td style="width:28%">${v1 || '—'}</td>
+      <th style="width:22%">${esc(k2)}</th><td>${v2 || '—'}</td></tr>`;
+  }
+  const infoTable = (rows) => `<div class="tbl-wrap"><table class="info-tbl"><tbody>${rows}</tbody></table></div>`;
+
+  /* attendance the way a student is asked about it: per semester, and then
+     per paper inside the semester they are standing in */
+  function studentSemesterAttendance(sid) {
+    const rows = new Map();
+    Store.all('attendance').forEach(a => {
+      const mark = (a.records || {})[sid];
+      if (!mark) return;
+      /* A session recorded before the class-context fields existed carries no
+         semester of its own — it belongs to the one its paper is taught in. */
+      const sem = +a.semester || +((Store.find('courses', a.courseId) || {}).semester) || 0;
+      if (!rows.has(sem)) rows.set(sem, { sem, held: 0, present: 0 });
+      const r = rows.get(sem);
+      r.held++;
+      if (mark === 'P') r.present++;
+    });
+    return [...rows.values()].sort((a, b) => a.sem - b.sem);
+  }
+  function studentPaperAttendance(sid) {
+    const rows = new Map();
+    Store.all('attendance').forEach(a => {
+      const mark = (a.records || {})[sid];
+      if (!mark) return;
+      const c = Store.find('courses', a.courseId) || {};
+      const key = a.paperCode || c.code || a.paperName || c.name || '—';
+      if (!rows.has(key)) {
+        rows.set(key, { code: key, name: a.paperName || c.name || '—',
+                        sem: a.semester || c.semester || '—', held: 0, present: 0 });
+      }
+      const r = rows.get(key);
+      r.held++;
+      if (mark === 'P') r.present++;
+    });
+    return [...rows.values()].sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  }
+  /** the last day this student was marked, present or absent */
+  function lastAttendanceDate(sid) {
+    const dates = Store.all('attendance')
+      .filter(a => (a.records || {})[sid]).map(a => a.date).filter(Boolean).sort();
+    return dates.length ? dates[dates.length - 1] : null;
+  }
+
+  function viewStudentProfile() {
+    const s = Store.find('students', profileStudentId);
+    if (!s) return `<div class="panel"><p class="empty">That student is no longer on the roll.</p></div>`;
+    const canEdit = !viewsMasterOnly() || user.role === 'admission';
+    const per = stuPart(s, 'personal');
+    const last = lastAttendanceDate(s.id);
+
+    const side = `<div class="panel stu-side">
+      <div class="stu-photo">${s.photo
+        ? `<img src="${esc(s.photo)}" alt="${esc(s.name || '')}">`
+        : `<span>${esc((s.name || '?').trim()[0] || '?')}</span>`}</div>
+      <div class="stu-lastatt"><span>Last Date of Class Attendance</span><strong>${esc(last || '—')}</strong></div>
+      <div class="tbl-wrap"><table class="info-tbl"><tbody>
+        ${infoRow('Registration No', `<span class="mono">${esc(s.roll || '—')}</span>`)}
+        ${infoRow('Serial No.', esc(s.serialNo || '—'))}
+        ${infoRow('Name', esc(s.name || '—'))}
+        ${infoRow('Mentor', esc(s.mentor || '—'))}
+        ${infoRow('Course', esc(s.course || '—'))}
+        ${infoRow('Batch', esc(s.batch || '—'))}
+        ${infoRow('Specialisation', esc(specOf(s) || '—'))}
+        ${infoRow('Section', esc(s.section || '—'))}
+        ${infoRow('Domain Email ID', esc(s.domainEmail || '—'))}
+        ${infoRow('Email ID', esc(s.email || '—'))}
+        ${infoRow('Mobile No', esc(s.phone || '—'))}
+        ${infoRow('WhatsApp No', esc(s.whatsapp || '—'))}
+        ${infoRow('Aadhaar No.', esc(s.aadhaar || '—'))}
+        ${infoRow('Voter ID', esc(per.voterId || '—'))}
+        ${infoRow('PAN No.', esc(per.pan || '—'))}
+        ${infoRow('Driving License No.', esc(per.drivingLicense || '—'))}
+        ${infoRow('Passport No.', esc(per.passport || '—'))}
+        ${infoRow('Status', `<span class="pill ${(s.status || 'Active') === 'Active' ? 'green' : 'red'}">${
+          esc(s.status || 'Active')}</span>`)}
+      </tbody></table></div>
+    </div>`;
+
+    const html = `<div class="panel-tools" style="margin-bottom:14px">
+        <button class="btn-outline btn-sm" id="spBack">← All Students</button>
+        ${canEdit ? `<button class="btn-primary btn-sm" id="spEdit">✎ Edit Student</button>` : ''}
+        <button class="btn-outline btn-sm" id="spCard">🪪 Print ID Card</button>
+        <button class="btn-outline btn-sm" id="spSheet">📄 Marksheet</button>
+      </div>
+      <div class="stu-profile">
+        ${side}
+        <div class="panel stu-main">
+          <div class="fin-tabs" id="spTabs">${STU_TABS.map(([k, label]) =>
+            `<button class="fin-tab ${k === stuTab ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
+          <div id="spBody">${studentTabHtml(s, stuTab)}</div>
+        </div>
+      </div>`;
+
+    viewStudentProfile.after = () => {
+      $('#spBack').onclick = () => navigate('students');
+      const edit = $('#spEdit');
+      if (edit) edit.onclick = () => studentForm(s.id);
+      $('#spCard').onclick = () => printIdCard(s.id);
+      $('#spSheet').onclick = () => printMarksheet(s.id);
+      const draw = () => {
+        $('#spBody').innerHTML = studentTabHtml(s, stuTab);
+        const t = $('#spAttToggle');
+        if (t) t.onclick = () => { stuAttSubjectWise = !stuAttSubjectWise; draw(); };
+      };
+      $('#spTabs').querySelectorAll('[data-tab]').forEach(b => {
+        b.onclick = () => {
+          stuTab = b.dataset.tab;
+          $('#spTabs').querySelectorAll('.fin-tab').forEach(x => x.classList.toggle('active', x === b));
+          draw();
+        };
+      });
+      draw();
+    };
+    return html;
+  }
+
+  function studentTabHtml(s, tab) {
+    const per = stuPart(s, 'personal');
+    const aca = stuPart(s, 'academicInfo');
+    const addr = stuPart(s, 'addressInfo');
+    const health = stuPart(s, 'health');
+    const guardians = stuPart(s, 'guardians');
+    const docs = stuPart(s, 'documents');
+
+    if (tab === 'personal') {
+      return `<h4 class="ro-sub">Personal Details</h4>` + infoTable(`
+        <tr><th style="width:22%">Admission Category</th><td colspan="3" style="background:var(--warn-soft, #fdf6e3)">${
+          esc(per.admissionCategory || '—')}</td></tr>
+        ${infoRow2('Title', esc(per.title || '—'), 'Gender', esc(s.gender || '—'))}
+        ${infoRow2('First Name', esc(s.firstName || '—'), 'Last Name', esc(s.lastName || '—'))}
+        ${infoRow2('Middle Name', esc(s.middleName || '—'), 'Date of Birth', esc(s.dob || '—'))}
+        ${infoRow2('Nationality', esc(per.nationality || '—'), 'Caste', esc(per.caste || '—'))}
+        ${infoRow2('Religion', esc(per.religion || '—'), 'Blood Group', esc(s.bloodGroup || '—'))}
+        ${infoRow2('Birthplace', esc(per.birthplace || '—'), 'Identification Mark', esc(per.identificationMark || '—'))}
+        ${infoRow2('Thumb ID', esc(per.thumbId || '—'), 'Hostel', esc(per.hostel || '—'))}
+        ${infoRow2('Transport', esc(per.transport || '—'), 'Lunch', esc(per.lunch || '—'))}
+        ${infoRow2('NSS', esc(per.nss || '—'), 'Languages Known', esc(per.languages || '—'))}
+        ${infoRow('Hobbies', esc(per.hobbies || '—'))}`);
+    }
+
+    if (tab === 'academic') {
+      const quals = Array.isArray(aca.qualifications) ? aca.qualifications : [];
+      const qualRows = quals.length ? quals.map(q => `<tr>
+          <td><strong>${esc(q.level || '—')}</strong></td><td>${esc(q.institute || '—')}</td>
+          <td>${esc(q.year || '—')}</td><td style="text-align:right">${esc(q.marks || '—')}</td>
+        </tr>`).join('')
+        : `<tr><td colspan="4" class="empty">No previous qualifications on record.</td></tr>`;
+      return `<h4 class="ro-sub">Academic Details</h4>` + infoTable(`
+        ${infoRow2('Course', esc(s.course || '—'), 'Batch', esc(s.batch || '—'))}
+        ${infoRow2('Specialisation', esc(specOf(s) || '—'), 'Section', esc(s.section || '—'))}
+        ${infoRow2('House', esc(s.house || '—'), 'Lab Group', esc(aca.labGroup || '—'))}
+        ${infoRow2('Honors', esc(aca.honors || '—'), 'Minor', esc(aca.minor || '—'))}
+        ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
+        ${infoRow2('Value added course 1', esc(aca.vac1 || '—'), 'Value added course 2', esc(aca.vac2 || '—'))}
+        ${infoRow2('Value added course 3', esc(aca.vac3 || '—'), 'Academic Year', esc(s.academicYear || '—'))}
+        ${infoRow2('Admission Date', esc(s.admissionDate || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
+        ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
+        ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
+        + `<h4 class="ro-sub">Previous Qualifications</h4>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Qualification</th><th>Institute Name</th><th>Passout Year</th>
+          <th style="text-align:right">Marks</th></tr></thead><tbody>${qualRows}</tbody></table></div>`;
+    }
+
+    if (tab === 'guardians') {
+      if (!guardians.length) return `<h4 class="ro-sub">Guardians</h4><p class="empty">No guardian recorded.</p>`;
+      return `<h4 class="ro-sub">Guardians Details</h4>` + guardians.map((g, i) => `
+        <h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${i + 1} · ${esc(g.name || 'Guardian')}
+          <span class="pill ${g.emergency === 'Yes' ? 'green' : 'grey'}" style="float:right">
+            Emergency Contact: ${g.emergency === 'Yes' ? 'Yes' : 'No'}</span></h4>
+        ${infoTable(`
+          ${infoRow('Name', esc(g.name || '—'))}
+          ${infoRow2('Relation', esc(g.relation || '—'), 'Occupation', esc(g.occupation || '—'))}
+          ${infoRow2('Mobile No', esc(g.mobile || '—'), 'Phone No', esc(g.phone || '—'))}
+          ${infoRow2('Annual Income', g.income ? '₹' + esc(g.income) : '—', 'Email', esc(g.email || '—'))}
+          ${infoRow('Qualification', esc(g.qualification || '—'))}
+          ${infoRow('Home Address', esc(g.homeAddress || '—'))}
+          ${infoRow('Office Address', esc(g.officeAddress || '—'))}`)}`).join('');
+    }
+
+    if (tab === 'address') {
+      const block = (title, a) => `<h4 class="ro-sub">${title}</h4>` + infoTable(`
+        ${infoRow('Address', esc(a.address || '—'))}
+        ${infoRow2('City', esc(a.city || '—'), 'State', esc(a.state || '—'))}
+        ${infoRow2('Country', esc(a.country || '—'), 'House No', esc(a.houseNo || '—'))}
+        ${infoRow2('Pincode', esc(a.pincode || '—'), 'Phone No', esc(a.phone || '—'))}`);
+      return `<h4 class="ro-sub">Address Info</h4>`
+        + block('Current Address', addr.current || {})
+        + block('Permanent Address', addr.permanent || {});
+    }
+
+    if (tab === 'documents') {
+      const rows = docs.length ? docs.map(d => `<tr>
+          <td>${esc(d.name || '—')}</td><td>${esc(d.type || '—')}</td>
+          <td class="mono">${esc(d.number || '—')}</td><td>${esc(d.issued || '—')}</td>
+          <td>${d.file ? `<a href="${esc(d.file)}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+        </tr>`).join('')
+        : `<tr><td colspan="5" class="empty">No documents on record.</td></tr>`;
+      return `<h4 class="ro-sub">Documents</h4>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th>Document</th><th>Type</th><th>Number</th><th>Issued On</th><th>File</th>
+        </tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+
+    if (tab === 'fees') {
+      const fin = financeRows().find(x => x.sid === s.id) || { total: 0, paid: 0, pending: 0, rows: [] };
+      const payments = paymentsOf(s.id);
+      const feeRows = fin.rows.length ? fin.rows.map(f => {
+        const st = feeStatusOf(f.total, f.paid);
+        return `<tr><td>Semester ${esc(f.semester || '—')}</td><td>${esc(f.academicYear || '—')}</td>
+          <td style="text-align:right">${money(f.total)}</td><td style="text-align:right">${money(f.paid)}</td>
+          <td style="text-align:right">${money(Math.max(0, (+f.total || 0) - (+f.paid || 0)))}</td>
+          <td><span class="pill ${st.pill}">${st.label}</span></td></tr>`;
+      }).join('') : `<tr><td colspan="6" class="empty">No fee record.</td></tr>`;
+      const payRows = payments.length ? payments.map(p => `<tr>
+        <td class="mono">${esc(p.receiptNo || '—')}</td><td>${esc(p.date || '—')}</td>
+        <td style="text-align:right">${money(p.amount)}</td><td>${esc(p.mode || '—')}</td></tr>`).join('')
+        : `<tr><td colspan="4" class="empty">No payments recorded.</td></tr>`;
+      return `<div class="stat-grid" style="margin-bottom:16px">
+          ${statCard('💰', money(fin.total), 'Total Fee')}
+          ${statCard('✅', money(fin.paid), 'Paid', 'c3')}
+          ${statCard('⏳', money(fin.pending), 'Pending', fin.pending ? 'c4' : 'c3')}
+        </div>
+        <h4 class="ro-sub">Semester-wise Fee</h4>
+        <div class="tbl-wrap"><table><thead><tr><th>Semester</th><th>Academic Year</th>
+          <th style="text-align:right">Total</th><th style="text-align:right">Paid</th>
+          <th style="text-align:right">Pending</th><th>Status</th></tr></thead>
+          <tbody>${feeRows}</tbody></table></div>
+        <h4 class="ro-sub">Payment History</h4>
+        <div class="tbl-wrap"><table><thead><tr><th>Receipt</th><th>Date</th>
+          <th style="text-align:right">Amount</th><th>Mode</th></tr></thead>
+          <tbody>${payRows}</tbody></table></div>`;
+    }
+
+    if (tab === 'attendance') {
+      const pct = (r) => r.held ? Math.round(r.present / r.held * 1000) / 10 : null;
+      if (stuAttSubjectWise) {
+        const rows = studentPaperAttendance(s.id);
+        const body = rows.length ? rows.map(r => `<tr>
+            <td class="mono">${esc(r.code)}</td><td>${esc(r.name)}</td><td>${esc(String(r.sem))}</td>
+            <td>${r.held}</td><td>${r.present}</td>
+            <td><strong class="${pct(r) < 75 ? 'att-low' : 'att-ok'}">${pct(r)}%</strong></td>
+          </tr>`).join('') : `<tr><td colspan="6" class="empty">No sessions recorded.</td></tr>`;
+        return `<div class="tbl-wrap"><table><thead><tr>
+            <th>Paper Code</th><th>Paper</th><th>Semester</th>
+            <th>Classes Held</th><th>Attended</th><th>% Attendance</th>
+          </tr></thead><tbody>${body}</tbody></table></div>
+          <div style="text-align:center;margin-top:16px">
+            <button class="btn-primary btn-sm" id="spAttToggle">↩ Back to Semester-wise</button></div>`;
+      }
+      const sems = studentSemesterAttendance(s.id);
+      const bySem = new Map(sems.map(r => [r.sem, r]));
+      const all = SEMESTERS.map(n => bySem.get(n) || { sem: n, held: 0, present: 0 });
+      const body = all.map(r => `<tr>
+        <td><strong style="color:var(--primary-dark)">${ordinalSem(r.sem)} Semester</strong></td>
+        <td>${r.held}</td><td>${r.present}</td>
+        <td>${r.held ? `<strong class="${pct(r) < 75 ? 'att-low' : 'att-ok'}">${pct(r)}%</strong>` : '—'}</td>
+      </tr>`).join('');
+      return `<div class="tbl-wrap"><table><thead><tr>
+          <th>Semester</th><th>Total Classes Held</th><th>Total Classes Attended</th><th>% Attendance</th>
+        </tr></thead><tbody>${body}</tbody></table></div>
+        <div style="text-align:center;margin-top:16px">
+          <button class="btn-primary btn-sm" id="spAttToggle">📄 View Subject Wise Detail Attendance</button></div>`;
+    }
+
+    if (tab === 'health') {
+      return `<h4 class="ro-sub">Health Record</h4>` + infoTable(`
+        ${infoRow2('Blood Group', esc(s.bloodGroup || '—'), 'Height', health.height ? esc(health.height) + ' cm' : '—')}
+        ${infoRow2('Weight', health.weight ? esc(health.weight) + ' kg' : '—', 'Last Check-up', esc(health.lastCheckup || '—'))}
+        ${infoRow('Allergies', esc(health.allergies || '—'))}
+        ${infoRow('Medical Conditions', esc(health.conditions || '—'))}
+        ${infoRow('Regular Medication', esc(health.medication || '—'))}
+        ${infoRow2('Emergency Contact', esc(health.emergencyName || '—'), 'Emergency Phone', esc(health.emergencyPhone || '—'))}
+        ${infoRow('Notes', esc(health.notes || '—'))}`);
+    }
+
+    // ID card
+    const gpa = studentGPA(s.id);
+    return `<h4 class="ro-sub">ID Card</h4>
+      <div class="idcard-preview">
+        <div class="idc-head"><img src="assets/nmiet-logo.png" alt=""><div>
+          <strong>NMIET B-SCHOOL</strong><span>Bhubaneswar</span></div></div>
+        <div class="idc-body">
+          <div class="idc-photo">${s.photo ? `<img src="${esc(s.photo)}" alt="">` : '<span>No photo</span>'}</div>
+          <div class="idc-fields">
+            <div><label>Name</label><strong>${esc(s.name || '—')}</strong></div>
+            <div><label>Reg No</label><strong class="mono">${esc(s.roll || '—')}</strong></div>
+            <div><label>Course</label><strong>${esc(s.course || '—')} · ${esc(specOf(s) || '—')}</strong></div>
+            <div><label>Batch</label><strong>${esc(s.batch || '—')}</strong></div>
+            <div><label>Blood Group</label><strong>${esc(s.bloodGroup || '—')}</strong></div>
+            <div><label>Phone</label><strong>${esc(s.phone || '—')}</strong></div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:10px">
+        GPA on record: ${gpa ?? '—'}. Use "Print ID Card" above for the printable version.</p>`;
+  }
+
+  function ordinalSem(n) {
+    return ({ 1: '1ST', 2: '2ND', 3: '3RD' })[n] || (n + 'TH');
+  }
+
   function studentProfileModal(sid) {
     const s = Store.find('students', sid);
     if (!s) return;
@@ -1466,42 +1810,244 @@
     return p === '' || /^\d{10}$/.test(p);
   }
 
+  /* ---------- the student form ---------- */
+  const TITLES_LIST = ['Mr.', 'Ms.', 'Mrs.', 'Dr.'];
+  const GENDERS = ['Male', 'Female', 'Other'];
+  const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  const YES_NO = ['No', 'Yes'];
+  const ADMISSION_CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'EWS', 'Management', 'NRI'];
+  const RELATIONS = ['Father', 'Mother', 'Guardian', 'Brother', 'Sister', 'Uncle', 'Aunt', 'Spouse'];
+  const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
+  const DOC_TYPES = ['Aadhaar', 'PAN', 'Marksheet', 'Certificate', 'Transfer Certificate',
+                     'Migration Certificate', 'Caste Certificate', 'Income Certificate',
+                     'Photograph', 'Other'];
+
+  const fText = (name, label, val, extra) =>
+    `<div class="field"><label>${label}</label>
+      <input name="${name}" value="${esc(val ?? '')}" ${extra || ''}></div>`;
+  const fDate = (name, label, val) =>
+    `<div class="field"><label>${label}</label>
+      <input type="date" name="${name}" value="${esc(val || '')}"></div>`;
+  const fSel = (name, label, val, list, blank) =>
+    `<div class="field"><label>${label}</label><select name="${name}">
+      ${blank === false ? '' : '<option value=""></option>'}
+      ${list.map(o => `<option ${String(o) === String(val ?? '') ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+    </select></div>`;
+  const fArea = (name, label, val, rows) =>
+    `<div class="field full"><label>${label}</label>
+      <textarea name="${name}" rows="${rows || 2}">${esc(val || '')}</textarea></div>`;
+
+  /** one guardian card in the form — rendered for existing rows and for new ones */
+  function guardianCard(g, i) {
+    g = g || {};
+    return `<div class="sub-card" data-guardian>
+      <div class="sub-card-head"><strong>Guardian ${i + 1}</strong>
+        <button type="button" class="btn-outline btn-sm" data-remove-guardian>Remove</button></div>
+      <div class="form-grid">
+        ${fText('g_name', 'Name', g.name)}
+        ${fSel('g_relation', 'Relation', g.relation, RELATIONS)}
+        ${fText('g_occupation', 'Occupation', g.occupation)}
+        ${fText('g_mobile', 'Mobile No', g.mobile, 'inputmode="numeric" maxlength="10"')}
+        ${fText('g_phone', 'Phone No', g.phone)}
+        ${fText('g_income', 'Annual Income (₹)', g.income, 'inputmode="numeric"')}
+        ${fText('g_email', 'Email', g.email, 'type="email"')}
+        ${fText('g_qualification', 'Qualification', g.qualification)}
+        ${fSel('g_emergency', 'Emergency Contact', g.emergency || 'No', YES_NO, false)}
+        ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
+        ${fArea('g_officeAddress', 'Office Address', g.officeAddress)}
+      </div></div>`;
+  }
+
+  function documentRow(d, i) {
+    d = d || {};
+    return `<div class="sub-card" data-document>
+      <div class="sub-card-head"><strong>Document ${i + 1}</strong>
+        <button type="button" class="btn-outline btn-sm" data-remove-document>Remove</button></div>
+      <div class="form-grid">
+        ${fText('d_name', 'Document Name', d.name)}
+        ${fSel('d_type', 'Type', d.type, DOC_TYPES)}
+        ${fText('d_number', 'Number', d.number)}
+        ${fDate('d_issued', 'Issued On', d.issued)}
+        <div class="field full"><label>File (optional, max 1 MB)</label>
+          <input type="file" data-doc-file accept="image/*,application/pdf">
+          <input type="hidden" data-doc-value value="${esc(d.file || '')}">
+          <small style="color:var(--muted);font-size:11.5px" data-doc-note>${
+            d.file ? 'A file is attached — choosing another replaces it.' : ''}</small>
+        </div>
+      </div></div>`;
+  }
+
   function studentForm(id) {
     const s = id ? Store.find('students', id) : {};
+    const per = stuPart(s, 'personal');
+    const aca = stuPart(s, 'academicInfo');
+    const addr = stuPart(s, 'addressInfo');
+    const health = stuPart(s, 'health');
+    const guardians = stuPart(s, 'guardians');
+    const docs = stuPart(s, 'documents');
+    const cur = addr.current || {};
+    const perm = addr.permanent || {};
+    const quals = Array.isArray(aca.qualifications) ? aca.qualifications : [];
+    const qualOf = (level) => quals.find(q => q.level === level) || {};
+
+    const TABS = [['basic', 'Basic'], ['personal', 'Personal'], ['academic', 'Academic'],
+                  ['guardians', 'Guardians'], ['address', 'Address'],
+                  ['health', 'Health'], ['docs', 'Documents']];
+
+    const addressBlock = (prefix, a) => `<div class="form-grid">
+      ${fArea(prefix + '_address', 'Address', a.address)}
+      ${fText(prefix + '_houseNo', 'House No', a.houseNo)}
+      ${fText(prefix + '_city', 'City', a.city)}
+      ${fText(prefix + '_state', 'State', a.state)}
+      ${fText(prefix + '_country', 'Country', a.country || 'India')}
+      ${fText(prefix + '_pincode', 'Pincode', a.pincode, 'inputmode="numeric" maxlength="6"')}
+      ${fText(prefix + '_phone', 'Phone No', a.phone, 'inputmode="numeric"')}
+    </div>`;
+
     openModal((id ? 'Edit' : 'Add') + ' Student', `<form id="f">
-      <div class="form-grid">
-        <div class="field"><label>Registration Number</label>
-          <input name="roll" id="rollInput" inputmode="numeric" maxlength="${regNoLength()}"
-                 placeholder="${regNoLength()} digits" value="${esc(s.roll||'')}" required></div>
-        <div class="field"><label>First Name</label><input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
-        <div class="field"><label>Middle Name</label><input name="middleName" value="${esc(s.middleName||'')}"></div>
-        <div class="field"><label>Last Name</label><input name="lastName" value="${esc(s.lastName||'')}"></div>
-        <div class="field"><label>Email</label><input name="email" type="email" placeholder="name@example.com" value="${esc(s.email||'')}"></div>
-        <div class="field"><label>Phone</label><input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone||'')}"></div>
-        <div class="field"><label>Course</label><select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
-        <div class="field"><label>Department</label><select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
-        <div class="field"><label>Specialisation</label>
-          <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
-        <div class="field"><label>Year</label><input name="year" type="number" min="1" max="2" value="${s.year||1}"></div>
-        <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${s.semester||1}"></div>
-        <div class="field"><label>Section</label><input name="section" value="${esc(s.section||'A')}"></div>
-        <div class="field"><label>Academic Year</label><select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
-        <div class="field"><label>Status</label><select name="status">${
-          ['Active','Inactive'].map(v => `<option ${((s.status||'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
-        }</select></div>
-        ${photoField(s.photo)}
+      <div class="fin-tabs" id="sfTabs">${TABS.map(([k, label], i) =>
+        `<button type="button" class="fin-tab ${i ? '' : 'active'}" data-pane="${k}">${label}</button>`).join('')}</div>
+
+      <div class="sf-pane" data-pane="basic">
+        <div class="form-grid">
+          <div class="field"><label>Registration Number</label>
+            <input name="roll" id="rollInput" inputmode="numeric" maxlength="${regNoLength()}"
+                   placeholder="${regNoLength()} digits" value="${esc(s.roll || '')}" required></div>
+          ${fText('serialNo', 'Serial No.', s.serialNo)}
+          ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
+          <div class="field"><label>First Name</label>
+            <input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
+          ${fText('middleName', 'Middle Name', s.middleName)}
+          ${fText('lastName', 'Last Name', s.lastName)}
+          ${fText('email', 'Email ID', s.email, 'type="email" placeholder="name@example.com"')}
+          ${fText('domainEmail', 'Domain Email ID', s.domainEmail, 'type="email"')}
+          <div class="field"><label>Mobile No</label>
+            <input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number"
+                   value="${esc(s.phone || '')}"></div>
+          ${fText('whatsapp', 'WhatsApp No', s.whatsapp, 'inputmode="numeric" maxlength="10"')}
+          <div class="field"><label>Course</label>
+            <select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
+          <div class="field"><label>Department</label>
+            <select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
+          <div class="field"><label>Specialisation</label>
+            <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
+          <div class="field"><label>Year</label>
+            <input name="year" type="number" min="1" max="2" value="${s.year || 1}"></div>
+          <div class="field"><label>Semester</label>
+            <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
+          ${fText('section', 'Section', s.section || 'A')}
+          ${fText('batch', 'Batch', s.batch, 'placeholder="e.g. 2025-2027"')}
+          ${fText('house', 'House', s.house)}
+          <div class="field"><label>Academic Year</label>
+            <select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
+          ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
+          ${fText('mentor', 'Mentor', s.mentor)}
+          ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
+          <div class="field"><label>Status</label><select name="status">${
+            ['Active', 'Inactive'].map(v =>
+              `<option ${((s.status || 'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
+          }</select></div>
+          ${photoField(s.photo)}
+        </div>
+        <h4 class="ro-sub">Placement Eligibility</h4>
+        <p style="font-size:12px;color:var(--muted);margin:-4px 0 10px">
+          Used by the placement cell to work out which drives this student qualifies for.
+          Leave the CGPA blank to fall back to the average of their internal marks.</p>
+        <div class="form-grid">
+          <div class="field"><label>CGPA</label>
+            <input name="cgpa" type="number" step="0.01" min="0" max="10" value="${esc(s.cgpa ?? '')}"></div>
+          <div class="field"><label>Active Backlogs</label>
+            <input name="backlogs" type="number" min="0" value="${esc(s.backlogs ?? 0)}"></div>
+        </div>
       </div>
-      <h4 style="font-size:13px;color:var(--primary-dark);margin:18px 0 8px">PLACEMENT ELIGIBILITY</h4>
-      <p style="font-size:12px;color:var(--muted);margin:-4px 0 10px">
-        Used by the placement cell to work out which drives this student qualifies for.
-        Leave the CGPA blank to fall back to the average of their internal marks.</p>
-      <div class="form-grid">
-        <div class="field"><label>CGPA</label><input name="cgpa" type="number" step="0.01" min="0" max="10" value="${esc(s.cgpa ?? '')}"></div>
-        <div class="field"><label>Active Backlogs</label><input name="backlogs" type="number" min="0" value="${esc(s.backlogs ?? 0)}"></div>
-        <div class="field"><label>Batch</label><input name="batch" placeholder="e.g. 2021-2025" value="${esc(s.batch || '')}"></div>
+
+      <div class="sf-pane hidden" data-pane="personal">
+        <div class="form-grid">
+          ${fSel('per_admissionCategory', 'Admission Category', per.admissionCategory, ADMISSION_CATEGORIES)}
+          ${fSel('gender', 'Gender', s.gender, GENDERS)}
+          ${fDate('dob', 'Date of Birth', s.dob)}
+          ${fSel('bloodGroup', 'Blood Group', s.bloodGroup, BLOOD_GROUPS)}
+          ${fText('per_nationality', 'Nationality', per.nationality || 'Indian')}
+          ${fText('per_caste', 'Caste', per.caste)}
+          ${fText('per_religion', 'Religion', per.religion)}
+          ${fText('per_birthplace', 'Birthplace', per.birthplace)}
+          ${fText('per_identificationMark', 'Identification Mark', per.identificationMark)}
+          ${fText('per_thumbId', 'Thumb ID', per.thumbId)}
+          ${fSel('per_hostel', 'Hostel', per.hostel || 'No', YES_NO, false)}
+          ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
+          ${fSel('per_lunch', 'Lunch', per.lunch || 'No', YES_NO, false)}
+          ${fSel('per_nss', 'NSS', per.nss || 'No', YES_NO, false)}
+          ${fText('per_voterId', 'Voter ID', per.voterId)}
+          ${fText('per_pan', 'PAN No.', per.pan)}
+          ${fText('per_drivingLicense', 'Driving License No.', per.drivingLicense)}
+          ${fText('per_passport', 'Passport No.', per.passport)}
+          ${fText('per_languages', 'Languages Known', per.languages, 'placeholder="Odia, Hindi, English"')}
+          ${fText('per_hobbies', 'Hobbies', per.hobbies, 'placeholder="Cricket, Reading"')}
+        </div>
       </div>
+
+      <div class="sf-pane hidden" data-pane="academic">
+        <div class="form-grid">
+          ${fText('aca_labGroup', 'Lab Group', aca.labGroup)}
+          ${fSel('aca_honors', 'Honors', aca.honors || 'No', YES_NO, false)}
+          ${fSel('aca_minor', 'Minor', aca.minor || 'No', YES_NO, false)}
+          ${fText('aca_entranceExam', 'Entrance Examination', aca.entranceExam, 'placeholder="e.g. CAT, OJEE"')}
+          ${fText('aca_entranceRank', 'Entrance Rank', aca.entranceRank, 'inputmode="numeric"')}
+          ${fText('aca_vac1', 'Value added course 1', aca.vac1)}
+          ${fText('aca_vac2', 'Value added course 2', aca.vac2)}
+          ${fText('aca_vac3', 'Value added course 3', aca.vac3)}
+        </div>
+        <h4 class="ro-sub">Previous Qualifications</h4>
+        <div class="tbl-wrap"><table><thead><tr>
+          <th style="width:16%">Qualification</th><th>Institute Name</th>
+          <th style="width:18%">Passout Year</th><th style="width:16%">Marks / %</th>
+        </tr></thead><tbody>${QUAL_LEVELS.map(level => {
+          const q = qualOf(level);
+          return `<tr data-qual="${esc(level)}">
+            <td><strong>${esc(level)}</strong></td>
+            <td><input data-q="institute" value="${esc(q.institute || '')}"></td>
+            <td><input data-q="year" inputmode="numeric" maxlength="4" value="${esc(q.year || '')}"></td>
+            <td><input data-q="marks" value="${esc(q.marks || '')}"></td></tr>`;
+        }).join('')}</tbody></table></div>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="guardians">
+        <div id="sfGuardians">${(guardians.length ? guardians : [{}]).map(guardianCard).join('')}</div>
+        <button type="button" class="btn-outline btn-sm" id="sfAddGuardian">+ Add Guardian</button>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="address">
+        <h4 class="ro-sub">Current Address</h4>
+        ${addressBlock('cur', cur)}
+        <h4 class="ro-sub">Permanent Address
+          <button type="button" class="btn-outline btn-sm" id="sfSameAddr" style="float:right">
+            Copy from current</button></h4>
+        ${addressBlock('perm', perm)}
+      </div>
+
+      <div class="sf-pane hidden" data-pane="health">
+        <div class="form-grid">
+          ${fText('h_height', 'Height (cm)', health.height, 'inputmode="numeric"')}
+          ${fText('h_weight', 'Weight (kg)', health.weight, 'inputmode="numeric"')}
+          ${fDate('h_lastCheckup', 'Last Check-up', health.lastCheckup)}
+          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
+          ${fText('h_emergencyPhone', 'Emergency Contact Phone', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
+          ${fArea('h_allergies', 'Allergies', health.allergies)}
+          ${fArea('h_conditions', 'Medical Conditions', health.conditions)}
+          ${fArea('h_medication', 'Regular Medication', health.medication)}
+          ${fArea('h_notes', 'Notes', health.notes)}
+        </div>
+      </div>
+
+      <div class="sf-pane hidden" data-pane="docs">
+        <div id="sfDocs">${docs.map(documentRow).join('')}</div>
+        <button type="button" class="btn-outline btn-sm" id="sfAddDoc">+ Add Document</button>
+      </div>
+
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+
+    /* ---- wiring ---- */
     $('#cx').onclick = closeModal;
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
@@ -1509,19 +2055,150 @@
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
     bindPhotoField();
+
+    const panes = () => document.querySelectorAll('.sf-pane');
+    $('#sfTabs').querySelectorAll('[data-pane]').forEach(btn => {
+      btn.onclick = () => {
+        $('#sfTabs').querySelectorAll('.fin-tab').forEach(b => b.classList.toggle('active', b === btn));
+        panes().forEach(p => p.classList.toggle('hidden', p.dataset.pane !== btn.dataset.pane));
+      };
+    });
+
+    const bindGuardianRemovals = () => {
+      document.querySelectorAll('[data-remove-guardian]').forEach(b => {
+        b.onclick = () => {
+          const cards = document.querySelectorAll('[data-guardian]');
+          if (cards.length === 1) { toast('At least one guardian block stays on the form.', 'err'); return; }
+          b.closest('[data-guardian]').remove();
+          renumber('[data-guardian]', 'Guardian');
+        };
+      });
+    };
+    const renumber = (sel, word) => {
+      document.querySelectorAll(sel).forEach((card, i) => {
+        const h = card.querySelector('.sub-card-head strong');
+        if (h) h.textContent = `${word} ${i + 1}`;
+      });
+    };
+    const bindDocRemovals = () => {
+      document.querySelectorAll('[data-remove-document]').forEach(b => {
+        b.onclick = () => { b.closest('[data-document]').remove(); renumber('[data-document]', 'Document'); };
+      });
+    };
+    /* a document file is kept with the record, so it has to be small — a
+       scanned certificate at full resolution would bloat every bootstrap */
+    const bindDocFiles = () => {
+      document.querySelectorAll('[data-doc-file]').forEach(input => {
+        input.onchange = () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+          if (file.size > 1024 * 1024) {
+            toast('That file is over 1 MB — attach a smaller scan.', 'err');
+            input.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const card = input.closest('[data-document]');
+            card.querySelector('[data-doc-value]').value = reader.result;
+            card.querySelector('[data-doc-note]').textContent = 'Attached: ' + file.name;
+          };
+          reader.readAsDataURL(file);
+        };
+      });
+    };
+    bindGuardianRemovals(); bindDocRemovals(); bindDocFiles();
+
+    $('#sfAddGuardian').onclick = () => {
+      const wrap = $('#sfGuardians');
+      wrap.insertAdjacentHTML('beforeend', guardianCard({}, wrap.children.length));
+      bindGuardianRemovals();
+    };
+    $('#sfAddDoc').onclick = () => {
+      const wrap = $('#sfDocs');
+      wrap.insertAdjacentHTML('beforeend', documentRow({}, wrap.children.length));
+      bindDocRemovals(); bindDocFiles();
+    };
+    $('#sfSameAddr').onclick = () => {
+      ['address', 'houseNo', 'city', 'state', 'country', 'pincode', 'phone'].forEach(k => {
+        const from = document.querySelector(`[name="cur_${k}"]`);
+        const to = document.querySelector(`[name="perm_${k}"]`);
+        if (from && to) to.value = from.value;
+      });
+      toast('Copied from the current address.');
+    };
+
+    /* ---- save ---- */
     $('#f').onsubmit = (e) => {
       e.preventDefault();
-      const d = formData(e.target);
+      const f = e.target;
+      const d = formData(f);
+
       // A record enrolled under an older scheme keeps its number: the digits
       // rule applies to what is being written now, not retrospectively, or
       // correcting a phone number on a 2019 student would be impossible.
       const regChanged = !id || String(d.roll || '') !== String(s.roll || '');
       const regBad = regChanged ? regNoProblem(d.roll, id) : regNoDuplicate(d.roll, id);
       if (regBad) { toast(regBad, 'err'); return; }
-      if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
+      if (!phoneValid(d.phone)) { toast('Mobile number must be exactly 10 digits.', 'err'); return; }
+      if (d.whatsapp && !/^\d{10}$/.test(d.whatsapp)) {
+        toast('WhatsApp number must be exactly 10 digits.', 'err'); return;
+      }
+      if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
+        toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
+      }
       if (d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
         toast('CGPA must be between 0 and 10.', 'err'); return;
       }
+
+      // pull the prefixed fields out into the blob each tab is stored as
+      const take = (prefix) => {
+        const out = {};
+        Object.keys(d).forEach(k => {
+          if (k.startsWith(prefix)) { out[k.slice(prefix.length)] = d[k]; delete d[k]; }
+        });
+        return out;
+      };
+      const personal = take('per_');
+      const academicInfo = take('aca_');
+      const health = take('h_');
+      const current = take('cur_');
+      const permanent = take('perm_');
+      Object.keys(d).forEach(k => { if (k.startsWith('g_') || k.startsWith('d_')) delete d[k]; });
+
+      academicInfo.qualifications = [...f.querySelectorAll('[data-qual]')].map(tr => ({
+        level: tr.dataset.qual,
+        institute: (tr.querySelector('[data-q="institute"]').value || '').trim(),
+        year: (tr.querySelector('[data-q="year"]').value || '').trim(),
+        marks: (tr.querySelector('[data-q="marks"]').value || '').trim(),
+      })).filter(q => q.institute || q.year || q.marks);
+
+      const guardianRows = [...f.querySelectorAll('[data-guardian]')].map(card => {
+        const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
+        return { name: val('name'), relation: val('relation'), occupation: val('occupation'),
+                 mobile: val('mobile'), phone: val('phone'), income: val('income'),
+                 email: val('email'), qualification: val('qualification'),
+                 emergency: val('emergency'), homeAddress: val('homeAddress'),
+                 officeAddress: val('officeAddress') };
+      }).filter(g => g.name);
+      const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
+      if (badGuardian) {
+        toast(`${badGuardian.name}'s mobile number must be exactly 10 digits.`, 'err'); return;
+      }
+
+      const documents = [...f.querySelectorAll('[data-document]')].map(card => {
+        const val = (n) => (card.querySelector(`[name="d_${n}"]`).value || '').trim();
+        return { name: val('name'), type: val('type'), number: val('number'), issued: val('issued'),
+                 file: card.querySelector('[data-doc-value]').value || '' };
+      }).filter(x => x.name || x.number || x.file);
+
+      d.personal = personal;
+      d.academicInfo = academicInfo;
+      d.addressInfo = { current, permanent };
+      d.health = health;
+      d.guardians = guardianRows;
+      d.documents = documents;
+
       // every other screen — ID card, marksheet, fee receipt, placement list —
       // prints `name`, so it is composed here rather than taught to each of them
       d.name = [d.firstName, d.middleName, d.lastName]
@@ -1533,6 +2210,7 @@
       closeModal(); toast('Student saved.'); render();
     };
   }
+
   /* The registration number identifies a student for their whole time here —
      it prints on the ID card, it is their login, and every fee and placement
      record hangs off it. Two students sharing one, or one being a digit short,

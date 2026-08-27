@@ -88,7 +88,16 @@ const COLLECTIONS = [
     'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
                      'email', 'phone', 'branch', 'specialisation', 'year', 'semester',
                      'section', 'photo', 'course', 'academicYear', 'cgpa', 'backlogs',
-                     'batch', 'status'],
+                     'batch', 'status',
+                     /* the rest of the file. The columns below are the ones other
+                        screens read — an ID card wants the date of birth and the
+                        blood group, the admissions dashboard wants the date. */
+                     'serialNo', 'mentor', 'domainEmail', 'whatsapp', 'dob', 'gender',
+                     'bloodGroup', 'admissionDate', 'house', 'aadhaar',
+                     /* and these six hold the tabs: personal details, the academic
+                        record, the family, both addresses, health, and documents */
+                     'personal', 'academicInfo', 'guardians', 'addressInfo',
+                     'health', 'documents'],
     // reportingTo holds the id of another faculty row — the person this one
     // reports to. Blank for the top of the tree.
     'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
@@ -182,7 +191,13 @@ const COLLECTIONS = [
 ];
 
 /** columns stored as a JSON string but exposed to the UI as an object */
-const JSON_FIELDS = ['attendance' => ['records']];
+const JSON_FIELDS = [
+    'attendance' => ['records'],
+    /* Decoded on the way out and encoded on the way in, so the app works with
+       objects and the database keeps one column per tab. */
+    'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
+                     'health', 'documents'],
+];
 
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
 const LONGTEXT_FIELDS = [

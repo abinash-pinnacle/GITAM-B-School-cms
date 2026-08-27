@@ -594,3 +594,53 @@ a.install-btn:hover{background:var(--primary-light)}
   /* Cancel/Save side by side rather than crowded into the right corner */
   .form-actions > *{flex:1}
 }
+
+/* ============ student file: the profile page and its long form ============ */
+/* Left column is the person, right column is whichever tab is open. */
+.stu-profile{display:grid;gap:18px;align-items:start}
+@media (min-width:900px){.stu-profile{grid-template-columns:340px minmax(0,1fr)}}
+.stu-side{padding:18px}
+.stu-photo{width:150px;height:150px;margin:0 auto 14px;border-radius:50%;overflow:hidden;
+  border:4px solid var(--primary-light);background:var(--bg);display:flex;
+  align-items:center;justify-content:center}
+.stu-photo img{width:100%;height:100%;object-fit:cover}
+.stu-photo span{font-size:52px;font-weight:700;color:var(--primary)}
+.stu-lastatt{background:#fdf6e3;border:1px solid #f0e2bd;border-radius:8px;padding:10px 12px;
+  margin-bottom:14px;text-align:center}
+.stu-lastatt span{display:block;font-size:11.5px;color:var(--muted);letter-spacing:.04em;
+  text-transform:uppercase}
+.stu-lastatt strong{font-size:15px;color:var(--primary-dark)}
+.stu-main{padding:18px;min-width:0}
+
+/* label/value tables — the shape every tab uses */
+.info-tbl th{background:var(--primary-light);color:var(--primary-dark);font-weight:600;
+  font-size:13px;text-align:left;vertical-align:top}
+.info-tbl td{font-size:13.5px;vertical-align:top}
+
+/* a guardian or a document inside the form */
+.sub-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;
+  background:var(--bg)}
+.sub-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sub-card-head strong{font-size:13px;color:var(--primary-dark);letter-spacing:.02em}
+
+/* attendance percentages read at a glance */
+.att-low{color:var(--red)}
+.att-ok{color:var(--green)}
+
+/* the ID card preview on its own tab */
+.idcard-preview{max-width:420px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 6px 18px -12px rgba(18,63,140,.5)}
+.idc-head{display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff}
+.idc-head img{width:38px;height:38px;object-fit:contain;background:#fff;border-radius:6px;padding:3px}
+.idc-head strong{display:block;font-size:15px;letter-spacing:.02em}
+.idc-head span{font-size:11.5px;opacity:.85}
+.idc-body{display:flex;gap:14px;padding:14px}
+.idc-photo{width:92px;height:110px;border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.idc-photo img{width:100%;height:100%;object-fit:cover}
+.idc-photo span{font-size:11px;color:var(--muted);text-align:center}
+.idc-fields{display:grid;gap:7px;font-size:13px;min-width:0}
+.idc-fields label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted)}
+.idc-fields strong{font-weight:600;word-break:break-word}
