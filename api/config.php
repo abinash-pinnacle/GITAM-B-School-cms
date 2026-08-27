@@ -76,7 +76,11 @@ const SEED_REVISION = '2026-08-21-mba-only';
 
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
-    'users'      => ['id', 'username', 'password', 'role', 'refId', 'name'],
+    /* access: 'full' (everything the role allows) or 'restricted' (only the
+       modules listed in permissions). Absent means full — every account that
+       existed before this was added keeps working. */
+    'users'      => ['id', 'username', 'password', 'role', 'refId', 'name',
+                     'access', 'permissions'],
     // course + academicYear are used by the accounts office (fee structure is per course/year);
     // cgpa/backlogs/batch drive placement eligibility (cgpa falls back to the marks average)
     /* `name` stays the full name every other screen prints — the ID card, the
@@ -203,6 +207,7 @@ const JSON_FIELDS = [
     'attendance' => ['records'],
     /* Decoded on the way out and encoded on the way in, so the app works with
        objects and the database keeps one column per tab. */
+    'users'      => ['permissions'],
     'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
                      'health', 'documents'],
     'faculty'    => ['personal', 'guardians', 'addressInfo', 'otherInfo',
@@ -264,6 +269,57 @@ const ID_PREFIX = [
  */
 const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
                'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
+
+/* ---------------- modules ----------------
+   One entry per part of the college. `views` are the pages it covers in the
+   sidebar; `write` are the collections it may change. A login marked
+   'restricted' may open its ticked modules and change nothing else — which is
+   checked here, not only hidden in the menu. */
+const MODULES = [
+    'students'    => ['label' => 'Students',
+                      'views' => ['students', 'stuprofile', 'batchsem'],
+                      'write' => ['students', 'users']],
+    'staff'       => ['label' => 'Faculty & Staff',
+                      'views' => ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers'],
+                      'write' => ['faculty', 'accountants', 'centerheads', 'placementofficers',
+                                  'coordinators', 'admissions', 'users']],
+    'academics'   => ['label' => 'Courses & Curriculum',
+                      'views' => ['courses', 'syllabus', 'assignments', 'timetable'],
+                      'write' => ['courses', 'syllabus', 'timetable']],
+    'attendance'  => ['label' => 'Attendance',
+                      'views' => ['attendance', 'attrecords'],
+                      'write' => ['attendance']],
+    'marks'       => ['label' => 'Marks & Results',
+                      'views' => ['marks'],
+                      'write' => ['marks']],
+    'fees'        => ['label' => 'Fees & Finance',
+                      'views' => ['fees', 'finstudents', 'fixedfee', 'semfee', 'feecollect',
+                                  'payments', 'pendingfees', 'finreports'],
+                      'write' => ['fees', 'fixedfees', 'payments']],
+    'assets'      => ['label' => 'Assets',
+                      'views' => ['assets'],
+                      'write' => ['assets']],
+    'requisitions' => ['label' => 'Requisitions',
+                      'views' => ['requisitions', 'goodsreq', 'bookreq'],
+                      'write' => ['requisitions']],
+    'library'     => ['label' => 'Library',
+                      'views' => ['library', 'issueBook', 'returnBook', 'reports'],
+                      'write' => ['books', 'issues']],
+    'placement'   => ['label' => 'Placement Cell',
+                      'views' => ['plstudents', 'companies', 'drives', 'applications', 'interviews',
+                                  'placements', 'offers', 'plcalendar', 'plreports'],
+                      'write' => ['companies', 'drives', 'applications', 'interviews',
+                                  'offers', 'placementevents']],
+    'events'      => ['label' => 'Events & Notices',
+                      'views' => ['events'],
+                      'write' => ['events']],
+    'reports'     => ['label' => 'Reports & Departments',
+                      'views' => ['chreports', 'departments', 'branches'],
+                      'write' => []],
+    'system'      => ['label' => 'Login Accounts & Settings',
+                      'views' => ['accounts', 'usersettings'],
+                      'write' => ['users', 'settings']],
+];
 
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */
 const READ_ONLY_ROLES = ['center_head'];

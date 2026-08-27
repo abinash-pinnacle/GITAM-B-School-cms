@@ -172,6 +172,50 @@ function placement_officer_may_read(string $col): bool
 }
 
 /**
+ * The modules this account has been narrowed to, or null when it has not been
+ * narrowed at all. An account with no `access` recorded is a full one — every
+ * login that existed before user settings arrived keeps working.
+ */
+function restricted_modules(): ?array
+{
+    $u = current_user();
+    if (!$u || (string) ($u['access'] ?? 'full') !== 'restricted') {
+        return null;
+    }
+    $raw = $u['permissions'] ?? null;
+    if (is_string($raw)) {
+        $raw = json_decode($raw, true);
+    }
+    return is_array($raw) ? array_values(array_filter(array_map('strval', $raw))) : [];
+}
+
+/**
+ * A narrowed account may change only what its modules cover. Reads are left to
+ * the role — a page it can open still needs the names and the lists it prints —
+ * but nothing outside its modules can be written, whatever the request looks
+ * like.
+ */
+function guard_module_write(string $resource): void
+{
+    $mods = restricted_modules();
+    if ($mods === null) {
+        return;
+    }
+    $allowed = [];
+    foreach ($mods as $key) {
+        foreach (MODULES[$key]['write'] ?? [] as $col) {
+            $allowed[$col] = true;
+        }
+    }
+    if (!isset($allowed[$resource])) {
+        send_json([
+            'error'   => 'not-permitted',
+            'message' => 'Your account does not have permission to change this.',
+        ], 403);
+    }
+}
+
+/**
  * Guard for one request — the real permission gate, independent of the UI.
  *
  *  1. a read-only role (center head) is refused every write, on every
@@ -186,6 +230,10 @@ function placement_officer_may_read(string $col): bool
 function guard_request(string $resource, string $method): void
 {
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
+
+    if ($isWrite && $resource !== 'login' && $resource !== 'change-password') {
+        guard_module_write($resource);
+    }
 
     if ($isWrite && $resource !== 'login' && $resource !== 'change-password' && is_read_only_role()
         && !read_only_write_allowed($resource, $method)) {

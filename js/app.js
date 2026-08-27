@@ -180,6 +180,7 @@
   function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
   /** the label shown in the top bar and the sidebar */
   function roleLabel(role) { return ROLE_LABEL[role] || role; }
+  const ROLE_LIST = Object.keys(ROLE_LABEL);
 
   /* ========================================================= */
   /*  AUTH                                                      */
@@ -291,6 +292,7 @@
       ['interviews','🎤','Interviews'], ['placements','🏆','Selections'],
       ['offers','📜','Offers'], ['plcalendar','📅','Placement Calendar'],
       ['plreports','📊','Placement Reports'], ['placementofficers','🧑‍💼','Placement Officers'],
+      ['usersettings','⚙️','User Settings'],
       [NAV_SECTION,'','Staff'],
       EMP_ATTENDANCE,
     ],
@@ -372,6 +374,18 @@
     let items = MENU[role] || [];
     if (role === 'student' && !studentFeesVisible()) items = items.filter(([key]) => key !== 'myfees');
     if (role === 'faculty' && !facultyAttendanceOn()) items = items.filter(([key]) => key !== 'attendance');
+    /* An account narrowed in User Settings shows only the modules it was given.
+       Section headings and the external link are structure, not pages, so they
+       stay — an empty section is dropped afterwards. */
+    const mods = accountModules(user);
+    if (mods) {
+      const allowed = viewsForModules(mods);
+      items = items.filter(([key, , , url]) =>
+        key === NAV_SECTION || key === NAV_LINK
+        || (key === NAV_GROUP ? allowed.has(url) : allowed.has(key)));
+      items = items.filter(([key], i) =>
+        key !== NAV_SECTION || items.slice(i + 1).some(([k]) => k !== NAV_SECTION));
+    }
     return items;
   }
 
@@ -443,6 +457,13 @@
 
   function canView(key) {
     const { view } = splitViewKey(key);
+    /* A narrowed account is held to its modules on top of whatever its role
+       allows — the API refuses the same pages' writes either way. */
+    const mods = accountModules(user);
+    if (mods && !viewsForModules(mods).has(view === 'stuprofile' ? 'students'
+                                          : view === 'facprofile' ? 'faculty' : view)) {
+      return false;
+    }
     /* A student's file is reached from the roll rather than from the sidebar,
        so it is open to whoever may open the roll itself. */
     if (view === 'stuprofile') return canView('students');
@@ -473,8 +494,49 @@
     }
   }
 
+  /* One entry per part of the college — the same list the API holds, because
+     the menu here is a convenience and the API is the rule. */
+  const MODULES = [
+    ['students',     'Students',                    ['students', 'stuprofile', 'batchsem']],
+    ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers']],
+    ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable']],
+    ['attendance',   'Attendance',                  ['attendance', 'attrecords']],
+    ['marks',        'Marks & Results',             ['marks']],
+    ['fees',         'Fees & Finance',              ['fees', 'finstudents', 'fixedfee', 'semfee', 'feecollect',
+                                                     'payments', 'pendingfees', 'finreports']],
+    ['assets',       'Assets',                      ['assets']],
+    ['requisitions', 'Requisitions',                ['requisitions', 'goodsreq', 'bookreq']],
+    ['library',      'Library',                     ['library', 'issueBook', 'returnBook', 'reports']],
+    ['placement',    'Placement Cell',              ['plstudents', 'companies', 'drives', 'applications',
+                                                     'interviews', 'placements', 'offers', 'plcalendar', 'plreports']],
+    ['events',       'Events & Notices',            ['events']],
+    ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches']],
+    ['system',       'Login Accounts & Settings',   ['accounts', 'usersettings']],
+  ];
+  /* Pages nobody is ever narrowed out of: the dashboard they land on and the
+     pages that are about themselves. */
+  const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
+                          'mybooks', 'myplacement'];
+
+  /** the module keys this account is limited to, or null when it is not */
+  function accountModules(u) {
+    if (!u || (u.access || 'full') !== 'restricted') return null;
+    const raw = u.permissions;
+    const list = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { return []; } })() : raw;
+    return Array.isArray(list) ? list : [];
+  }
+  /** every view key a set of modules covers */
+  function viewsForModules(keys) {
+    const out = new Set(ALWAYS_ALLOWED);
+    MODULES.forEach(([key, , views]) => {
+      if (keys.includes(key)) views.forEach(v => out.add(v));
+    });
+    return out;
+  }
+
   const TITLES = {
     dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
+    usersettings:'User Settings',
     faculty:'Faculty', facprofile:'Employee Profile', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
@@ -537,6 +599,7 @@
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers, employees: viewEmployees,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
+      usersettings: viewUserSettings,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     // every page a read-only role opens says so — views that already carry a
@@ -11129,6 +11192,144 @@
       </tr></thead><tbody>${offerRows}</tbody></table></div>
       <div class="form-actions"><button class="btn-primary" id="cx">Close</button></div>`, true);
     $('#cx').onclick = closeModal;
+  }
+
+  /* ==================== USER SETTINGS (admin) ====================
+     A role says what kind of account somebody has; this narrows one account
+     inside it. Full access means everything the role allows. Restricted means
+     the ticked modules and nothing else — enforced by the API too, so it is a
+     permission rather than a tidier menu. */
+  function viewUserSettings() {
+    if (user.role !== 'admin') {
+      return `<div class="panel"><p class="empty">Only the administrator manages user access.</p></div>`;
+    }
+    const html = `<div class="panel"><div class="panel-head"><h3>User Settings</h3>
+        <div class="panel-tools">
+          <input class="search-box" id="usQ" placeholder="Search name / username...">
+          <select class="filter-sel" id="usRole"><option value="">All Roles</option>
+            ${ROLE_LIST.map(r => `<option value="${r}">${esc(roleLabel(r))}</option>`).join('')}</select>
+          <button class="btn-outline btn-sm" id="usClear">Clear</button>
+        </div></div>
+      <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
+        Every login and what it may open. <b>Full Access</b> gives everything the role allows.
+        <b>Restricted Access</b> limits the account to the modules you tick — the menu follows it,
+        and so does the server.</p>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Full Name</th><th>Username</th><th>Role</th><th>Type Of Access</th><th>Modules</th><th>Actions</th>
+      </tr></thead><tbody id="usBody"></tbody></table></div><div id="usPager"></div></div>`;
+
+    viewUserSettings.after = () => {
+      let page = 1;
+      const rowsFor = () => {
+        const q = ($('#usQ').value || '').trim().toLowerCase();
+        const role = $('#usRole').value;
+        return Store.all('users').filter(u =>
+          (!q || [u.name, u.username].some(v => String(v || '').toLowerCase().includes(q)))
+          && (!role || u.role === role))
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      };
+      const draw = () => {
+        const rows = rowsFor();
+        page = Math.min(page, pageCount(rows.length));
+        $('#usBody').innerHTML = rows.length ? pageSlice(rows, page).map(u => {
+          const mods = accountModules(u);
+          const restricted = mods !== null;
+          const names = restricted
+            ? (mods.length
+                ? MODULES.filter(([k]) => mods.includes(k)).map(([, label]) => label).join(', ')
+                : 'None ticked — dashboard only')
+            : 'Everything this role allows';
+          return `<tr>
+            <td>${esc(u.name || '—')}</td>
+            <td class="mono">${esc(u.username || '—')}</td>
+            <td>${esc(roleLabel(u.role))}</td>
+            <td><span class="pill ${restricted ? 'amber' : 'green'}">${
+              restricted ? 'Restricted Access' : 'Full Access'}</span></td>
+            <td style="max-width:320px;white-space:normal;font-size:12.5px;color:var(--muted)">${esc(names)}</td>
+            <td><div class="row-actions">
+              <button class="btn-sm btn-edit" data-perm="${u.id}">Permissions</button>
+              ${u.id === user.id ? '' : `<button class="btn-sm btn-del" data-del="${u.id}">Delete</button>`}
+            </div></td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="empty">No login accounts found.</td></tr>`;
+
+        $('#usBody').querySelectorAll('[data-perm]').forEach(b =>
+          b.onclick = () => permissionsModal(b.dataset.perm, draw));
+        $('#usBody').querySelectorAll('[data-del]').forEach(b =>
+          b.onclick = () => delConfirm('users', b.dataset.del, 'login account', draw));
+        $('#usPager').innerHTML = pagerHtml(rows.length, page);
+        bindPager($('#usPager'), rows.length, page, (p) => page = p, draw);
+      };
+      $('#usQ').oninput = () => { page = 1; draw(); };
+      $('#usRole').onchange = () => { page = 1; draw(); };
+      $('#usClear').onclick = () => { $('#usQ').value = ''; $('#usRole').value = ''; page = 1; draw(); };
+      draw();
+    };
+    return html;
+  }
+
+  function permissionsModal(uid, after) {
+    const u = Store.find('users', uid);
+    if (!u) return;
+    const mods = accountModules(u);
+    const restricted = mods !== null;
+    const ticked = mods || [];
+
+    openModal('Permissions — ' + (u.name || u.username), `<form id="f">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
+        <b>${esc(u.name || '—')}</b> · ${esc(roleLabel(u.role))} · <span class="mono">${esc(u.username)}</span></p>
+      <h4 class="ro-sub">Type of Access</h4>
+      <div class="chk-grid">
+        <label class="chk"><input type="radio" name="access" value="full" ${restricted ? '' : 'checked'}>
+          Full Access — everything this role allows</label>
+        <label class="chk"><input type="radio" name="access" value="restricted" ${restricted ? 'checked' : ''}>
+          Restricted Access — only the modules ticked below</label>
+      </div>
+      <h4 class="ro-sub">Access Permissions
+        <button type="button" class="btn-outline btn-sm" id="pmAll" style="float:right">Tick all</button></h4>
+      <div class="chk-grid" id="pmModules">${MODULES.map(([key, label]) => `<label class="chk">
+        <input type="checkbox" name="mod_${key}" ${ticked.includes(key) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</div>
+      <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">
+        The dashboard and a person's own pages are always open. A module covers its pages and
+        the records behind them — the server refuses a change outside them, whatever the screen shows.</p>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+
+    $('#cx').onclick = closeModal;
+    const boxes = () => [...document.querySelectorAll('#pmModules input[type=checkbox]')];
+    const syncEnabled = () => {
+      const restrictedNow = document.querySelector('[name="access"][value="restricted"]').checked;
+      boxes().forEach(b => { b.disabled = !restrictedNow; });
+      $('#pmModules').style.opacity = restrictedNow ? '1' : '.5';
+      $('#pmAll').disabled = !restrictedNow;
+    };
+    document.querySelectorAll('[name="access"]').forEach(r => { r.onchange = syncEnabled; });
+    $('#pmAll').onclick = () => {
+      const some = boxes().some(b => !b.checked);
+      boxes().forEach(b => { b.checked = some; });
+    };
+    syncEnabled();
+
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const access = document.querySelector('[name="access"]:checked').value;
+      const picked = MODULES.map(([k]) => k).filter(k => {
+        const box = document.querySelector(`[name="mod_${k}"]`);
+        return box && box.checked;
+      });
+      if (access === 'restricted' && u.id === user.id) {
+        toast('You cannot restrict your own account — ask another admin to do it.', 'err');
+        return;
+      }
+      Store.update('users', uid, {
+        access,
+        permissions: access === 'restricted' ? picked : [],
+      });
+      closeModal();
+      toast(access === 'restricted'
+        ? `${u.name || u.username} is limited to ${picked.length} module(s).`
+        : `${u.name || u.username} has full access.`);
+      if (after) after(); else render();
+    };
   }
 
   /* =========================== COMPANIES =========================== */
