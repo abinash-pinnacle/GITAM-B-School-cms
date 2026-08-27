@@ -1943,7 +1943,8 @@
           <div class="field"><label>Specialisation I</label>
             <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
           <div class="field"><label>Specialisation II</label>
-            <select name="specialisation2" id="stuFormSpec2">${specialisationOptions(s.specialisation2, true)}</select></div>
+            <select name="specialisation2" id="stuFormSpec2">
+              <option value="">— None —</option>${specialisationOptions(s.specialisation2, true)}</select></div>
           <div class="field"><label>Semester</label>
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
