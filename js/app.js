@@ -1949,7 +1949,7 @@
           }</select></div>
           ${photoField(s.photo)}
         </div>
-        <h4 class="ro-sub">Placement Eligibility</h4>
+        ${id ? `<h4 class="ro-sub">Placement Eligibility</h4>
         <p style="font-size:12px;color:var(--muted);margin:-4px 0 10px">
           Used by the placement cell to work out which drives this student qualifies for.
           Leave the CGPA blank to fall back to the average of their internal marks.</p>
@@ -1958,7 +1958,7 @@
             <input name="cgpa" type="number" step="0.01" min="0" max="10" value="${esc(s.cgpa ?? '')}"></div>
           <div class="field"><label>Active Backlogs</label>
             <input name="backlogs" type="number" min="0" value="${esc(s.backlogs ?? 0)}"></div>
-        </div>
+        </div>` : ''}
       </div>
 
       <div class="sf-pane hidden" data-pane="personal">
@@ -2147,7 +2147,9 @@
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
       }
-      if (d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
+      // the placement fields are only on the form when editing — a student
+      // being admitted today has neither a CGPA nor a backlog yet
+      if (d.cgpa != null && d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
         toast('CGPA must be between 0 and 10.', 'err'); return;
       }
 
@@ -2204,7 +2206,8 @@
       d.name = [d.firstName, d.middleName, d.lastName]
         .map(x => (x || '').trim()).filter(Boolean).join(' ');
       d.year = +d.year; d.semester = +d.semester;
-      d.backlogs = d.backlogs === '' ? 0 : +d.backlogs;
+      d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
+      if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
       else { Store.add('students', d); ensureStudentLogin(d); }
       closeModal(); toast('Student saved.'); render();
