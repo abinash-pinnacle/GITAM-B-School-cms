@@ -12925,11 +12925,9 @@
   function startApp() {
     $('#loginScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
+    // The bar carries the name only — the role is already obvious from the
+    // menu the person is looking at, and it reads as a job title beside it.
     $('#topUserName').textContent = user.name;
-    // the raw role name leaked through here — "course_coordinator" is an
-    // identifier, not something to show a person
-    $('#topUserRole').textContent = roleLabel(user.role) + (readOnly() ? ' · Read Only' : '');
-    $('#topUserRole').classList.toggle('role-readonly', readOnly());
     // a read-only session is flagged on <body> so the whole app can style itself
     document.body.classList.toggle('read-only', readOnly());
     applyReadOnly();
