@@ -58,6 +58,16 @@
   }
   function closeModal() { $('#modalOverlay').classList.add('hidden'); }
 
+  /* The second layer. A list picker is opened from inside a form, and reusing
+     the one modal would throw the half-filled form away. */
+  function openModal2(title, html, wide) {
+    $('#modal2Title').textContent = title;
+    $('#modal2Body').innerHTML = html;
+    $('#modal2Overlay').querySelector('.modal').classList.toggle('modal-wide', !!wide);
+    $('#modal2Overlay').classList.remove('hidden');
+  }
+  function closeModal2() { $('#modal2Overlay').classList.add('hidden'); }
+
   /* ---------- lookups ---------- */
   const courseName = (id) => { const c = Store.find('courses', id); return c ? `${c.code} — ${c.name}` : '—'; };
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -1258,13 +1268,13 @@
       <h3>${deptBranch ? deptBranch + ' Department Students' : 'All Students'}</h3>
       <div class="panel-tools">
         <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
-        ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
-        <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
         <button class="btn-outline btn-sm" id="stuPrint">🖨 PDF</button>
         <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
-        <button class="btn-primary btn-sm" id="stuXls">⬇ Excel</button>
+        <button class="btn-outline btn-sm" id="stuXls">⬇ Excel</button>
+        ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
+        <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
       </div></div>
-      <div class="tbl-wrap"><table class="tbl-filter"><thead>
+      <div class="tbl-wrap tbl-sticky"><table class="tbl-filter"><thead>
         <tr>
           <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
           <th>Department</th><th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
@@ -1889,6 +1899,10 @@
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'EWS', 'Management', 'NRI'];
   const RELATIONS = ['Father', 'Mother', 'Guardian', 'Brother', 'Sister', 'Uncle', 'Aunt', 'Spouse'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
+  /* A club is the specialisation's own society — Marketing has the Marketing
+     Club — so the list is built from the specialisations rather than typed
+     again and left to drift. */
+  const clubList = () => specialisationList().map(v => v + ' Club');
   const DOC_TYPES = ['Aadhaar', 'PAN', 'Marksheet', 'Certificate', 'Transfer Certificate',
                      'Migration Certificate', 'Caste Certificate', 'Income Certificate',
                      'Photograph', 'Other'];
@@ -1984,7 +1998,7 @@
           <div class="field"><label>Registration Number</label>
             <input name="roll" id="rollInput" inputmode="numeric" maxlength="${regNoLength()}"
                    placeholder="${regNoLength()} digits" value="${esc(s.roll || '')}" required></div>
-          ${fText('serialNo', 'Serial No.', s.serialNo)}
+          ${fText('serialNo', 'Roll No.', s.serialNo)}
           ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
           <div class="field"><label>First Name</label>
             <input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
@@ -1998,8 +2012,6 @@
           ${fText('whatsapp', 'WhatsApp No', s.whatsapp, 'inputmode="numeric" maxlength="10"')}
           <div class="field"><label>Course</label>
             <select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
-          <div class="field"><label>Department</label>
-            <select name="branch" id="stuFormBranch">${branchOptions(s.branch, true)}</select></div>
           <div class="field"><label>Specialisation I</label>
             <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
           <div class="field"><label>Specialisation II</label>
@@ -2009,12 +2021,17 @@
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
           ${fText('batch', 'Batch', s.batch, 'placeholder="e.g. 2025-2027"')}
-          ${fText('house', 'House', s.house)}
+          <div class="field"><label>Club</label><select name="house">
+            <option value="">— None —</option>
+            ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select></div>
           <div class="field"><label>Academic Year</label>
             <select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           ${fText('mentor', 'Mentor', s.mentor)}
           ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
+          ${fText('h_emergencyPhone', 'Emergency Contact No', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
+          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
           <div class="field"><label>Status</label><select name="status">${
             ['Active', 'Inactive'].map(v =>
               `<option ${((s.status || 'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
@@ -2096,8 +2113,6 @@
           ${fText('h_height', 'Height (cm)', health.height, 'inputmode="numeric"')}
           ${fText('h_weight', 'Weight (kg)', health.weight, 'inputmode="numeric"')}
           ${fDate('h_lastCheckup', 'Last Check-up', health.lastCheckup)}
-          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
-          ${fText('h_emergencyPhone', 'Emergency Contact Phone', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
           ${fArea('h_allergies', 'Allergies', health.allergies)}
           ${fArea('h_conditions', 'Medical Conditions', health.conditions)}
           ${fArea('h_medication', 'Regular Medication', health.medication)}
@@ -2117,7 +2132,6 @@
     $('#cx').onclick = closeModal;
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
-    bindBranchSelect($('#stuFormBranch'));
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormSpec2'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
@@ -2211,9 +2225,19 @@
       if (d.whatsapp && !/^\d{10}$/.test(d.whatsapp)) {
         toast('WhatsApp number must be exactly 10 digits.', 'err'); return;
       }
+      if (d.h_emergencyPhone && !/^\d{10}$/.test(d.h_emergencyPhone)) {
+        toast('Emergency contact number must be exactly 10 digits.', 'err'); return;
+      }
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
       }
+      /* A number nobody else holds. Two students sharing a mobile is the same
+         mistake as two sharing a registration number — the office rings one and
+         reaches the other. */
+      const clash = takenBy('students', 'phone', d.phone, id)
+        || takenBy('students', 'whatsapp', d.whatsapp, id)
+        || takenBy('students', 'aadhaar', d.aadhaar, id);
+      if (clash) { toast(clash, 'err'); return; }
       // the placement fields are only on the form when editing — a student
       // being admitted today has neither a CGPA nor a backlog yet
       if (d.cgpa != null && d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
@@ -2274,6 +2298,8 @@
         .map(x => (x || '').trim()).filter(Boolean).join(' ');
       d.semester = +d.semester;
       d.year = yearForSemester(d.semester);
+      // one programme, asked for once: the department is the course
+      d.branch = d.course;
       d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
@@ -2286,6 +2312,20 @@
      it prints on the ID card, it is their login, and every fee and placement
      record hangs off it. Two students sharing one, or one being a digit short,
      is the kind of mistake that is found months later. */
+  /* Whoever else already holds this value in this column, as a message, or
+     null. Blank is not a clash — plenty of records have no WhatsApp number. */
+  const FIELD_LABEL = { phone: 'Mobile number', whatsapp: 'WhatsApp number',
+                        aadhaar: 'Aadhaar number', email: 'Email' };
+  function takenBy(col, field, value, excludeId) {
+    const v = String(value || '').trim();
+    if (!v) return null;
+    const clash = Store.all(col).find(x =>
+      String(x[field] || '').trim() === v && x.id !== excludeId);
+    return clash
+      ? `${FIELD_LABEL[field] || field} ${v} already belongs to ${clash.name || clash.roll || 'another record'}.`
+      : null;
+  }
+
   const DEFAULT_REG_LENGTH = 10;
   function regNoLength() {
     const row = settingRow('regNoLength');
@@ -9258,7 +9298,58 @@
       (val) => {
         const n = listUsageCount(name, val);
         return n ? `"${val}" is used by ${n} record(s) — change those first.` : null;
-      });
+      },
+      () => manageListModal(name, select));
+  }
+
+  /* Tick what should go. A value still on somebody's record cannot be removed —
+     the row says so and how many records hold it, which the old prompt could
+     not. The list rebuilds behind the modal, so the dropdown that opened it
+     shows the result straight away. */
+  function manageListModal(name, select) {
+    const def = LIST_DEFS[name];
+    const label = name === 'course' ? 'Courses' : name === 'specialisation' ? 'Specialisations' : 'Values';
+    const draw = () => {
+      const values = listValues(name).slice();
+      const rows = values.map((v) => {
+        const used = listUsageCount(name, v);
+        return `<label class="chk-row ${used ? 'chk-locked' : ''}">
+          <input type="checkbox" value="${esc(v)}" ${used ? 'disabled' : ''}>
+          <span class="chk-text"><strong>${esc(v)}</strong>
+            <small>${used ? `in use by ${plural(used, 'record')} — change those first` : 'not used by any record'}</small>
+          </span></label>`;
+      }).join('');
+      openModal2('Manage ' + label, `
+        <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+          Tick what you want to remove. A value still on a record is locked.</p>
+        <div class="chk-list" id="mlList">${rows || '<p class="empty">Nothing in this list yet.</p>'}</div>
+        <div class="form-actions">
+          <button type="button" class="btn-outline" id="cx">Close</button>
+          <button type="button" class="btn-primary" style="background:var(--red)" id="mlGo">Remove selected</button>
+        </div>`, true);
+      $('#modal2Body').querySelector('#cx').onclick = closeModal2;
+      $('#modal2Body').querySelector('#mlGo').onclick = () => {
+        const picked = [...document.querySelectorAll('#mlList input:checked')].map(i => i.value);
+        if (!picked.length) { toast('Nothing ticked.', 'err'); return; }
+        const list = listValues(name);
+        if (list.length - picked.length < 1) {
+          toast('At least one value has to remain.', 'err'); return;
+        }
+        picked.forEach(v => {
+          const i = list.indexOf(v);
+          if (i !== -1) list.splice(i, 1);
+        });
+        saveList(name);
+        if (select) {
+          const keep = list.includes(select.value) ? select.value : list[0];
+          select.innerHTML = listOptions(name, keep, true);
+          select.value = keep;
+        }
+        closeModal2();
+        toast(`Removed ${plural(picked.length, 'value')}.`);
+      };
+    };
+    draw();
   }
   function facultyOptions(sel, withAddNew) {
     return Store.all('faculty').map(f =>
@@ -9276,7 +9367,7 @@
   // new value pushes it into the list and re-renders the select with it selected;
   // picking "Remove..." lets you take an existing value back out of the list.
   // `canRemove(value)` may return a message to block a removal (e.g. still in use)
-  function bindListAddNew(select, list, promptText, rebuild, parse, onListChange, canRemove) {
+  function bindListAddNew(select, list, promptText, rebuild, parse, onListChange, canRemove, onRemoveClick) {
     if (!select) return;
     let prevValue = select.value;
     select.onchange = () => {
@@ -9293,7 +9384,9 @@
         return;
       }
       if (v === REMOVE_OPT) {
-        if (list.length <= 1) { toast('At least one option must remain.', 'err'); select.value = prevValue; return; }
+        select.value = prevValue;
+        if (onRemoveClick) { onRemoveClick(); return; }
+        if (list.length <= 1) { toast('At least one option must remain.', 'err'); return; }
         const raw = (window.prompt('Remove which value?\n(' + list.join(', ') + ')') || '').trim();
         if (!raw) { select.value = prevValue; return; }
         const target = parse ? parse(raw) : raw;
@@ -13181,6 +13274,8 @@
     $('#logoutBtn').onclick = logout;
     $('#pwdBtn').onclick = changePasswordModal;
     $('#modalClose').onclick = closeModal;
+    $('#modal2Close').onclick = closeModal2;
+    $('#modal2Overlay').onclick = (e) => { if (e.target.id === 'modal2Overlay') closeModal2(); };
     $('#modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
     $('#menuToggle').onclick = toggleSidebar;
     // apply saved collapsed preference (desktop)

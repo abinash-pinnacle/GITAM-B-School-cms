@@ -653,3 +653,16 @@ a.install-btn:hover{background:var(--primary-light)}
 /* The side card is a narrow column, so its labels need more of it than the
    22% a wide tab table gives them — otherwise "Employee ID" wraps. */
 .stu-side .info-tbl th{width:46% !important}
+
+/* The roll is long: its heading and filter rows stay put while it scrolls,
+   so you always know which column you are reading. */
+.tbl-sticky{max-height:calc(100vh - 260px);overflow:auto}
+.tbl-sticky thead th{position:sticky;top:0;z-index:3;background:var(--primary-light)}
+.tbl-sticky thead .filter-row td{position:sticky;top:38px;z-index:2;background:var(--bg)}
+
+/* a value that cannot be removed because records still hold it */
+.chk-row.chk-locked{opacity:.6}
+.chk-row.chk-locked .chk-text small{color:var(--red)}
+
+/* the picker layer sits above the form that opened it */
+.modal-layer2{z-index:80}
