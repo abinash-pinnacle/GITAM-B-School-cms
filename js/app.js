@@ -13265,8 +13265,11 @@
      the person is looking at, and beside the name it reads as a job title. */
   function paintUser() {
     const name = displayName(user);
-    $('#topUserName').textContent = name;
     const photo = (loginRecord(user) || {}).photo;
+    $('#topUserName').innerHTML = `<span class="uc-avatar">${photo
+        ? `<img src="${esc(photo)}" alt="">`
+        : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.5-8 5.5V21a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-3-3.6-5.5-8-5.5Z"/></svg>`
+      }</span><span class="uc-name">${esc(name)}</span>`;
     $('#sideUser').innerHTML = `<span class="side-avatar">${photo
         ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
         : esc(name[0] || 'U')}</span>
