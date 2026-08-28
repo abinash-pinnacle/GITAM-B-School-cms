@@ -1599,12 +1599,10 @@
     if (tab === 'guardians') {
       if (!guardians.length) return `<h4 class="ro-sub">Guardians</h4><p class="empty">No guardian recorded.</p>`;
       return `<h4 class="ro-sub">Guardians Details</h4>` + guardians.map((g, i) => `
-        <h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${i + 1} · ${esc(g.name || 'Guardian')}
-          <span class="pill ${g.emergency === 'Yes' ? 'green' : 'grey'}" style="float:right">
-            Emergency Contact: ${g.emergency === 'Yes' ? 'Yes' : 'No'}</span></h4>
+        <h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${esc(g.relation || 'Guardian')}</h4>
         ${infoTable(`
           ${infoRow('Name', esc(g.name || '—'))}
-          ${infoRow2('Relation', esc(g.relation || '—'), 'Occupation', esc(g.occupation || '—'))}
+          ${infoRow('Occupation', esc(g.occupation || '—'))}
           ${infoRow2('Mobile No', esc(g.mobile || '—'), 'Phone No', esc(g.phone || '—'))}
           ${infoRow2('Annual Income', g.income ? '₹' + esc(g.income) : '—', 'Email', esc(g.email || '—'))}
           ${infoRow('Qualification', esc(g.qualification || '—'))}
@@ -1923,6 +1921,28 @@
       <textarea name="${name}" rows="${rows || 2}">${esc(val || '')}</textarea></div>`;
 
   /** one guardian card in the form — rendered for existing rows and for new ones */
+  /* The three a student's file always has. Named here, so the form does not
+     ask who each one is. */
+  const GUARDIAN_ROLES = ['Father', 'Mother', 'Local Guardian'];
+
+  /** one of the three fixed blocks on the admission form */
+  function fixedGuardianCard(g, role) {
+    g = g || {};
+    return `<div class="sub-card" data-guardian data-role="${esc(role)}">
+      <div class="sub-card-head"><strong>${esc(role)}</strong></div>
+      <div class="form-grid">
+        ${fText('g_name', 'Name', g.name)}
+        ${fText('g_occupation', 'Occupation', g.occupation)}
+        ${fText('g_mobile', 'Mobile No', g.mobile, 'inputmode="numeric" maxlength="10"')}
+        ${fText('g_phone', 'Phone No', g.phone)}
+        ${fText('g_income', 'Annual Income (₹)', g.income, 'inputmode="numeric"')}
+        ${fText('g_email', 'Email', g.email, 'type="email"')}
+        ${fText('g_qualification', 'Qualification', g.qualification)}
+        ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
+        ${fArea('g_officeAddress', 'Office Address', g.officeAddress)}
+      </div></div>`;
+  }
+
   function guardianCard(g, i) {
     g = g || {};
     return `<div class="sub-card" data-guardian>
@@ -2095,8 +2115,8 @@
       </div>
 
       <div class="sf-pane hidden" data-pane="guardians">
-        <div id="sfGuardians">${(guardians.length ? guardians : [{}]).map(guardianCard).join('')}</div>
-        <button type="button" class="btn-outline btn-sm" id="sfAddGuardian">+ Add Guardian</button>
+        <div id="sfGuardians">${GUARDIAN_ROLES.map(role =>
+          fixedGuardianCard(guardians.find(g => g.relation === role), role)).join('')}</div>
       </div>
 
       <div class="sf-pane hidden" data-pane="address">
@@ -2145,16 +2165,6 @@
       };
     });
 
-    const bindGuardianRemovals = () => {
-      document.querySelectorAll('[data-remove-guardian]').forEach(b => {
-        b.onclick = () => {
-          const cards = document.querySelectorAll('[data-guardian]');
-          if (cards.length === 1) { toast('At least one guardian block stays on the form.', 'err'); return; }
-          b.closest('[data-guardian]').remove();
-          renumber('[data-guardian]', 'Guardian');
-        };
-      });
-    };
     const renumber = (sel, word) => {
       document.querySelectorAll(sel).forEach((card, i) => {
         const h = card.querySelector('.sub-card-head strong');
@@ -2188,13 +2198,8 @@
         };
       });
     };
-    bindGuardianRemovals(); bindDocRemovals(); bindDocFiles();
+    bindDocRemovals(); bindDocFiles();
 
-    $('#sfAddGuardian').onclick = () => {
-      const wrap = $('#sfGuardians');
-      wrap.insertAdjacentHTML('beforeend', guardianCard({}, wrap.children.length));
-      bindGuardianRemovals();
-    };
     $('#sfAddDoc').onclick = () => {
       const wrap = $('#sfDocs');
       wrap.insertAdjacentHTML('beforeend', documentRow({}, wrap.children.length));
@@ -2266,17 +2271,18 @@
         marks: (tr.querySelector('[data-q="marks"]').value || '').trim(),
       })).filter(q => q.institute || q.year || q.marks);
 
+      // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...f.querySelectorAll('[data-guardian]')].map(card => {
         const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
-        return { name: val('name'), relation: val('relation'), occupation: val('occupation'),
+        return { relation: card.dataset.role, name: val('name'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
-                 emergency: val('emergency'), homeAddress: val('homeAddress'),
-                 officeAddress: val('officeAddress') };
-      }).filter(g => g.name);
+                 homeAddress: val('homeAddress'), officeAddress: val('officeAddress') };
+      }).filter(g => g.name || g.mobile);
       const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
       if (badGuardian) {
-        toast(`${badGuardian.name}'s mobile number must be exactly 10 digits.`, 'err'); return;
+        toast(`The ${badGuardian.relation.toLowerCase()}'s mobile number must be exactly 10 digits.`, 'err');
+        return;
       }
 
       const documents = [...f.querySelectorAll('[data-document]')].map(card => {
@@ -2423,12 +2429,15 @@
         { key:'entranceRank', header:'Entrance Rank', into:'academicInfo', as:'entranceRank' },
 
         // ---- guardian ----
-        { key:'gName', header:'Guardian Name', into:'guardian', as:'name', aliases:['father name','parent name'] },
-        { key:'gRelation', header:'Guardian Relation', into:'guardian', as:'relation', aliases:['relation'] },
-        { key:'gOccupation', header:'Guardian Occupation', into:'guardian', as:'occupation', aliases:['occupation'] },
-        { key:'gMobile', header:'Guardian Mobile', into:'guardian', as:'mobile', aliases:['parent mobile'] },
-        { key:'gIncome', header:'Guardian Income', into:'guardian', as:'income', aliases:['annual income','income'] },
-        { key:'gEmail', header:'Guardian Email', into:'guardian', as:'email' },
+        { key:'fName', header:'Father Name', into:'father', as:'name', aliases:['father'] },
+        { key:'fOccupation', header:'Father Occupation', into:'father', as:'occupation' },
+        { key:'fMobile', header:'Father Mobile', into:'father', as:'mobile' },
+        { key:'fIncome', header:'Father Income', into:'father', as:'income', aliases:['annual income','income'] },
+        { key:'mName', header:'Mother Name', into:'mother', as:'name', aliases:['mother'] },
+        { key:'mOccupation', header:'Mother Occupation', into:'mother', as:'occupation' },
+        { key:'mMobile', header:'Mother Mobile', into:'mother', as:'mobile' },
+        { key:'lgName', header:'Local Guardian Name', into:'localGuardian', as:'name' },
+        { key:'lgMobile', header:'Local Guardian Mobile', into:'localGuardian', as:'mobile' },
 
         // ---- address ----
         { key:'address', header:'Address', into:'current', as:'address' },
@@ -2452,7 +2461,9 @@
                'Mr.','Male','2003-05-14','B+','General','OBC','Hindu','Indian','Cuttack','123456789012',
                'Odia, Hindi, English','Cricket, Reading',
                'Saraswati Vidya Mandir','2019','88.4','Kendriya Vidyalaya','2021','79.2','CAT','4521',
-               'Bhikari Das','Father','Farmer','7978851886','240000','bhikari@example.com',
+               'Bhikari Das','Farmer','7978851886','240000',
+               'Sunita Das','Homemaker','7978851887',
+               'Ramesh Das','7978851888',
                'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','India','752054',
                'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','752054',
                'Bhikari Das','7978851886','None'],
@@ -2606,7 +2617,10 @@
 
       if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
       if (raw.whatsapp && !phoneValid(raw.whatsapp)) return { raw, error: 'WhatsApp must be 10 digits' };
-      if (raw.gMobile && !phoneValid(raw.gMobile)) return { raw, error: 'Guardian mobile must be 10 digits' };
+      for (const [field, who] of [['fMobile', "Father's"], ['mMobile', "Mother's"],
+                                  ['lgMobile', "Local guardian's"], ['gMobile', "Guardian's"]]) {
+        if (raw[field] && !phoneValid(raw[field])) return { raw, error: `${who} mobile must be 10 digits` };
+      }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
       if (raw.cgpa && (isNaN(+raw.cgpa) || +raw.cgpa < 0 || +raw.cgpa > 10)) {
         return { raw, error: 'CGPA must be 0-10' };
@@ -2651,6 +2665,10 @@
         data.addressInfo = { current: parts.current || {}, permanent: parts.permanent || {} };
       }
       if (parts.guardian) data.guardians = [parts.guardian];
+      const family = [['father', 'Father'], ['mother', 'Mother'], ['localGuardian', 'Local Guardian']]
+        .filter(([key]) => parts[key])
+        .map(([key, relation]) => Object.assign({ relation }, parts[key]));
+      if (family.length) data.guardians = (data.guardians || []).concat(family);
       if (raw.name && !data.name) data.name = raw.name;
       // schooling arrives as two sets of three columns and is filed as the
       // qualification rows the profile page prints
