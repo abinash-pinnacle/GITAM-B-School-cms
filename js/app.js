@@ -580,6 +580,7 @@
        it from viewPreset and the title says which kind is being shown. */
     const { view, preset } = splitViewKey(currentView);
     viewPreset = preset;
+    paintUser();
     $('#pageTitle').textContent =
       ((readOnly() && READ_ONLY_TITLES[view]) || TITLES[view] || 'Dashboard')
       + (preset ? ' — ' + preset : '');
@@ -6222,7 +6223,7 @@
       if (clash) { toast('User id "' + username + '" is already taken.', 'err'); return; }
       Store.update('users', id, { name: d.name, username, password: d.password });
       // the top bar shows the logged-in user's name — keep it in sync
-      if (id === user.id) { user.name = d.name; user.username = username; $('#topUserName').textContent = d.name; }
+      if (id === user.id) { user.name = d.name; user.username = username; paintUser(); }
       closeModal(); toast('Login updated.'); after ? after() : render();
     };
   }
@@ -8441,7 +8442,7 @@
         const patch = { name: d.name };
         if (withLogin) { patch.username = uid; if (password) patch.password = password; }
         Store.update('users', acct.id, patch);
-        if (acct.id === user.id) { user.name = d.name; $('#topUserName').textContent = d.name; }
+        if (acct.id === user.id) { user.name = d.name; paintUser(); }
       } else {
         Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
                              role: def.role, refId: rec.id, name: d.name });
@@ -9447,6 +9448,24 @@
   /* A person and the login that belongs to them go together. Left behind, the
      login still signs in — against a record that no longer exists — and it
      holds the registration number hostage, because a username is unique. */
+  /* Which record a login belongs to. A login keeps its own copy of the name,
+     and a copy goes stale the moment the office corrects a spelling — so the
+     record is asked first, the copy second, and the user id last. That way the
+     bar carries a name for every role and is never left blank. */
+  const LOGIN_RECORD = {
+    student: 'students', faculty: 'faculty', accountant: 'accountants',
+    center_head: 'centerheads', placement_officer: 'placementofficers',
+    course_coordinator: 'coordinators', admission: 'admissions',
+  };
+  function loginRecord(u) {
+    const col = u && LOGIN_RECORD[u.role];
+    return (col && u.refId) ? Store.find(col, u.refId) : null;
+  }
+  function displayName(u) {
+    const rec = loginRecord(u) || {};
+    return String(rec.name || (u && u.name) || (u && u.username) || 'User').trim();
+  }
+
   const COLLECTIONS_WITH_LOGIN = ['students', 'faculty', 'accountants', 'centerheads',
                                   'placementofficers', 'coordinators', 'admissions'];
   function removeLinkedLogins(col, id) {
@@ -13242,20 +13261,26 @@
   /* ========================================================= */
   /*  BOOT                                                      */
   /* ========================================================= */
+  /* The bar carries the name only — the role is already obvious from the menu
+     the person is looking at, and beside the name it reads as a job title. */
+  function paintUser() {
+    const name = displayName(user);
+    $('#topUserName').textContent = name;
+    const photo = (loginRecord(user) || {}).photo;
+    $('#sideUser').innerHTML = `<span class="side-avatar">${photo
+        ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : esc(name[0] || 'U')}</span>
+      <span class="su-meta"><strong>${esc(name)}</strong><small>${
+        esc(roleLabel(user.role))} · @${esc(user.username)}</small></span>`;
+  }
+
   function startApp() {
     $('#loginScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
-    // The bar carries the name only — the role is already obvious from the
-    // menu the person is looking at, and it reads as a job title beside it.
-    $('#topUserName').textContent = user.name;
+    paintUser();
     // a read-only session is flagged on <body> so the whole app can style itself
     document.body.classList.toggle('read-only', readOnly());
     applyReadOnly();
-    const photoCol = { student: 'students', faculty: 'faculty', center_head: 'centerheads' }[user.role];
-    const ownPhoto = photoCol && user.refId ? (Store.find(photoCol, user.refId) || {}).photo : null;
-    $('#sideUser').innerHTML = `<span class="side-avatar">${ownPhoto ?
-        `<img src="${esc(ownPhoto)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((user.name || 'U')[0])}</span>
-      <span class="su-meta"><strong>${esc(user.name)}</strong><small>${esc(roleLabel(user.role))} · @${esc(user.username)}</small></span>`;
     currentView = 'dashboard';
     buildNav();
     render();
