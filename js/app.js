@@ -2057,12 +2057,12 @@
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           ${fText('mentor', 'Mentor', s.mentor)}
           ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
-          ${fText('h_emergencyPhone', 'Emergency Contact No', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
-          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
           <div class="field"><label>Status</label><select name="status">${
             ['Active', 'Inactive'].map(v =>
               `<option ${((s.status || 'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
           }</select></div>
+          ${fText('h_emergencyPhone', 'Emergency Contact No', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
+          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
           ${photoField(s.photo)}
         </div>
         ${id ? `<h4 class="ro-sub">Placement Eligibility</h4>
