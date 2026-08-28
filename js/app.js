@@ -1410,6 +1410,11 @@
     ['address', '🏠 Address'], ['documents', '📄 Documents'], ['fees', '₹ Fees'],
     ['attendance', '📅 Attendance'], ['health', '🩺 Health'], ['idcard', '🪪 ID Card'],
   ];
+  /* The student sees the same tabs, less the ones that are not theirs to
+     read: fees only when the admin has fees switched on for students. */
+  function stuTabsFor(own) {
+    return STU_TABS.filter(([k]) => !(own && k === 'fees' && !studentFeesVisible()));
+  }
   let profileStudentId = null;
   let stuTab = 'personal';
   let stuAttSubjectWise = false;
@@ -1477,9 +1482,15 @@
   }
 
   function viewStudentProfile() {
-    const s = Store.find('students', profileStudentId);
+    /* A student opening "My Profile" lands here too. It is the same file — the
+       only difference is that it is their own, so there is no roster to go back
+       to and nothing on it for them to edit. */
+    const own = user.role === 'student';
+    const s = Store.find('students', own ? user.refId : profileStudentId);
     if (!s) return `<div class="panel"><p class="empty">That student is no longer on the roll.</p></div>`;
-    const canEdit = !viewsMasterOnly() || user.role === 'admission';
+    const canEdit = !own && (!viewsMasterOnly() || user.role === 'admission');
+    const tabs = stuTabsFor(own);
+    if (!tabs.some(([k]) => k === stuTab)) stuTab = 'personal';
     const per = stuPart(s, 'personal');
     const last = lastAttendanceDate(s.id);
 
@@ -1513,7 +1524,7 @@
     </div>`;
 
     const html = `<div class="panel-tools" style="margin-bottom:14px">
-        <button class="btn-outline btn-sm" id="spBack">← All Students</button>
+        ${own ? '' : `<button class="btn-outline btn-sm" id="spBack">← All Students</button>`}
         ${canEdit ? `<button class="btn-primary btn-sm" id="spEdit">✎ Edit Student</button>` : ''}
         <button class="btn-outline btn-sm" id="spCard">🪪 Print ID Card</button>
         <button class="btn-outline btn-sm" id="spSheet">📄 Marksheet</button>
@@ -1521,14 +1532,15 @@
       <div class="stu-profile">
         ${side}
         <div class="panel stu-main">
-          <div class="fin-tabs" id="spTabs">${STU_TABS.map(([k, label]) =>
+          <div class="fin-tabs" id="spTabs">${tabs.map(([k, label]) =>
             `<button class="fin-tab ${k === stuTab ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
           <div id="spBody">${studentTabHtml(s, stuTab)}</div>
         </div>
       </div>`;
 
     viewStudentProfile.after = () => {
-      $('#spBack').onclick = () => navigate('students');
+      const back = $('#spBack');
+      if (back) back.onclick = () => navigate('students');
       const edit = $('#spEdit');
       if (edit) edit.onclick = () => studentForm(s.id);
       $('#spCard').onclick = () => printIdCard(s.id);
@@ -5163,16 +5175,13 @@
 
   function viewProfile() {
     viewProfile.after = null;
+    /* One page for one record: the student reads their own file in the same
+       layout the office uses, rather than a short summary that quietly leaves
+       out half of what was recorded at admission. */
     if (user.role === 'student') {
-      const s = Store.find('students', user.refId)||{};
-      viewProfile.after = () => {
-        const b = $('#printId'); if (b) b.onclick = () => printIdCard(s.id);
-        const m = $('#printSheet'); if (m) m.onclick = () => printMarksheet(s.id);
-      };
-      return profileCard([['Registration Number',s.roll],['Name',s.name],['Email',s.email],['Phone',s.phone],
-        ['Specialisation',s.branch],['Year',s.year],['Semester',s.semester],['Section',s.section]],
-        `<button class="btn-primary" id="printId">🪪 Print ID Card</button>
-         <button class="btn-outline" id="printSheet">📄 Download Marksheet</button>`, s.photo);
+      const html = viewStudentProfile();
+      viewProfile.after = viewStudentProfile.after;
+      return html;
     }
     if (user.role === 'faculty') {
       const f = Store.find('faculty', user.refId)||{};
