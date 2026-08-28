@@ -1613,8 +1613,7 @@
       const block = (title, a) => `<h4 class="ro-sub">${title}</h4>` + infoTable(`
         ${infoRow('Address', esc(a.address || '—'))}
         ${infoRow2('City', esc(a.city || '—'), 'State', esc(a.state || '—'))}
-        ${infoRow2('Country', esc(a.country || '—'), 'House No', esc(a.houseNo || '—'))}
-        ${infoRow2('Pincode', esc(a.pincode || '—'), 'Phone No', esc(a.phone || '—'))}`);
+        ${infoRow2('Country', esc(a.country || '—'), 'Pincode', esc(a.pincode || '—'))}`);
       return `<h4 class="ro-sub">Address Info</h4>`
         + block('Current Address', addr.current || {})
         + block('Permanent Address', addr.permanent || {});
@@ -1622,14 +1621,12 @@
 
     if (tab === 'documents') {
       const rows = docs.length ? docs.map(d => `<tr>
-          <td>${esc(d.name || '—')}</td><td>${esc(d.type || '—')}</td>
-          <td class="mono">${esc(d.number || '—')}</td><td>${esc(d.issued || '—')}</td>
-          <td>${d.file ? `<a href="${esc(d.file)}" target="_blank" rel="noopener">Open</a>` : '—'}</td>
+          <td>${esc(d.name || '—')}</td><td>${esc(d.type || '—')}</td><td>${esc(d.issued || '—')}</td>
         </tr>`).join('')
-        : `<tr><td colspan="5" class="empty">No documents on record.</td></tr>`;
-      return `<h4 class="ro-sub">Documents</h4>
+        : `<tr><td colspan="3" class="empty">No documents on record.</td></tr>`;
+      return `<h4 class="ro-sub">Original Docs</h4>
         <div class="tbl-wrap"><table><thead><tr>
-          <th>Document</th><th>Type</th><th>Number</th><th>Issued On</th><th>File</th>
+          <th>Document</th><th>Type</th><th>Issued On</th>
         </tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
@@ -1960,6 +1957,21 @@
       </div></div>`;
   }
 
+  /* What the office took in at admission: the originals themselves, not scans
+     of them. The number lives on the document, and the document is in the file
+     cabinet — the form records that it was handed over. */
+  function originalDocRow(d) {
+    d = d || {};
+    return `<div class="sub-card" data-document>
+      <div class="sub-card-head"><strong>Original Docs</strong></div>
+      <div class="form-grid">
+        ${fText('d_name', 'Document Name', d.name)}
+        ${fSel('d_type', 'Type', d.type, DOC_TYPES)}
+        ${fDate('d_issued', 'Issued On', d.issued)}
+      </div></div>`;
+  }
+
+  /** the employee version: a staff file keeps the number and the scan */
   function documentRow(d, i) {
     d = d || {};
     return `<div class="sub-card" data-document>
@@ -1998,12 +2010,10 @@
 
     const addressBlock = (prefix, a) => `<div class="form-grid">
       ${fArea(prefix + '_address', 'Address', a.address)}
-      ${fText(prefix + '_houseNo', 'House No', a.houseNo)}
       ${fText(prefix + '_city', 'City', a.city)}
       ${fText(prefix + '_state', 'State', a.state)}
       ${fText(prefix + '_country', 'Country', a.country || 'India')}
       ${fText(prefix + '_pincode', 'Pincode', a.pincode, 'inputmode="numeric" maxlength="6"')}
-      ${fText(prefix + '_phone', 'Phone No', a.phone, 'inputmode="numeric"')}
     </div>`;
 
     openModal((id ? 'Edit' : 'Add') + ' Student', `<form id="f">
@@ -2138,7 +2148,7 @@
       </div>
 
       <div class="sf-pane hidden" data-pane="docs">
-        <div id="sfDocs">${docs.map(documentRow).join('')}</div>
+        <div id="sfDocs">${(docs.length ? docs : [{}]).map(originalDocRow).join('')}</div>
         <button type="button" class="btn-outline btn-sm" id="sfAddDoc">+ Add Document</button>
       </div>
 
@@ -2198,12 +2208,10 @@
     bindDocRemovals(); bindDocFiles();
 
     $('#sfAddDoc').onclick = () => {
-      const wrap = $('#sfDocs');
-      wrap.insertAdjacentHTML('beforeend', documentRow({}, wrap.children.length));
-      bindDocRemovals(); bindDocFiles();
+      $('#sfDocs').insertAdjacentHTML('beforeend', originalDocRow({}));
     };
     $('#sfSameAddr').onclick = () => {
-      ['address', 'houseNo', 'city', 'state', 'country', 'pincode', 'phone'].forEach(k => {
+      ['address', 'city', 'state', 'country', 'pincode'].forEach(k => {
         const from = document.querySelector(`[name="cur_${k}"]`);
         const to = document.querySelector(`[name="perm_${k}"]`);
         if (from && to) to.value = from.value;
@@ -2284,9 +2292,8 @@
 
       const documents = [...f.querySelectorAll('[data-document]')].map(card => {
         const val = (n) => (card.querySelector(`[name="d_${n}"]`).value || '').trim();
-        return { name: val('name'), type: val('type'), number: val('number'), issued: val('issued'),
-                 file: card.querySelector('[data-doc-value]').value || '' };
-      }).filter(x => x.name || x.number || x.file);
+        return { name: val('name'), type: val('type'), issued: val('issued') };
+      }).filter(x => x.name);
 
       d.personal = personal;
       d.academicInfo = academicInfo;
