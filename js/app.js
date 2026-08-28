@@ -1606,8 +1606,7 @@
           ${infoRow2('Mobile No', esc(g.mobile || '—'), 'Phone No', esc(g.phone || '—'))}
           ${infoRow2('Annual Income', g.income ? '₹' + esc(g.income) : '—', 'Email', esc(g.email || '—'))}
           ${infoRow('Qualification', esc(g.qualification || '—'))}
-          ${infoRow('Home Address', esc(g.homeAddress || '—'))}
-          ${infoRow('Office Address', esc(g.officeAddress || '—'))}`)}`).join('');
+          ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
     }
 
     if (tab === 'address') {
@@ -1939,7 +1938,6 @@
         ${fText('g_email', 'Email', g.email, 'type="email"')}
         ${fText('g_qualification', 'Qualification', g.qualification)}
         ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
-        ${fArea('g_officeAddress', 'Office Address', g.officeAddress)}
       </div></div>`;
   }
 
@@ -1959,7 +1957,6 @@
         ${fText('g_qualification', 'Qualification', g.qualification)}
         ${fSel('g_emergency', 'Emergency Contact', g.emergency || 'No', YES_NO, false)}
         ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
-        ${fArea('g_officeAddress', 'Office Address', g.officeAddress)}
       </div></div>`;
   }
 
@@ -2277,7 +2274,7 @@
         return { relation: card.dataset.role, name: val('name'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
-                 homeAddress: val('homeAddress'), officeAddress: val('officeAddress') };
+                 homeAddress: val('homeAddress') };
       }).filter(g => g.name || g.mobile);
       const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
       if (badGuardian) {
@@ -3243,7 +3240,6 @@
           ${infoRow2('Relation', esc(g.relation || '—'), 'Occupation', esc(g.occupation || '—'))}
           ${infoRow2('Total Income', g.income ? '₹' + esc(g.income) : '—', 'Mobile No', esc(g.mobile || '—'))}
           ${infoRow2('Phone No', esc(g.phone || '—'), 'Email ID', esc(g.email || '—'))}
-          ${infoRow('Office Address', esc(g.officeAddress || '—'))}
           ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
     }
 
@@ -3701,8 +3697,7 @@
         return { name: val('name'), relation: val('relation'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
-                 emergency: val('emergency'), homeAddress: val('homeAddress'),
-                 officeAddress: val('officeAddress') };
+                 emergency: val('emergency'), homeAddress: val('homeAddress') };
       }).filter(g => g.name);
       const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
       if (badGuardian) {
