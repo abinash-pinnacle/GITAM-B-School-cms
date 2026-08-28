@@ -600,6 +600,25 @@
     const owner = MODULES.find(([, , views]) => views.includes(viewKey));
     return !!owner && perms[owner[0]] === 'view';
   }
+  /** every page key a role's own menu leads to */
+  function roleViewKeys(role) {
+    const out = new Set(ALWAYS_ALLOWED);
+    (MENU[role] || []).forEach(([key, , , url]) => {
+      if (key === NAV_SECTION || key === NAV_LINK) return;
+      out.add(key === NAV_GROUP ? url : key);
+    });
+    return out;
+  }
+  /* The modules worth asking about for one role. A placement officer's menu
+     never had a Fees page, so offering to grant or withhold Fees says nothing
+     — narrowing an account should be a choice among the pages it could
+     actually open. A module already saved on the account stays on the list
+     whatever the role, so it can be seen and taken away. */
+  function modulesForRole(role, perms) {
+    const views = roleViewKeys(role);
+    return MODULES.filter(([key, , mviews]) =>
+      (perms && perms[key]) || mviews.some(v => views.has(v)));
+  }
   /** every view key a set of modules covers */
   function viewsForModules(keys) {
     const out = new Set(ALWAYS_ALLOWED);
@@ -11441,7 +11460,7 @@
           // without opening the box
           const names = restricted
             ? (Object.keys(perms).length
-                ? MODULES.filter(([k]) => perms[k])
+                ? MODULES.filter(([k]) => perms[k])  // in the app's own order, not the tick order
                     .map(([k, label]) => `${label} (${perms[k] === 'edit' ? 'edit' : 'view'})`).join(', ')
                 : 'None ticked — dashboard only')
             : 'Everything this role allows';
@@ -11478,6 +11497,7 @@
     if (!u) return;
     const perms = accountPerms(u) || {};
     const restricted = accountPerms(u) !== null;
+    const rows = modulesForRole(u.role, perms);
 
     openModal('Permissions — ' + (u.name || u.username), `<form id="f">
       <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
@@ -11493,13 +11513,14 @@
         <button type="button" class="btn-outline btn-sm" id="pmAll" style="float:right">Tick all</button></h4>
       <div class="perm-list" id="pmModules">
         <div class="perm-row perm-head"><span>Module</span><span>View</span><span>Can Edit</span></div>
-        ${MODULES.map(([key, label]) => `<div class="perm-row">
+        ${rows.length ? rows.map(([key, label]) => `<div class="perm-row">
           <label class="perm-name"><input type="checkbox" name="mod_${key}" ${
             perms[key] ? 'checked' : ''}> <span>${esc(label)}</span></label>
           <span class="perm-cell perm-view" title="Ticking the module opens its pages">✓</span>
           <label class="perm-cell"><input type="checkbox" name="edit_${key}" ${
             perms[key] === 'edit' ? 'checked' : ''}></label>
-        </div>`).join('')}
+        </div>`).join('') : `<p class="empty" style="padding:14px 2px">
+          This role only opens the dashboard and its own pages — there is nothing to narrow.</p>`}
       </div>
       <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">
         Ticking a module opens its pages. <b>Can Edit</b> on top of that lets them add, change and
@@ -11512,7 +11533,7 @@
     $('#cx').onclick = closeModal;
     const modBox = (k) => document.querySelector(`[name="mod_${k}"]`);
     const editBox = (k) => document.querySelector(`[name="edit_${k}"]`);
-    const keys = MODULES.map(([k]) => k);
+    const keys = rows.map(([k]) => k);
     const syncEnabled = () => {
       const restrictedNow = document.querySelector('[name="access"][value="restricted"]').checked;
       keys.forEach(k => {
