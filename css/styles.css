@@ -666,3 +666,13 @@ a.install-btn:hover{background:var(--primary-light)}
 
 /* the picker layer sits above the form that opened it */
 .modal-layer2{z-index:80}
+
+/* A form with seven sections is taller than the screen, and the tab bar used
+   to scroll away with the fields — leaving no way to tell which section you
+   were in, or to reach another without scrolling back. It now sits under the
+   modal's own heading, which is already pinned. */
+.modal-body .fin-tabs{position:sticky;top:61px;z-index:6;background:#fff;
+  margin:-22px -22px 14px;padding:14px 22px 12px;border-bottom:1px solid var(--line)}
+@media (max-width:640px){
+  .modal-body .fin-tabs{top:57px;margin:-16px -16px 12px;padding:12px 16px 10px}
+}
