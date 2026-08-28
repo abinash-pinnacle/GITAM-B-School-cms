@@ -176,7 +176,13 @@ function placement_officer_may_read(string $col): bool
  * narrowed at all. An account with no `access` recorded is a full one — every
  * login that existed before user settings arrived keeps working.
  */
-function restricted_modules(): ?array
+/**
+ * What a narrowed account was given, as module key => 'view' | 'edit'.
+ *
+ * Older accounts stored a plain list of module keys, which meant the account
+ * could change them, so a list still reads as 'edit' throughout.
+ */
+function restricted_perms(): ?array
 {
     $u = current_user();
     if (!$u || (string) ($u['access'] ?? 'full') !== 'restricted') {
@@ -186,7 +192,24 @@ function restricted_modules(): ?array
     if (is_string($raw)) {
         $raw = json_decode($raw, true);
     }
-    return is_array($raw) ? array_values(array_filter(array_map('strval', $raw))) : [];
+    if (!is_array($raw)) {
+        return [];
+    }
+    $out = [];
+    foreach ($raw as $key => $value) {
+        if (is_int($key)) {
+            $out[(string) $value] = 'edit';
+        } elseif ($value !== '' && $value !== false && $value !== null) {
+            $out[(string) $key] = ($value === 'view') ? 'view' : 'edit';
+        }
+    }
+    return $out;
+}
+
+function restricted_modules(): ?array
+{
+    $perms = restricted_perms();
+    return $perms === null ? null : array_keys($perms);
 }
 
 /**
@@ -197,12 +220,16 @@ function restricted_modules(): ?array
  */
 function guard_module_write(string $resource): void
 {
-    $mods = restricted_modules();
-    if ($mods === null) {
+    $perms = restricted_perms();
+    if ($perms === null) {
         return;
     }
+    // a module ticked for viewing only opens its pages, never its save button
     $allowed = [];
-    foreach ($mods as $key) {
+    foreach ($perms as $key => $level) {
+        if ($level !== 'edit') {
+            continue;
+        }
         foreach (MODULES[$key]['write'] ?? [] as $col) {
             $allowed[$col] = true;
         }

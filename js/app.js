@@ -161,26 +161,46 @@
   const PLACEMENT_MANAGE_ROLES = ['admin', 'placement_officer'];
   function canManagePlacement() { return !!user && PLACEMENT_MANAGE_ROLES.includes(user.role); }
   function isPlacementOfficer() { return !!user && user.role === 'placement_officer'; }
-  /** true when the signed-in user may only look at data, never change it */
-  function readOnly() { return !!user && READ_ONLY_ROLES.includes(user.role); }
+  /** true for a role that may only look at data, never change it */
+  function roleReadOnly() { return !!user && READ_ONLY_ROLES.includes(user.role); }
+  /* True when nothing on the page the user is looking at may be changed —
+     either because the role never writes, or because the module this page
+     belongs to was given to the account for viewing only. Every view asks this
+     before it draws an Add, Edit or Delete button, so the second case needs no
+     separate handling anywhere. */
+  function readOnly() { return roleReadOnly() || moduleViewOnly(splitViewKey(currentView).view); }
   /* The one write a read-only role keeps: the center head approves requisitions.
      Kept in step with READ_ONLY_WRITE_EXCEPTIONS in api/config.php. */
   function readOnlyWritable() {
     return user && user.role === 'center_head' ? { requisitions: ['update'] } : {};
   }
   function applyReadOnly() {
+    // what the role itself allows, before any narrowing
+    let ro = roleReadOnly(), allow = readOnlyWritable();
     // A coordinator writes attendance and nothing else, so the store treats it
     // as read-only with that one exception — the same rule the API applies.
     if (user && user.role === 'course_coordinator') {
-      Store.setReadOnly(true, { attendance: ['add', 'update', 'remove'] });
-      return;
+      ro = true; allow = { attendance: ['add', 'update', 'remove'] };
+    } else if (user && user.role === 'admission') {
+      // the admissions desk adds and corrects; removing a student is not its call
+      ro = true; allow = { students: ['add', 'update'], users: ['add', 'update'] };
     }
-    // the admissions desk adds and corrects; removing a student is not its call
-    if (user && user.role === 'admission') {
-      Store.setReadOnly(true, { students: ['add', 'update'], users: ['add', 'update'] });
-      return;
+    /* A narrowed account may change only what its "can edit" modules cover, and
+       never more than its role already allowed — so the two are intersected
+       rather than one replacing the other. */
+    const perms = accountPerms(user);
+    if (perms) {
+      const merged = {};
+      MODULES.forEach(([key, , , write]) => {
+        if (perms[key] !== 'edit') return;
+        (write || []).forEach(col => {
+          if (!ro) merged[col] = ['add', 'update', 'remove'];
+          else if (allow[col]) merged[col] = allow[col];
+        });
+      });
+      ro = true; allow = merged;
     }
-    Store.setReadOnly(readOnly(), readOnlyWritable());
+    Store.setReadOnly(ro, allow);
   }
   /** true for a role that may look at the master data but never change it */
   function viewsMasterOnly() {
@@ -506,34 +526,79 @@
 
   /* One entry per part of the college — the same list the API holds, because
      the menu here is a convenience and the API is the rule. */
+  /* key, label, the pages it opens, and the collections it may write. The
+     write lists are the same ones MODULES carries in api/config.php — the
+     server is what actually refuses a change; these let the screen agree with
+     it instead of offering a button that always fails. */
   const MODULES = [
-    ['students',     'Students',                    ['students', 'stuprofile', 'batchsem']],
-    ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers']],
-    ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable']],
-    ['attendance',   'Attendance',                  ['attendance', 'attrecords']],
-    ['marks',        'Marks & Results',             ['marks']],
+    ['students',     'Students',                    ['students', 'stuprofile', 'batchsem'],
+                                                    ['students', 'users']],
+    ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers'],
+                                                    ['faculty', 'accountants', 'centerheads', 'placementofficers',
+                                                     'coordinators', 'admissions', 'users']],
+    ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable'],
+                                                    ['courses', 'syllabus', 'timetable']],
+    ['attendance',   'Attendance',                  ['attendance', 'attrecords'],
+                                                    ['attendance']],
+    ['marks',        'Marks & Results',             ['marks'],
+                                                    ['marks']],
     ['fees',         'Fees & Finance',              ['fees', 'finstudents', 'fixedfee', 'semfee', 'feecollect',
-                                                     'payments', 'pendingfees', 'finreports']],
-    ['assets',       'Assets',                      ['assets']],
-    ['requisitions', 'Requisitions',                ['requisitions', 'goodsreq', 'bookreq']],
-    ['library',      'Library',                     ['library', 'issueBook', 'returnBook', 'reports']],
+                                                     'payments', 'pendingfees', 'finreports'],
+                                                    ['fees', 'fixedfees', 'payments']],
+    ['assets',       'Assets',                      ['assets'],
+                                                    ['assets']],
+    ['requisitions', 'Requisitions',                ['requisitions', 'goodsreq', 'bookreq'],
+                                                    ['requisitions']],
+    ['library',      'Library',                     ['library', 'issueBook', 'returnBook', 'reports'],
+                                                    ['books', 'issues']],
     ['placement',    'Placement Cell',              ['plstudents', 'companies', 'drives', 'applications',
-                                                     'interviews', 'placements', 'offers', 'plcalendar', 'plreports']],
-    ['events',       'Events & Notices',            ['events']],
-    ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches']],
-    ['system',       'Login Accounts & Settings',   ['accounts', 'usersettings']],
+                                                     'interviews', 'placements', 'offers', 'plcalendar', 'plreports'],
+                                                    ['companies', 'drives', 'applications', 'interviews',
+                                                     'offers', 'placementevents']],
+    ['events',       'Events & Notices',            ['events'],
+                                                    ['events']],
+    ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches'],
+                                                    []],
+    ['system',       'Login Accounts & Settings',   ['accounts', 'usersettings'],
+                                                    ['users', 'settings']],
   ];
   /* Pages nobody is ever narrowed out of: the dashboard they land on and the
      pages that are about themselves. */
   const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
                           'mybooks', 'myplacement'];
 
-  /** the module keys this account is limited to, or null when it is not */
-  function accountModules(u) {
+  /* What a narrowed account was given, as { moduleKey: 'view' | 'edit' }, or
+     null when the account is not narrowed at all. Accounts saved before the
+     two levels existed hold a plain list of keys, which meant they could
+     change those modules — so a list still reads as 'edit'. */
+  function accountPerms(u) {
     if (!u || (u.access || 'full') !== 'restricted') return null;
     const raw = u.permissions;
-    const list = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (e) { return []; } })() : raw;
-    return Array.isArray(list) ? list : [];
+    const val = typeof raw === 'string'
+      ? (() => { try { return JSON.parse(raw); } catch (e) { return null; } })() : raw;
+    if (Array.isArray(val)) {
+      const out = {};
+      val.forEach(k => { if (k) out[String(k)] = 'edit'; });
+      return out;
+    }
+    if (val && typeof val === 'object') {
+      const out = {};
+      Object.keys(val).forEach(k => { if (val[k]) out[k] = val[k] === 'view' ? 'view' : 'edit'; });
+      return out;
+    }
+    return {};
+  }
+  /** the module keys this account is limited to, or null when it is not */
+  function accountModules(u) {
+    const perms = accountPerms(u);
+    return perms === null ? null : Object.keys(perms);
+  }
+  /** true when the page belongs to a module this account may only look at */
+  function moduleViewOnly(viewKey) {
+    const perms = accountPerms(user);
+    if (!perms) return false;
+    const owner = MODULES.find(([, , views]) => views.includes(viewKey));
+    return !!owner && perms[owner[0]] === 'view';
   }
   /** every view key a set of modules covers */
   function viewsForModules(keys) {
@@ -618,6 +683,12 @@
     if (readOnly() && !v.querySelector('.ro-banner')) {
       v.insertAdjacentHTML('afterbegin', readOnlyBanner());
     }
+    /* A module handed over for viewing only keeps its lists, filters, printing
+       and exports and loses the controls that would write. Pages gate their
+       buttons on a dozen different role checks, so this is done once here
+       rather than trusted to each of them — and Store and the server refuse
+       the write in any case. */
+    v.classList.toggle('view-frozen', moduleViewOnly(view));
     if (typeof fn.after === 'function') fn.after();
   }
 
@@ -11364,11 +11435,14 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         $('#usBody').innerHTML = rows.length ? pageSlice(rows, page).map(u => {
-          const mods = accountModules(u);
-          const restricted = mods !== null;
+          const perms = accountPerms(u);
+          const restricted = perms !== null;
+          // each module says which of the two it is, so the column is readable
+          // without opening the box
           const names = restricted
-            ? (mods.length
-                ? MODULES.filter(([k]) => mods.includes(k)).map(([, label]) => label).join(', ')
+            ? (Object.keys(perms).length
+                ? MODULES.filter(([k]) => perms[k])
+                    .map(([k, label]) => `${label} (${perms[k] === 'edit' ? 'edit' : 'view'})`).join(', ')
                 : 'None ticked — dashboard only')
             : 'Everything this role allows';
           return `<tr>
@@ -11402,9 +11476,8 @@
   function permissionsModal(uid, after) {
     const u = Store.find('users', uid);
     if (!u) return;
-    const mods = accountModules(u);
-    const restricted = mods !== null;
-    const ticked = mods || [];
+    const perms = accountPerms(u) || {};
+    const restricted = accountPerms(u) !== null;
 
     openModal('Permissions — ' + (u.name || u.username), `<form id="f">
       <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
@@ -11418,47 +11491,71 @@
       </div>
       <h4 class="ro-sub">Access Permissions
         <button type="button" class="btn-outline btn-sm" id="pmAll" style="float:right">Tick all</button></h4>
-      <div class="chk-grid" id="pmModules">${MODULES.map(([key, label]) => `<label class="chk">
-        <input type="checkbox" name="mod_${key}" ${ticked.includes(key) ? 'checked' : ''}> ${esc(label)}</label>`).join('')}</div>
+      <div class="perm-list" id="pmModules">
+        <div class="perm-row perm-head"><span>Module</span><span>View</span><span>Can Edit</span></div>
+        ${MODULES.map(([key, label]) => `<div class="perm-row">
+          <label class="perm-name"><input type="checkbox" name="mod_${key}" ${
+            perms[key] ? 'checked' : ''}> <span>${esc(label)}</span></label>
+          <span class="perm-cell perm-view" title="Ticking the module opens its pages">✓</span>
+          <label class="perm-cell"><input type="checkbox" name="edit_${key}" ${
+            perms[key] === 'edit' ? 'checked' : ''}></label>
+        </div>`).join('')}
+      </div>
       <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">
-        The dashboard and a person's own pages are always open. A module covers its pages and
-        the records behind them — the server refuses a change outside them, whatever the screen shows.</p>
+        Ticking a module opens its pages. <b>Can Edit</b> on top of that lets them add, change and
+        delete there — leave it off and the pages open read-only. The dashboard and a person's own
+        pages are always open, and the server refuses a change outside these modules whatever the
+        screen shows.</p>
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
 
     $('#cx').onclick = closeModal;
-    const boxes = () => [...document.querySelectorAll('#pmModules input[type=checkbox]')];
+    const modBox = (k) => document.querySelector(`[name="mod_${k}"]`);
+    const editBox = (k) => document.querySelector(`[name="edit_${k}"]`);
+    const keys = MODULES.map(([k]) => k);
     const syncEnabled = () => {
       const restrictedNow = document.querySelector('[name="access"][value="restricted"]').checked;
-      boxes().forEach(b => { b.disabled = !restrictedNow; });
+      keys.forEach(k => {
+        const m = modBox(k), ed = editBox(k);
+        m.disabled = !restrictedNow;
+        // "Can Edit" only means something once the module itself is open
+        ed.disabled = !restrictedNow || !m.checked;
+        if (ed.disabled && !m.checked) ed.checked = false;
+        ed.closest('.perm-row').classList.toggle('off', !m.checked);
+      });
       $('#pmModules').style.opacity = restrictedNow ? '1' : '.5';
       $('#pmAll').disabled = !restrictedNow;
     };
     document.querySelectorAll('[name="access"]').forEach(r => { r.onchange = syncEnabled; });
+    keys.forEach(k => { modBox(k).onchange = syncEnabled; });
     $('#pmAll').onclick = () => {
-      const some = boxes().some(b => !b.checked);
-      boxes().forEach(b => { b.checked = some; });
+      // first press opens everything with editing, second clears the lot
+      const some = keys.some(k => !modBox(k).checked || !editBox(k).checked);
+      keys.forEach(k => { modBox(k).checked = some; editBox(k).checked = some; });
+      syncEnabled();
     };
     syncEnabled();
 
     $('#f').onsubmit = (e) => {
       e.preventDefault();
       const access = document.querySelector('[name="access"]:checked').value;
-      const picked = MODULES.map(([k]) => k).filter(k => {
-        const box = document.querySelector(`[name="mod_${k}"]`);
-        return box && box.checked;
+      const picked = {};
+      keys.forEach(k => {
+        if (modBox(k).checked) picked[k] = editBox(k).checked ? 'edit' : 'view';
       });
+      const count = Object.keys(picked).length;
+      const canEdit = Object.values(picked).filter(v => v === 'edit').length;
       if (access === 'restricted' && u.id === user.id) {
         toast('You cannot restrict your own account — ask another admin to do it.', 'err');
         return;
       }
       Store.update('users', uid, {
         access,
-        permissions: access === 'restricted' ? picked : [],
+        permissions: access === 'restricted' ? picked : {},
       });
       closeModal();
       toast(access === 'restricted'
-        ? `${u.name || u.username} is limited to ${picked.length} module(s).`
+        ? `${u.name || u.username}: ${count} module(s), ${canEdit} editable.`
         : `${u.name || u.username} has full access.`);
       if (after) after(); else render();
     };
@@ -13282,7 +13379,7 @@
     $('#appScreen').classList.remove('hidden');
     paintUser();
     // a read-only session is flagged on <body> so the whole app can style itself
-    document.body.classList.toggle('read-only', readOnly());
+    document.body.classList.toggle('read-only', roleReadOnly());
     applyReadOnly();
     currentView = 'dashboard';
     buildNav();
