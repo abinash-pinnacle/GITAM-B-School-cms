@@ -1575,18 +1575,15 @@
         ${infoRow2('Course', esc(s.course || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Specialisation I', esc(specOf(s) || '—'), 'Specialisation II', esc(s.specialisation2 || '—'))}
         ${infoRow2('Section', esc(s.section || '—'), 'Academic Year', esc(s.academicYear || '—'))}
-        ${infoRow2('House', esc(s.house || '—'), 'Lab Group', esc(aca.labGroup || '—'))}
-        ${infoRow2('Honors', esc(aca.honors || '—'), 'Minor', esc(aca.minor || '—'))}
+        ${infoRow2('House', esc(s.house || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
-        ${infoRow2('Value added course 1', esc(aca.vac1 || '—'), 'Value added course 2', esc(aca.vac2 || '—'))}
-        ${infoRow('Value added course 3', esc(aca.vac3 || '—'))}
         ${infoRow2('Admission Date', esc(s.admissionDate || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
         ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
         + `<h4 class="ro-sub">Previous Qualifications</h4>
         <div class="tbl-wrap"><table><thead><tr>
           <th>Qualification</th><th>Institute Name</th><th>Passout Year</th>
-          <th style="text-align:right">Marks</th></tr></thead><tbody>${qualRows}</tbody></table></div>`;
+          <th style="text-align:right">% Marks</th></tr></thead><tbody>${qualRows}</tbody></table></div>`;
     }
 
     if (tab === 'guardians') {
@@ -2063,19 +2060,13 @@
 
       <div class="sf-pane hidden" data-pane="academic">
         <div class="form-grid">
-          ${fText('aca_labGroup', 'Lab Group', aca.labGroup)}
-          ${fSel('aca_honors', 'Honors', aca.honors || 'No', YES_NO, false)}
-          ${fSel('aca_minor', 'Minor', aca.minor || 'No', YES_NO, false)}
           ${fText('aca_entranceExam', 'Entrance Examination', aca.entranceExam, 'placeholder="e.g. CAT, OJEE"')}
           ${fText('aca_entranceRank', 'Entrance Rank', aca.entranceRank, 'inputmode="numeric"')}
-          ${fText('aca_vac1', 'Value added course 1', aca.vac1)}
-          ${fText('aca_vac2', 'Value added course 2', aca.vac2)}
-          ${fText('aca_vac3', 'Value added course 3', aca.vac3)}
         </div>
         <h4 class="ro-sub">Previous Qualifications</h4>
         <div class="tbl-wrap"><table><thead><tr>
           <th style="width:16%">Qualification</th><th>Institute Name</th>
-          <th style="width:18%">Passout Year</th><th style="width:16%">Marks / %</th>
+          <th style="width:18%">Passout Year</th><th style="width:16%">% Marks</th>
         </tr></thead><tbody>${QUAL_LEVELS.map(level => {
           const q = qualOf(level);
           return `<tr data-qual="${esc(level)}">
