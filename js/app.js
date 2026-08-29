@@ -1668,13 +1668,12 @@
         ${infoRow2('Title', esc(per.title || '—'), 'Gender', esc(s.gender || '—'))}
         ${infoRow2('First Name', esc(s.firstName || '—'), 'Last Name', esc(s.lastName || '—'))}
         ${infoRow2('Middle Name', esc(s.middleName || '—'), 'Date of Birth', esc(s.dob || '—'))}
-        ${infoRow2('Nationality', esc(per.nationality || '—'), 'Caste', esc(per.caste || '—'))}
-        ${infoRow2('Religion', esc(per.religion || '—'), 'Blood Group', esc(s.bloodGroup || '—'))}
-        ${infoRow2('Birthplace', esc(per.birthplace || '—'), 'Identification Mark', esc(per.identificationMark || '—'))}
-        ${infoRow2('Thumb ID', esc(per.thumbId || '—'), 'Hostel', esc(per.hostel || '—'))}
-        ${infoRow2('Transport', esc(per.transport || '—'), 'Lunch', esc(per.lunch || '—'))}
-        ${infoRow2('NSS', esc(per.nss || '—'), 'Languages Known', esc(per.languages || '—'))}
-        ${infoRow('Hobbies', esc(per.hobbies || '—'))}`);
+        ${infoRow2('Nationality', esc(per.nationality || '—'), 'Religion', esc(per.religion || '—'))}
+        ${infoRow2('Blood Group', esc(s.bloodGroup || '—'), 'Birthplace', esc(per.birthplace || '—'))}
+        ${infoRow2('Identification Mark', esc(per.identificationMark || '—'), 'Biometric Scan', esc(per.thumbId || '—'))}
+        ${infoRow2('Hostel', esc(per.hostel || '—'), 'Transport', esc(per.transport || '—'))}
+        ${infoRow2('Lunch', esc(per.lunch || '—'), 'NSS', esc(per.nss || '—'))}
+        ${infoRow2('Languages Known', esc(per.languages || '—'), 'Hobbies', esc(per.hobbies || '—'))}`);
     }
 
     if (tab === 'academic') {
@@ -1993,7 +1992,8 @@
   const GENDERS = ['Male', 'Female', 'Other'];
   const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   const YES_NO = ['No', 'Yes'];
-  const ADMISSION_CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'EWS', 'Management', 'NRI'];
+  const ADMISSION_CATEGORIES = ['General', 'OBC', 'SEBC', 'SC', 'ST', 'EWS', 'TFW',
+                               'Physically Handicapped', 'Management', 'NRI'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
   /* A club is the specialisation's own society — Marketing has the Marketing
      Club — so the list is built from the specialisations rather than typed
@@ -2171,11 +2171,10 @@
           ${fDate('dob', 'Date of Birth', s.dob)}
           ${fSel('bloodGroup', 'Blood Group', s.bloodGroup, BLOOD_GROUPS)}
           ${fText('per_nationality', 'Nationality', per.nationality || 'Indian')}
-          ${fText('per_caste', 'Caste', per.caste)}
           ${fText('per_religion', 'Religion', per.religion)}
           ${fText('per_birthplace', 'Birthplace', per.birthplace)}
           ${fText('per_identificationMark', 'Identification Mark', per.identificationMark)}
-          ${fText('per_thumbId', 'Thumb ID', per.thumbId)}
+          ${fText('per_thumbId', 'Biometric Scan', per.thumbId)}
           ${fSel('per_hostel', 'Hostel', per.hostel || 'No', YES_NO, false)}
           ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
           ${fSel('per_lunch', 'Lunch', per.lunch || 'No', YES_NO, false)}
@@ -2529,7 +2528,6 @@
         { key:'bloodGroup', header:'Blood Group', aliases:['blood'] },
         { key:'admissionCategory', header:'Admission Category', into:'personal', as:'admissionCategory',
           aliases:['category','quota'] },
-        { key:'caste', header:'Caste', into:'personal', as:'caste' },
         { key:'religion', header:'Religion', into:'personal', as:'religion' },
         { key:'nationality', header:'Nationality', into:'personal', as:'nationality' },
         { key:'birthplace', header:'Birthplace', into:'personal', as:'birthplace', aliases:['birth place'] },
