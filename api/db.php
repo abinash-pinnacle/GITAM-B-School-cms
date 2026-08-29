@@ -454,7 +454,8 @@ function row_out(string $col, array $row): array
        leisure, and no screen has needed to read one since they stopped being
        readable at all. */
     if ($col === 'users') {
-        unset($row['password']);
+        // api_login() puts the token back in afterwards, for its owner alone
+        unset($row['password'], $row['token']);
     }
     foreach (JSON_FIELDS[$col] ?? [] as $f) {
         if (!empty($row[$f]) && is_string($row[$f])) {

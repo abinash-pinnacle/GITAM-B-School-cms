@@ -129,6 +129,22 @@ function upgrade_password(string $id, string $plain): void
  * The caller's user row, identified by the X-User-Id header the frontend sends
  * after login, or null when the request is anonymous.
  */
+/** 32 random bytes, hex — unguessable, and belonging to one account */
+function new_token(): string
+{
+    return bin2hex(random_bytes(32));
+}
+
+/** the token this request presented, from the header or the query string */
+function request_token(): string
+{
+    $t = (string) ($_SERVER['HTTP_X_AUTH_TOKEN'] ?? '');
+    if ($t === '' && isset($_GET['token'])) {
+        $t = (string) $_GET['token'];      // for a download the browser navigates to
+    }
+    return trim($t);
+}
+
 function current_user(): ?array
 {
     static $cached = false;
@@ -137,6 +153,26 @@ function current_user(): ?array
         return $user;
     }
     $cached = true;
+
+    /* A token identifies its holder. Compared with a WHERE rather than in PHP
+       because there is nothing secret about the comparison — the token itself
+       is the secret, and an attacker who does not hold it learns nothing from
+       how long the query takes. */
+    $token = request_token();
+    if ($token !== '') {
+        $row = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+        if ($row && (string) ($row['status'] ?? 'Active') !== 'Inactive') {
+            return $user = $row;
+        }
+        return $user = null;
+    }
+
+    /* One deploy's grace for a tab still running yesterday's build. This is the
+       old scheme and it is not authentication — the ids are u1, u2, u3 — so it
+       goes as soon as everyone has reloaded. */
+    if (!ACCEPT_LEGACY_USER_ID) {
+        return $user = null;
+    }
     $id = $_SERVER['HTTP_X_USER_ID'] ?? '';
     if ($id === '') {
         return $user = null;
@@ -496,7 +532,15 @@ function guard_request(string $resource, string $method): void
 {
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 
-    if ($isWrite && $resource !== 'login' && $resource !== 'change-password') {
+    /* Before any rule about which role may do what, the question of whether
+       there is a role at all. Without this the guards below fall through for a
+       caller who sent no identity, which is how the student roll came to be
+       readable by anyone who asked for it. */
+    if (!in_array($resource, OPEN_ENDPOINTS, true) && current_user() === null) {
+        send_json(['error' => 'unauthorised', 'message' => 'Please sign in.'], 401);
+    }
+
+    if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true)) {
         guard_module_write($resource, $method);
     }
 
@@ -521,7 +565,7 @@ function guard_request(string $resource, string $method): void
         }
     }
 
-    if ($isWrite && $resource !== 'login' && $resource !== 'change-password' && is_read_only_role()
+    if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true) && is_read_only_role()
         && !read_only_write_allowed($resource, $method)) {
         send_json([
             'error'   => 'read-only',
@@ -895,7 +939,29 @@ function api_login(): void
             'message' => 'More than one account uses this username. Contact the administrator.',
         ], 409);
     }
-    send_json(row_out('users', $rows[0]));
+    /* Reused when the account already has one, so signing in on a phone does
+       not sign the same person out on their desk. Logout, a password change and
+       being deactivated all clear it, which is what makes it revocable. */
+    $token = (string) ($rows[0]['token'] ?? '');
+    if ($token === '') {
+        $token = new_token();
+        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
+            ->execute([$token, $rows[0]['id']]);
+    }
+    $out = row_out('users', $rows[0]);
+    $out['token'] = $token;          // the only response that carries it
+    send_json($out);
+}
+
+/** Give the token up. Anything still holding it is a 401 from here on. */
+function api_logout(): void
+{
+    $me = current_user();
+    if ($me) {
+        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = NULL WHERE ' . qi('id') . ' = ?')
+            ->execute([$me['id']]);
+    }
+    send_json(['ok' => true]);
 }
 
 /**
@@ -928,9 +994,12 @@ function api_change_password(): void
         send_json(['error' => 'unchanged', 'message' => 'That is the password you already have.'], 422);
     }
 
-    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
-        ->execute([hash_password($next), $me['id']]);
-    send_json(['ok' => true]);
+    /* A new token with the new password: whoever knew the old one is signed
+       out, which is the point of changing it after a screen was left unlocked. */
+    $token = new_token();
+    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ?, ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
+        ->execute([hash_password($next), $token, $me['id']]);
+    send_json(['ok' => true, 'token' => $token]);
 }
 
 function api_create(string $col): void
@@ -1050,6 +1119,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'login') {
         api_login();
+    }
+    if ($method === 'POST' && $resource === 'logout') {
+        api_logout();
     }
     if ($method === 'POST' && $resource === 'change-password') {
         api_change_password();

@@ -11,13 +11,22 @@ const Store = {
           applications: [], interviews: [], offers: [], placementevents: [],
           coordinators: [], admissions: [] },
 
-  /* The backend restricts financial collections to admin/accountant. It works
-     out who is calling from this header, so every request carries it. */
+  /* Who is calling. The token is what the server actually believes — it is
+     minted at login, cannot be guessed, and is given up at logout. The id is
+     kept alongside it only because the app reads it locally; the server no
+     longer takes the id as proof of anything. */
   userId: sessionStorage.getItem('nmiet_user') || null,
-  setUser(id) {
+  token: sessionStorage.getItem('nmiet_token') || null,
+  setUser(id, token) {
     this.userId = id || null;
     if (id) sessionStorage.setItem('nmiet_user', id);
     else sessionStorage.removeItem('nmiet_user');
+    if (token !== undefined) this.setToken(token);
+  },
+  setToken(token) {
+    this.token = token || null;
+    if (token) sessionStorage.setItem('nmiet_token', token);
+    else sessionStorage.removeItem('nmiet_token');
   },
 
   /* View-only roles (center head). The server is the real gate — it answers 403
@@ -41,6 +50,7 @@ const Store = {
   },
   _headers(json) {
     const h = json ? { 'Content-Type': 'application/json' } : {};
+    if (this.token) h['X-Auth-Token'] = this.token;
     if (this.userId) h['X-User-Id'] = this.userId;
     return h;
   },
@@ -48,6 +58,14 @@ const Store = {
   // load everything from the server into the cache
   async load() {
     const res = await fetch(`${API}/bootstrap`, { headers: this._headers() });
+    /* The token was revoked, expired with a password change, or belongs to an
+       account that has been switched off. Whatever the reason, this session is
+       over — drop it so the app asks for a sign-in rather than showing a shell
+       with no data in it. */
+    if (res.status === 401) {
+      this.setUser(null, null);
+      throw new Error('unauthorised');
+    }
     if (!res.ok) throw new Error('bootstrap failed');
     this.data = await res.json();
     return this.data;
@@ -72,7 +90,20 @@ const Store = {
       }
       return { error: (data && data.message) || 'Invalid username or password.' };
     }
+    // the one response that carries it; it is kept out of every other one
+    if (data && data.token) this.setToken(data.token);
     return data;
+  },
+
+  /* Give the token up. The server forgets it, so anything still holding a copy
+     — another tab, a stale phone — is a 401 from the next request on. */
+  async logout() {
+    try {
+      if (this.token) {
+        await fetch(`${API}/logout`, { method: 'POST', headers: this._headers() });
+      }
+    } catch (e) { /* signing out locally matters more than telling the server */ }
+    this.setUser(null, null);
   },
 
   /* Changing your own password. The account is the one in the header, so this
@@ -87,6 +118,8 @@ const Store = {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) return { error: (data && data.message) || 'That could not be saved.' };
+      // every other session is now signed out; this one carries on with the new token
+      if (data && data.token) this.setToken(data.token);
       return { ok: true };
     } catch (e) {
       return { error: 'Could not reach the server.' };

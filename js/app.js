@@ -292,9 +292,11 @@
         return;
       }
       user = found;
-      // the store sends this id with every request so the server can authorise
-      // financial reads/writes — it must be set before the first load()
-      Store.setUser(found.id);
+      /* Store.login() has already kept the token; this records who it belongs
+         to. Both have to be in place before the first load(), because the
+         server answers 401 to a request that carries neither. */
+      Store.setUser(found.id, found.token);
+      delete user.token;   // held by the store alone, never by a page
       applyReadOnly();
       await Store.load();
       startApp();
@@ -311,7 +313,8 @@
 
   function logout() {
     user = null;
-    Store.setUser(null);
+    // tell the server to forget the token first; a copy left behind is a session
+    Store.logout();
     Store.setReadOnly(false);
     document.body.classList.remove('read-only');
     stopDashboardPolling();
@@ -14224,7 +14227,7 @@
         await Store.load();
         const u = Store.find('users', uid);
         if (u) { user = u; startApp(); }
-        else Store.setUser(null);
+        else Store.setUser(null, null);
       } catch (e) { /* server down — stay on login screen */ }
     }
   }

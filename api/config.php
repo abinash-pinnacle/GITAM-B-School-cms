@@ -118,7 +118,11 @@ const COLLECTIONS = [
        modules listed in permissions). Absent means full — every account that
        existed before this was added keeps working. */
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name',
-                     'access', 'permissions', 'status', 'email', 'phone', 'empId'],
+                     'access', 'permissions', 'status', 'email', 'phone', 'empId',
+                     /* 32 random bytes, minted at login and sent back on every
+                        request. Cleared by logout, a password change or being
+                        deactivated — which is what makes a session revocable. */
+                     'token'],
     /* A row per role the admin has edited, plus every custom role. A role with
        no row here means "everything its ceiling allows" — which is what every
        login does today, so nothing had to be migrated. `base` names the
@@ -319,6 +323,17 @@ const ID_PREFIX = [
  */
 const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
                'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
+
+/* Requests that may arrive without a token, because they are how one is
+   obtained or are deliberately public. Everything else is refused. */
+const OPEN_ENDPOINTS = ['login', 'health'];
+
+/* The old scheme identified a caller by `X-User-Id`, and the ids are u1, u2,
+   u3 — so it was not authentication, it was a claim the server believed. There
+   is no grace period for that: leaving it on for the convenience of open tabs
+   leaves the administrator account open to anyone who types the header. A tab
+   from before this deploy gets a 401 and asks its owner to sign in again. */
+const ACCEPT_LEGACY_USER_ID = false;
 
 /* ---------------- actions ----------------
    What can be done inside a module. The same list the permission screen draws
