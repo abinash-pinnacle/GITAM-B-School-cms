@@ -1,6 +1,6 @@
 {
   "name": "nmiet/cms",
-  "description": "NMIET College Management System — PHP + PDO backend with a vanilla JS frontend (educational demo project).",
+  "description": "NMIET College Management System — PHP + PDO backend with a vanilla JS frontend.",
   "type": "project",
   "license": "MIT",
   "require": {
