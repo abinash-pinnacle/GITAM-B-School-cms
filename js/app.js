@@ -4288,8 +4288,14 @@
     }
     $('#newClassBtn').onclick = () => { closeModal(); courseForm(null, { presetFaculty: fid }); };
     $('#modalBody').querySelectorAll('[data-unassign]').forEach(b => b.onclick = () => {
-      Store.update('courses', b.dataset.unassign, { facultyId: '' });
-      toast('Class unassigned.'); refresh();
+      const c = Store.find('courses', b.dataset.unassign) || {};
+      confirmAction('Unassign Class',
+        `Take <b>${esc(c.code || '')} ${esc(c.name || '')}</b> away from
+         <b>${esc(f.name)}</b>? The class stays on the roll, with nobody teaching it.`,
+        'Unassign', () => {
+          Store.update('courses', b.dataset.unassign, { facultyId: '' });
+          toast('Class unassigned.', 'err'); refresh();
+        });
     });
   }
 
@@ -5430,7 +5436,19 @@
             `<p class="empty">${isFaculty ? 'No periods scheduled for your classes yet.'
               : 'No periods scheduled for this selection.'}</p>`);
         if (isAdmin) $('#ttArea').querySelectorAll('[data-del]').forEach(btn =>
-          btn.onclick = () => { Store.remove('timetable', btn.dataset.del); toast('Slot removed.'); draw(); });
+          btn.onclick = () => {
+            const t = Store.find('timetable', btn.dataset.del) || {};
+            const c = t.courseId ? Store.find('courses', t.courseId) : null;
+            confirmDelete('Delete Period',
+              `Remove the <b>${esc(DAY_FULL[t.day] || t.day || '—')}</b> period at
+               <b>${esc(slotTimeLabel(t))}</b>${c ? ` — ${esc(c.code || '')} ${esc(c.name || '')}` : ''}
+               from the timetable?`,
+              'Delete Period', () => {
+                Store.remove('timetable', btn.dataset.del);
+                toast('Period removed.', 'err');
+                draw();
+              });
+          });
       };
       if (canPickClass) {
         $('#ttBranch').onchange = draw; $('#ttSem').onchange = draw; $('#ttSec').oninput = draw;
@@ -7101,6 +7119,20 @@
     $('#ok').onclick = () => { closeModal(); onOk(); };
   }
 
+  /* Every delete in the project goes through here, so they all read and look
+     the same: what is about to go, the same warning under it, and a red button
+     that is not where Cancel is. Deliberately not the same function as
+     confirmAction — a dialog that cries irreversible over a saved payment
+     teaches people to click through the one that means it. */
+  function confirmDelete(title, message, okLabel, onOk) {
+    openModal(title, `<p style="line-height:1.7">${message}</p>
+      <p style="color:var(--muted);font-size:13px;margin:8px 0 0">This action cannot be undone.</p>
+      <div class="form-actions"><button class="btn-outline" id="cx">Cancel</button>
+        <button class="btn-primary" style="background:var(--red)" id="ok">${esc(okLabel)}</button></div>`);
+    $('#cx').onclick = closeModal;
+    $('#ok').onclick = () => { closeModal(); onOk(); };
+  }
+
   /* ---------- shared filter bar ---------- */
   function finFilterBar(p, opts) {
     const o = opts || {};
@@ -7619,7 +7651,7 @@
           $('#asBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => assetForm(b.dataset.edit, draw));
           $('#asBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
             const a = Store.find('assets', b.dataset.del) || {};
-            confirmAction('Delete Asset', `Delete <b>${esc(a.name)}</b> (${esc(a.id)}) worth
+            confirmDelete('Delete Asset', `Delete <b>${esc(a.name)}</b> (${esc(a.id)}) worth
               <b>${money(a.currentValue)}</b> from the asset register? This cannot be undone.`,
               'Delete Asset', () => { Store.remove('assets', a.id); toast('Asset deleted.', 'err'); draw(); });
           });
@@ -7790,7 +7822,7 @@
           $('#ffBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => fixedFeeForm(b.dataset.edit, draw));
           $('#ffBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
             const r = Store.find('fixedfees', b.dataset.del) || {};
-            confirmAction('Delete Fixed Fee', `Remove <b>${esc(r.feeType)}</b> of <b>${money(r.amount)}</b>
+            confirmDelete('Delete Fixed Fee', `Remove <b>${esc(r.feeType)}</b> of <b>${money(r.amount)}</b>
               for ${esc(r.course)} / ${esc(r.branch)} / ${esc(r.academicYear)} from the fee structure?`,
               'Delete', () => { Store.remove('fixedfees', r.id); toast('Fixed fee deleted.', 'err'); draw(); });
           });
@@ -7967,7 +7999,7 @@
           $('#sfBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
             const f = Store.find('fees', b.dataset.del) || {};
             const s = Store.find('students', f.studentId) || {};
-            confirmAction('Delete Fee Record', `Delete the Semester ${esc(f.semester || '—')} fee record of
+            confirmDelete('Delete Fee Record', `Delete the Semester ${esc(f.semester || '—')} fee record of
               <b>${esc(s.name || '—')}</b> (${money(f.total)}, ${money(f.paid)} already paid)?
               Receipts already issued will stay in the payment history.`,
               'Delete Record', () => { Store.remove('fees', f.id); toast('Fee record deleted.', 'err'); draw(); });
@@ -8830,7 +8862,7 @@
         $('#acBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const a = Store.find('accountants', b.dataset.del) || {};
           const login = Store.all('users').find(u => u.role === 'accountant' && u.refId === a.id);
-          confirmAction('Delete Accountant', `Delete <b>${esc(a.name)}</b> from the accounts office
+          confirmDelete('Delete Accountant', `Delete <b>${esc(a.name)}</b> from the accounts office
             ${login ? `and remove their login <b>@${esc(login.username)}</b>` : ''}?
             Receipts they collected stay in the payment history.`,
             'Delete', () => {
@@ -8974,7 +9006,7 @@
         $('#rqBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => requisitionForm(type, b.dataset.edit, draw));
         $('#rqBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const r = Store.find('requisitions', b.dataset.del) || {};
-          confirmAction('Withdraw Request', `Withdraw request <b>${esc(r.id)}</b> for
+          confirmDelete('Withdraw Request', `Withdraw request <b>${esc(r.id)}</b> for
             <b>${esc(r.title)}</b> (${r.quantity} × ${money(r.estimatedCost)})?`,
             'Withdraw', () => { Store.remove('requisitions', r.id); toast('Request withdrawn.', 'err'); draw(); });
         });
@@ -9171,7 +9203,7 @@
         $('#rvBody').querySelectorAll('[data-review]').forEach(b => b.onclick = () => reviewRequisitionForm(b.dataset.review, draw));
         $('#rvBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const r = Store.find('requisitions', b.dataset.del) || {};
-          confirmAction('Delete Requisition', `Delete request <b>${esc(r.id)}</b> for <b>${esc(r.title)}</b>
+          confirmDelete('Delete Requisition', `Delete request <b>${esc(r.id)}</b> for <b>${esc(r.title)}</b>
             raised by ${esc(r.requesterName || '—')}? The requester will no longer see it.`,
             'Delete', () => { Store.remove('requisitions', r.id); toast('Requisition deleted.', 'err'); draw(); });
         });
@@ -9566,12 +9598,25 @@
           <button type="button" class="btn-primary" style="background:var(--red)" id="mlGo">Remove selected</button>
         </div>`, true);
       $('#modal2Body').querySelector('#cx').onclick = closeModal2;
-      $('#modal2Body').querySelector('#mlGo').onclick = () => {
+      const go = $('#modal2Body').querySelector('#mlGo');
+      let armed = false;
+      // un-arm the moment the selection changes, so the confirmed count is
+      // always the count that was shown
+      $('#modal2Body').querySelectorAll('#mlList input').forEach(box => box.onchange = () => {
+        if (!armed) return;
+        armed = false; go.textContent = 'Remove selected';
+      });
+      go.onclick = () => {
         const picked = [...document.querySelectorAll('#mlList input:checked')].map(i => i.value);
         if (!picked.length) { toast('Nothing ticked.', 'err'); return; }
         const list = listValues(name);
         if (list.length - picked.length < 1) {
           toast('At least one value has to remain.', 'err'); return;
+        }
+        if (!armed) {
+          armed = true;
+          go.textContent = `Confirm — remove ${plural(picked.length, 'value')}`;
+          return;
         }
         picked.forEach(v => {
           const i = list.indexOf(v);
@@ -9691,20 +9736,16 @@
   function delConfirm(col, id, label, after) {
     const logins = COLLECTIONS_WITH_LOGIN.includes(col)
       ? Store.all('users').filter(u => u.refId === id) : [];
-    openModal('Delete ' + label, `<p>Are you sure you want to delete this ${label}?
-        This action cannot be undone.</p>
-      ${logins.length ? `<p style="color:var(--muted);font-size:13px">
-        Their login <b>${esc(logins[0].username || '')}</b> is removed with them.</p>` : ''}
-      <div class="form-actions"><button class="btn-outline" id="cx">Cancel</button>
-        <button class="btn-primary" style="background:var(--red)" id="ok">Delete</button></div>`);
-    $('#cx').onclick = closeModal;
-    $('#ok').onclick = () => {
-      const removed = removeLinkedLogins(col, id);
-      Store.remove(col, id);
-      closeModal();
-      toast(label + (removed ? ' and their login deleted.' : ' deleted.'), 'err');
-      after ? after() : render();
-    };
+    confirmDelete('Delete ' + label,
+      `Are you sure you want to delete this ${esc(label)}?`
+      + (logins.length ? `<br><span style="color:var(--muted);font-size:13px">Their login <b>${
+          esc(logins[0].username || '')}</b> is removed with them.</span>` : ''),
+      'Delete', () => {
+        const removed = removeLinkedLogins(col, id);
+        Store.remove(col, id);
+        toast(label + (removed ? ' and their login deleted.' : ' deleted.'), 'err');
+        after ? after() : render();
+      });
   }
   function today() { const d = new Date(); return d.toISOString().slice(0,10); }
   function addDays(dateStr, n) {
@@ -11773,7 +11814,7 @@
             toast(`${c.name} has ${drives} drive(s) — delete or reassign those first.`, 'err');
             return;
           }
-          confirmAction('Delete Company', `Remove <b>${esc(c.name)}</b> from the company list?`,
+          confirmDelete('Delete Company', `Remove <b>${esc(c.name)}</b> from the company list?`,
             'Delete', () => { Store.remove('companies', c.id); toast('Company deleted.', 'err'); draw(); });
         });
         $('#coPager').innerHTML = pagerHtml(rows.length, page);
@@ -11971,7 +12012,7 @@
         $('#drBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const d = Store.find('drives', b.dataset.del) || {};
           const apps = Store.all('applications').filter(a => a.driveId === d.id).length;
-          confirmAction('Delete Drive', `Delete the <b>${esc(d.jobRole || d.id)}</b> drive by
+          confirmDelete('Delete Drive', `Delete the <b>${esc(d.jobRole || d.id)}</b> drive by
             <b>${esc(companyName(d.companyId))}</b>?${apps ? ` Its ${apps} application(s) will also be removed.` : ''}`,
             'Delete Drive', () => {
               Store.all('applications').filter(a => a.driveId === d.id).forEach(a => Store.remove('applications', a.id));
@@ -12214,7 +12255,7 @@
         $('#apBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const a = Store.find('applications', b.dataset.del) || {};
           const s = Store.find('students', a.studentId) || {};
-          confirmAction('Delete Application', `Remove <b>${esc(s.name || '—')}</b>'s application for
+          confirmDelete('Delete Application', `Remove <b>${esc(s.name || '—')}</b>'s application for
             <b>${esc(driveLabel(a.driveId))}</b>?`, 'Delete',
             () => {
               Store.all('interviews').filter(i => i.applicationId === a.id).forEach(i => Store.remove('interviews', i.id));
@@ -12414,7 +12455,7 @@
         $('#ivBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const i = Store.find('interviews', b.dataset.del) || {};
           const s = Store.find('students', i.studentId) || {};
-          confirmAction('Delete Interview', `Remove round ${esc(String(i.round || 1))} for
+          confirmDelete('Delete Interview', `Remove round ${esc(String(i.round || 1))} for
             <b>${esc(s.name || '—')}</b> on ${esc(i.date || '—')}?`, 'Delete',
             () => { Store.remove('interviews', i.id); toast('Interview deleted.', 'err'); draw(); });
         });
@@ -12611,7 +12652,7 @@
     root.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       const o = Store.find('offers', b.dataset.del) || {};
       const s = Store.find('students', o.studentId) || {};
-      confirmAction('Delete Offer', `Remove <b>${esc(s.name || '—')}</b>'s
+      confirmDelete('Delete Offer', `Remove <b>${esc(s.name || '—')}</b>'s
         ${esc(money(o.package))} offer from <b>${esc(companyName(o.companyId))}</b>?
         The student will stop counting as placed.`, 'Delete',
         () => { Store.remove('offers', o.id); toast('Offer deleted.', 'err'); draw(); });
@@ -12929,7 +12970,7 @@
           b.onclick = () => placementEventForm(b.dataset.edit, draw));
         $('#pcBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const e = Store.find('placementevents', b.dataset.del) || {};
-          confirmAction('Delete Date', `Remove <b>${esc(e.title)}</b> from the placement calendar?`,
+          confirmDelete('Delete Date', `Remove <b>${esc(e.title)}</b> from the placement calendar?`,
             'Delete', () => { Store.remove('placementevents', e.id); toast('Date removed.', 'err'); draw(); });
         });
         $('#pcPager').innerHTML = pagerHtml(rows.length, page);
