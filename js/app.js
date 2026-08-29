@@ -2160,7 +2160,7 @@
      again and left to drift. */
   const clubList = () => specialisationList().map(v => v + ' Club');
   const DOC_TYPES = ['Aadhaar', 'PAN', 'Marksheet', 'Physically Handicapped Certificate',
-                     'Transfer Certificate', 'Migration Certificate', 'Caste Certificate',
+                     'CLC', 'Migration Certificate', 'Caste Certificate',
                      'Income Certificate', 'Photograph', 'Other'];
   /* Which of the two the college is holding. A date of issue is printed on the
      document itself; what the desk needs to know later is whether the original
