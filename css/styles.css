@@ -739,3 +739,34 @@ a.install-btn:hover{background:var(--primary-light)}
 @media (max-width:640px){
   .modal-body .fin-tabs{top:57px;margin:-16px -16px 12px;padding:12px 16px 10px}
 }
+
+/* ---------- the permission grid ----------
+   Ten actions across and a module list down. The module column is pinned so a
+   row can still be read once the table is scrolled sideways on a laptop, and
+   the action headings are short because the column only has to fit a tick. */
+.pg-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.pg-tools .search-box{flex:1;min-width:160px}
+.pg-wrap{max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:11px}
+.pg-table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.pg-table thead th{position:sticky;top:0;z-index:3;background:var(--primary-light);
+  color:var(--primary-dark);font-weight:600;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.3px;padding:10px 6px;text-align:center;white-space:nowrap}
+.pg-table td{padding:9px 6px;text-align:center;border-top:1px solid var(--line)}
+.pg-table tbody tr:hover td{background:#f7f9fd}
+.pg-table input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
+.pg-table input:disabled{cursor:not-allowed;opacity:.5}
+/* the module name stays put while the actions scroll under it */
+.pg-table .pg-mod{position:sticky;left:0;z-index:2;background:#fff;text-align:left;
+  font-weight:600;color:var(--ink);white-space:nowrap;padding-left:12px;min-width:170px}
+.pg-table thead .pg-mod{z-index:4;background:var(--primary-light)}
+.pg-table tbody tr:hover .pg-mod{background:#f7f9fd}
+/* an action this role's pages have never supported — shown, not hidden, so it
+   reads as "not for this role" rather than "somebody forgot to tick it" */
+.pg-table .pg-na{color:var(--border);cursor:not-allowed}
+.pg-table .pg-all{background:#fbfcfe;border-left:1px solid var(--line)}
+.pg-table thead .pg-all{background:var(--primary-light)}
+.pg-table tr.hidden{display:none}
+
+/* a login somebody switched off */
+tr.row-off td{opacity:.55}
+tr.row-off td .pill{opacity:1}

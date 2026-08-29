@@ -172,38 +172,163 @@ function placement_officer_may_read(string $col): bool
 }
 
 /**
- * The modules this account has been narrowed to, or null when it has not been
- * narrowed at all. An account with no `access` recorded is a full one — every
- * login that existed before user settings arrived keeps working.
- */
-/**
- * What a narrowed account was given, as module key => 'view' | 'edit'.
+ * A stored permission set, in whichever shape it was saved, as
+ * module => list of actions.
  *
- * Older accounts stored a plain list of module keys, which meant the account
- * could change them, so a list still reads as 'edit' throughout.
+ * Three shapes have existed. A plain list of module keys was the first and
+ * meant full access; then 'view' | 'edit'; now a list of actions. All three are
+ * read rather than rewritten, so an account narrowed before any of this keeps
+ * working and keeps meaning what it always meant.
  */
-function restricted_perms(): ?array
+function read_perm_set($raw): ?array
 {
-    $u = current_user();
-    if (!$u || (string) ($u['access'] ?? 'full') !== 'restricted') {
-        return null;
-    }
-    $raw = $u['permissions'] ?? null;
     if (is_string($raw)) {
         $raw = json_decode($raw, true);
     }
     if (!is_array($raw)) {
-        return [];
+        return null;
     }
     $out = [];
     foreach ($raw as $key => $value) {
-        if (is_int($key)) {
-            $out[(string) $value] = 'edit';
-        } elseif ($value !== '' && $value !== false && $value !== null) {
-            $out[(string) $key] = ($value === 'view') ? 'view' : 'edit';
+        if (is_int($key)) {                     // the oldest form: a bare list
+            $out[(string) $value] = ACTIONS;
+            continue;
+        }
+        if ($value === '' || $value === false || $value === null) {
+            continue;
+        }
+        if (is_array($value)) {
+            $acts = array_values(array_intersect(ACTIONS, $value));
+        } elseif ($value === 'view') {
+            $acts = READ_ACTIONS;
+        } else {
+            $acts = ACTIONS;                    // 'edit', true, 1 — the old full grant
+        }
+        if ($acts) {
+            $out[(string) $key] = $acts;
         }
     }
     return $out;
+}
+
+/**
+ * What the code supports for a role, as module => actions — the cap every
+ * grant is held to. Worked out from MODULES and the carve-outs rather than
+ * from a menu, because the server has no menu; it is deliberately the coarser
+ * of the two, since the role rules further down guard_request() still apply on
+ * top of it.
+ */
+function role_ceiling(string $role): array
+{
+    static $cache = [];
+    if (isset($cache[$role])) {
+        return $cache[$role];
+    }
+    $out = [];
+    $carve = ROLE_CARVE_OUTS[$role] ?? null;
+    $readOnly = $carve !== null && ($carve['readOnly'] ?? false);
+    foreach (MODULES as $key => $def) {
+        $acts = ($role === 'admin' || !$readOnly) ? ACTIONS : READ_ACTIONS;
+        $extra = $carve['extra'][$key] ?? null;
+        if ($extra) {
+            $acts = array_values(array_intersect(ACTIONS, array_merge($acts, $extra)));
+        }
+        $out[$key] = $acts;
+    }
+    return $cache[$role] = $out;
+}
+
+/** the role row for a key, or null — a role nobody has edited has no row */
+function role_record(string $key): ?array
+{
+    static $cache = [];
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    try {
+        $row = fetch_one('SELECT * FROM ' . qi('roles') . ' WHERE ' . qi('key') . ' = ?', [$key]);
+    } catch (PDOException $e) {
+        $row = null;         // the table arrives with the next init_db()
+    }
+    return $cache[$key] = $row ?: null;
+}
+
+/** the built-in role a custom one borrows its ceiling from */
+function base_role(string $key): string
+{
+    $row = role_record($key);
+    $base = $row ? (string) ($row['base'] ?? '') : '';
+    if ($base !== '' && in_array($base, ROLES, true)) {
+        return $base;
+    }
+    return in_array($key, ROLES, true) ? $key : 'faculty';
+}
+
+/**
+ * What this account may actually do: ceiling ∩ role template ∩ user override.
+ * The override wins over the template, and both are capped by the ceiling —
+ * the same order the browser applies, so the two never disagree.
+ */
+function effective_perms(): array
+{
+    static $cached = false;
+    static $perms = [];
+    if ($cached) {
+        return $perms;
+    }
+    $cached = true;
+    $u = current_user();
+    if (!$u) {
+        return $perms = [];
+    }
+    $role = (string) ($u['role'] ?? '');
+    $ceiling = role_ceiling(base_role($role));
+    if ($role === 'admin') {
+        return $perms = $ceiling;              // never narrowed, never lost
+    }
+    $roleRow = role_record($role);
+    $fromRole = $roleRow ? read_perm_set($roleRow['permissions'] ?? null) : null;
+    $own = ((string) ($u['access'] ?? 'full') === 'restricted')
+        ? (read_perm_set($u['permissions'] ?? null) ?? [])
+        : null;
+    $out = [];
+    foreach ($ceiling as $key => $acts) {
+        if ($fromRole !== null) {
+            $acts = array_values(array_intersect($acts, $fromRole[$key] ?? []));
+        }
+        if ($own !== null) {
+            $acts = array_values(array_intersect($acts, $own[$key] ?? []));
+        }
+        if ($acts) {
+            $out[$key] = $acts;
+        }
+    }
+    return $perms = $out;
+}
+
+/** may the caller do this, in this module? */
+function may(string $module, string $action): bool
+{
+    if (current_role() === 'admin') {
+        return true;
+    }
+    return in_array($action, effective_perms()[$module] ?? [], true);
+}
+
+/**
+ * Kept for the callers that only ask "which modules". An account whose role
+ * has never been narrowed and which carries no override of its own is not
+ * narrowed at all, and reads as null exactly as it used to.
+ */
+function restricted_perms(): ?array
+{
+    $u = current_user();
+    if (!$u) {
+        return null;
+    }
+    $narrowed = (string) ($u['access'] ?? 'full') === 'restricted'
+        || role_record((string) ($u['role'] ?? '')) !== null;
+    return $narrowed ? effective_perms() : null;
 }
 
 function restricted_modules(): ?array
@@ -218,28 +343,49 @@ function restricted_modules(): ?array
  * but nothing outside its modules can be written, whatever the request looks
  * like.
  */
-function guard_module_write(string $resource): void
+/**
+ * The action gate. POST needs Add, PUT needs Edit, DELETE needs Delete — so a
+ * hand-made DELETE against a module ticked for View and Add is refused, which
+ * is the whole point of having actions at all.
+ *
+ * A collection can belong to more than one module (`users` is written by both
+ * Students and Staff), so holding the action in any module that writes it is
+ * enough — the same rule the screen draws its buttons by.
+ */
+function guard_module_write(string $resource, string $method): void
 {
     $perms = restricted_perms();
     if ($perms === null) {
         return;
     }
-    // a module ticked for viewing only opens its pages, never its save button
-    $allowed = [];
-    foreach ($perms as $key => $level) {
-        if ($level !== 'edit') {
-            continue;
-        }
-        foreach (MODULES[$key]['write'] ?? [] as $col) {
-            $allowed[$col] = true;
+    $action = METHOD_ACTION[$method] ?? 'edit';
+    $owners = [];
+    foreach (MODULES as $key => $def) {
+        if (in_array($resource, $def['write'] ?? [], true)) {
+            $owners[] = $key;
         }
     }
-    if (!isset($allowed[$resource])) {
-        send_json([
-            'error'   => 'not-permitted',
-            'message' => 'Your account does not have permission to change this.',
-        ], 403);
+    if (!$owners) {
+        return;              // not a collection any module claims — older rules decide
     }
+    foreach ($owners as $key) {
+        $acts = $perms[$key] ?? [];
+        if (in_array($action, $acts, true)) {
+            return;
+        }
+        // an import writes rows the same way an add does, and Manage covers a
+        // module handed over whole
+        if ($action === 'add' && in_array('import', $acts, true)) {
+            return;
+        }
+        if ($action === 'edit' && (in_array('approve', $acts, true) || in_array('manage', $acts, true))) {
+            return;
+        }
+    }
+    send_json([
+        'error'   => 'not-permitted',
+        'message' => 'Your account does not have permission to ' . $action . ' this.',
+    ], 403);
 }
 
 /**
@@ -259,7 +405,28 @@ function guard_request(string $resource, string $method): void
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 
     if ($isWrite && $resource !== 'login' && $resource !== 'change-password') {
-        guard_module_write($resource);
+        guard_module_write($resource, $method);
+    }
+
+    /* Nobody edits their own access. A permission screen is reached by the
+       admin alone, and the account it is aimed at is read from the caller's
+       header, so a hand-made PUT cannot widen the login making it. */
+    if ($resource === 'auditlog' && current_role() !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator reads the audit log.'], 403);
+    }
+    if ($isWrite && in_array($resource, ['roles', 'auditlog'], true) && current_role() !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator manages roles and permissions.'], 403);
+    }
+    if ($isWrite && $resource === 'users' && current_role() !== 'admin') {
+        $body = body();
+        foreach (['access', 'permissions', 'role', 'status'] as $field) {
+            if (array_key_exists($field, $body)) {
+                send_json(['error' => 'forbidden',
+                           'message' => 'Only the administrator can change roles or permissions.'], 403);
+            }
+        }
     }
 
     if ($isWrite && $resource !== 'login' && $resource !== 'change-password' && is_read_only_role()
@@ -409,7 +576,17 @@ function api_bootstrap(): void
     $placement = may_read_placement();
     $isPo = is_placement_officer();
     $out = [];
+    $isAdmin = current_role() === 'admin';
     foreach (COLLECTIONS as $col => $_) {
+        /* Every session needs the role table: it is how the browser works out
+           what its own account may do, and it holds no data about anybody —
+           only which boxes are ticked for which role. The audit log does name
+           people, so it goes to the admin alone. */
+        if ($col === 'roles' || $col === 'auditlog') {
+            $rows = ($col === 'roles' || $isAdmin) ? fetch_all('SELECT * FROM ' . qi($col)) : [];
+            $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
+            continue;
+        }
         // a student/faculty/librarian session gets the financial tables as empty
         // lists rather than a 403, so the rest of their bootstrap still works
         if ($isPo && !placement_officer_may_read($col)) {
@@ -600,6 +777,12 @@ function api_login(): void
     );
     if (!$rows) {
         send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
+    }
+    if ((string) ($rows[0]['status'] ?? 'Active') === 'Inactive') {
+        // deliberately the same wording as a wrong password: whether an account
+        // exists is not something a sign-in page should confirm
+        send_json(['error' => 'inactive',
+                   'message' => 'This account has been deactivated. Contact the administrator.'], 403);
     }
     if (count($rows) > 1) {
         // The UI rejects a duplicate username, but nothing in the schema

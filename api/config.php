@@ -98,7 +98,18 @@ const COLLECTIONS = [
        modules listed in permissions). Absent means full — every account that
        existed before this was added keeps working. */
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name',
-                     'access', 'permissions'],
+                     'access', 'permissions', 'status', 'email', 'phone', 'empId'],
+    /* A row per role the admin has edited, plus every custom role. A role with
+       no row here means "everything its ceiling allows" — which is what every
+       login does today, so nothing had to be migrated. `base` names the
+       built-in role a custom one takes its menu shape and its ceiling from. */
+    'roles'      => ['id', 'key', 'label', 'base', 'builtin', 'status', 'description',
+                     'permissions'],
+    /* Who changed whose access, and what it was before. Append-only: nothing in
+       the app updates or deletes a row, because a log that can be edited is not
+       one. `changes` holds one entry per module that moved. */
+    'auditlog'   => ['id', 'at', 'actorId', 'actorName', 'subjectType', 'subjectKey',
+                     'subjectName', 'summary', 'changes'],
     // course + academicYear are used by the accounts office (fee structure is per course/year);
     // cgpa/backlogs/batch drive placement eligibility (cgpa falls back to the marks average)
     /* `name` stays the full name every other screen prints — the ID card, the
@@ -219,6 +230,8 @@ const JSON_FIELDS = [
     /* Decoded on the way out and encoded on the way in, so the app works with
        objects and the database keeps one column per tab. */
     'users'      => ['permissions'],
+    'roles'      => ['permissions'],
+    'auditlog'   => ['changes'],
     'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
                      'health', 'documents'],
     'faculty'    => STAFF_JSON,
@@ -287,6 +300,33 @@ const ID_PREFIX = [
 const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
                'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
 
+/* ---------------- actions ----------------
+   What can be done inside a module. The same list the permission screen draws
+   and the same list guard_request() checks, so a box ticked there is the box
+   the server reads. Adding one here adds it to both. */
+const ACTIONS = ['view', 'add', 'edit', 'delete', 'import', 'export',
+                 'print', 'approve', 'manage', 'reports'];
+/** what a role that may look and never touch is allowed */
+const READ_ACTIONS = ['view', 'export', 'print', 'reports'];
+/** the action an HTTP method needs; anything not listed is a read */
+const METHOD_ACTION = ['POST' => 'add', 'PUT' => 'edit', 'PATCH' => 'edit', 'DELETE' => 'delete'];
+
+/* The one thing a permission cannot do is invent support that is not in the
+   code. A fees page assumes an accountant; ticking Fees for a librarian would
+   grant a screen that has never been written for them. So every role has a
+   ceiling — the modules its own menu reaches, and the actions its role has
+   always been able to perform — and every grant is capped by it. Narrowing is
+   the only direction a permission moves, which is also why no permission edit
+   can escalate anybody. */
+const ROLE_CARVE_OUTS = [
+    // read-only monitoring, except the one thing it decides
+    'center_head'       => ['readOnly' => true, 'extra' => ['requisitions' => ['approve']]],
+    // exists to run attendance, and writes nothing else
+    'course_coordinator' => ['readOnly' => true, 'extra' => ['attendance' => ['add', 'edit', 'delete']]],
+    // enrols and corrects; removing a student is not its call
+    'admission'         => ['readOnly' => true, 'extra' => ['students' => ['add', 'edit', 'import']]],
+];
+
 /* ---------------- modules ----------------
    One entry per part of the college. `views` are the pages it covers in the
    sidebar; `write` are the collections it may change. A login marked
@@ -333,9 +373,9 @@ const MODULES = [
     'reports'     => ['label' => 'Reports & Departments',
                       'views' => ['chreports', 'departments', 'branches'],
                       'write' => []],
-    'system'      => ['label' => 'Login Accounts & Settings',
-                      'views' => ['accounts', 'usersettings'],
-                      'write' => ['users', 'settings']],
+    'system'      => ['label' => 'Users, Roles & Settings',
+                      'views' => ['accounts', 'usersettings', 'roles'],
+                      'write' => ['users', 'settings', 'roles', 'auditlog']],
 ];
 
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */

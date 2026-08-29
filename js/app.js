@@ -168,39 +168,45 @@
      belongs to was given to the account for viewing only. Every view asks this
      before it draws an Add, Edit or Delete button, so the second case needs no
      separate handling anywhere. */
-  function readOnly() { return roleReadOnly() || moduleViewOnly(splitViewKey(currentView).view); }
+  /* Every page hangs its Add, Edit and Delete controls off this one answer, so
+     a module granted for viewing draws none of them without each page having
+     to learn the rule. `canHere(action)` is the finer question, for the pages
+     that separate Add from Import from Export. */
+  function readOnly() {
+    const m = moduleOfView(splitViewKey(currentView).view);
+    if (!m) return roleReadOnly();
+    return !can(m, 'add') && !can(m, 'edit') && !can(m, 'delete');
+  }
   /* The one write a read-only role keeps: the center head approves requisitions.
      Kept in step with READ_ONLY_WRITE_EXCEPTIONS in api/config.php. */
   function readOnlyWritable() {
     return user && user.role === 'center_head' ? { requisitions: ['update'] } : {};
   }
+  /* The same answer the buttons got, in the shape Store checks — so a request
+     the screen would not have offered is refused before it leaves the browser
+     too. The server refuses it again regardless; this is only so a bug shows up
+     as a blocked write rather than a silent one.
+
+     An account nobody has narrowed keeps exactly what its role always had: the
+     guard is switched on only once there is something to enforce. */
   function applyReadOnly() {
-    // what the role itself allows, before any narrowing
-    let ro = roleReadOnly(), allow = readOnlyWritable();
-    // A coordinator writes attendance and nothing else, so the store treats it
-    // as read-only with that one exception — the same rule the API applies.
-    if (user && user.role === 'course_coordinator') {
-      ro = true; allow = { attendance: ['add', 'update', 'remove'] };
-    } else if (user && user.role === 'admission') {
-      // the admissions desk adds and corrects; removing a student is not its call
-      ro = true; allow = { students: ['add', 'update'], users: ['add', 'update'] };
-    }
-    /* A narrowed account may change only what its "can edit" modules cover, and
-       never more than its role already allowed — so the two are intersected
-       rather than one replacing the other. */
-    const perms = accountPerms(user);
-    if (perms) {
-      const merged = {};
-      MODULES.forEach(([key, , , write]) => {
-        if (perms[key] !== 'edit') return;
-        (write || []).forEach(col => {
-          if (!ro) merged[col] = ['add', 'update', 'remove'];
-          else if (allow[col]) merged[col] = allow[col];
-        });
+    if (!user || user.role === 'admin') { Store.setReadOnly(false, {}); return; }
+    const base = baseRoleOf(user.role);
+    const narrowed = !!rolePerms(user.role) || !!userPerms(user)
+      || READ_ONLY_ROLES.includes(base) || !!ROLE_CARVE_OUTS[base];
+    if (!narrowed) { Store.setReadOnly(false, {}); return; }
+    const allow = {};
+    MODULES.forEach(([key, , , write]) => {
+      const acts = PERMS[key] || [];
+      (write || []).forEach(col => {
+        const ops = new Set(allow[col] || []);
+        if (acts.includes('add') || acts.includes('import')) ops.add('add');
+        if (acts.includes('edit') || acts.includes('approve') || acts.includes('manage')) ops.add('update');
+        if (acts.includes('delete')) ops.add('remove');
+        if (ops.size) allow[col] = [...ops];
       });
-      ro = true; allow = merged;
-    }
-    Store.setReadOnly(ro, allow);
+    });
+    Store.setReadOnly(true, allow);
   }
   /** true for a role that may look at the master data but never change it */
   function viewsMasterOnly() {
@@ -208,8 +214,47 @@
   }
   /** roles whose scope is the whole college: the admin runs it, the center head watches it */
   function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
+  /* ---------- actions ----------
+     What can be done inside a module. One list, drawn by the permission screen
+     and checked by the server, so a box ticked there is the box the API reads. */
+  const ACTIONS = [
+    ['view', 'View'], ['add', 'Add'], ['edit', 'Edit'], ['delete', 'Delete'],
+    ['import', 'Import'], ['export', 'Export'], ['print', 'Print'],
+    ['approve', 'Approve'], ['manage', 'Manage'], ['reports', 'Reports'],
+  ];
+  const ACTION_KEYS = ACTIONS.map(([k]) => k);
+  /** what a role that may look and never touch is allowed */
+  const READ_ACTIONS = ['view', 'export', 'print', 'reports'];
+  /** the actions that change something — what Store and the API gate on */
+  const WRITE_ACTIONS = ['add', 'edit', 'delete', 'import', 'approve', 'manage'];
+  const BUILTIN_ROLES = Object.keys(ROLE_LABEL);
+
+  /* ---------- roles ----------
+     A row exists only for a role the admin has edited and for every custom
+     role. No row means "everything this role's ceiling allows", which is what
+     every login did before any of this — so there was nothing to migrate. */
+  function roleRow(key) {
+    return Store.all('roles').find(r => String(r.key) === String(key)) || null;
+  }
+  /** every role that can be assigned, built-in and custom, in a stable order */
+  function allRoleKeys() {
+    const custom = Store.all('roles').filter(r => !BUILTIN_ROLES.includes(r.key))
+      .map(r => r.key).sort();
+    return BUILTIN_ROLES.concat(custom);
+  }
+  /* The built-in role a custom one takes its menu shape and its ceiling from.
+     A custom role is a narrowing of something the code already supports, never
+     a new kind of user the pages have never been written for. */
+  function baseRoleOf(key) {
+    const r = roleRow(key);
+    if (r && r.base && BUILTIN_ROLES.includes(r.base)) return r.base;
+    return BUILTIN_ROLES.includes(key) ? key : 'faculty';
+  }
   /** the label shown in the top bar and the sidebar */
-  function roleLabel(role) { return ROLE_LABEL[role] || role; }
+  function roleLabel(role) {
+    const r = roleRow(role);
+    return (r && r.label) || ROLE_LABEL[role] || role;
+  }
   const ROLE_LIST = Object.keys(ROLE_LABEL);
 
   /* ---------- who the college employs ----------
@@ -339,7 +384,7 @@
       ['interviews','🎤','Interviews'], ['placements','🏆','Selections'],
       ['offers','📜','Offers'], ['plcalendar','📅','Placement Calendar'],
       ['plreports','📊','Placement Reports'], ['placementofficers','🧑‍💼','Placement Officers'],
-      ['usersettings','⚙️','User Settings'],
+      ['usersettings','⚙️','User Management'], ['roles','🛡️','Roles & Permissions'],
       [NAV_SECTION,'','Staff'],
       EMP_ATTENDANCE,
     ],
@@ -417,33 +462,47 @@
   };
 
   // the role's menu after applying the admin's feature switches
-  function menuFor(role) {
+  /* The menu a built-in role has always had, before anybody was narrowed. The
+     ceiling is worked out from this, so it must not depend on the account. */
+  function rawMenu(role) {
     let items = MENU[role] || [];
     if (role === 'student' && !studentFeesVisible()) items = items.filter(([key]) => key !== 'myfees');
     if (role === 'faculty' && !facultyAttendanceOn()) items = items.filter(([key]) => key !== 'attendance');
-    /* An account narrowed in User Settings shows only the modules it was given.
-       Section headings and the external link are structure, not pages, so they
-       stay — an empty section is dropped afterwards. */
-    const mods = accountModules(user);
-    if (mods) {
-      const allowed = viewsForModules(mods);
-      items = items.filter(([key, , , url]) =>
-        key === NAV_SECTION || key === NAV_LINK
-        || (key === NAV_GROUP ? allowed.has(url) : allowed.has(key)));
-      items = items.filter(([key], i) =>
-        key !== NAV_SECTION || items.slice(i + 1).some(([k]) => k !== NAV_SECTION));
-    }
     return items;
+  }
+  /* What this account actually sees. A custom role has no menu of its own — it
+     borrows the shape of the role it is based on, and its permissions cut that
+     down. Section headings and the external link are structure rather than
+     pages, so they survive the filter; a section left with nothing under it is
+     dropped afterwards. */
+  function menuFor(u) {
+    const role = typeof u === 'string' ? u : baseRoleOf((u || {}).role);
+    let items = rawMenu(role);
+    const allowed = (key) => {
+      if (ALWAYS_ALLOWED.includes(key)) return true;
+      const m = moduleOfView(key);
+      return m ? can(m, 'view') : true;
+    };
+    items = items.filter(([key, , , url]) =>
+      key === NAV_SECTION || key === NAV_LINK
+      || allowed(key === NAV_GROUP ? url : key));
+    return items.filter(([key], i) =>
+      key !== NAV_SECTION || items.slice(i + 1).some(([k]) => k !== NAV_SECTION));
   }
 
   function buildNav() {
+    refreshPerms();
     const nav = $('#navMenu');
-    const label = { admin: 'Administration', faculty: 'Faculty Menu', student: 'Student Menu',
-                    librarian: 'Library Menu', accountant: 'Accounts Menu',
-                    center_head: 'Center Head · View Only',
-                    placement_officer: 'Placement Cell' }[user.role] || 'Menu';
+    /* A custom role reads its own name over the menu it borrowed — the person
+       signed in knows what they were made, not what it was built from. */
+    const label = BUILTIN_ROLES.includes(user.role)
+      ? ({ admin: 'Administration', faculty: 'Faculty Menu', student: 'Student Menu',
+           librarian: 'Library Menu', accountant: 'Accounts Menu',
+           center_head: 'Center Head · View Only',
+           placement_officer: 'Placement Cell' }[user.role] || 'Menu')
+      : roleLabel(user.role);
     nav.innerHTML = `<div class="nav-section">${label}</div>`;
-    menuFor(user.role).forEach(([key, ico, txt, url, kids]) => {
+    menuFor(user).forEach(([key, ico, txt, url, kids]) => {
       /* A group renders its own row plus one indented row per child. The
          child's key carries the filter — "drives::On Campus" — so the router
          needs no special case and the active highlight still works. */
@@ -502,20 +561,19 @@
                      : { view: key.slice(0, at), preset: key.slice(at + NAV_GROUP.length) };
   }
 
+  /* The one question the router asks, and the same one the sidebar asked to
+     decide whether to draw the item at all. The API refuses the same pages'
+     writes either way — this only keeps a page from being opened by hand. */
   function canView(key) {
     const { view } = splitViewKey(key);
-    /* A narrowed account is held to its modules on top of whatever its role
-       allows — the API refuses the same pages' writes either way. */
-    const mods = accountModules(user);
-    if (mods && !viewsForModules(mods).has(view === 'stuprofile' ? 'students'
-                                          : view === 'facprofile' ? 'faculty' : view)) {
-      return false;
-    }
+    if (ALWAYS_ALLOWED.includes(view)) return true;
     /* A student's file is reached from the roll rather than from the sidebar,
        so it is open to whoever may open the roll itself. */
     if (view === 'stuprofile') return canView('students');
     if (view === 'facprofile') return canView('faculty');
-    return menuFor(user.role).some(([k, , , url]) =>
+    const m = moduleOfView(view);
+    if (m && !can(m, 'view')) return false;
+    return rawMenu(baseRoleOf(user.role)).some(([k, , , url]) =>
       k === view || (k === NAV_GROUP && url === view));
   }
 
@@ -576,13 +634,121 @@
                                                     ['events']],
     ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches'],
                                                     []],
-    ['system',       'Login Accounts & Settings',   ['accounts', 'usersettings'],
-                                                    ['users', 'settings']],
+    ['system',       'Users, Roles & Settings',     ['accounts', 'usersettings', 'roles'],
+                                                    ['users', 'settings', 'roles', 'auditlog']],
   ];
   /* Pages nobody is ever narrowed out of: the dashboard they land on and the
      pages that are about themselves. */
   const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
                           'mybooks', 'myplacement'];
+
+  /* ---------- the ceiling ----------
+     What the code supports for a role, as module => actions. A permission can
+     narrow this and can never exceed it: a fees screen assumes an accountant,
+     so ticking Fees for a librarian would hand them a page nobody has written.
+     That cap is also what makes an escalation impossible — every edit on the
+     permission screen moves in one direction. */
+  const ROLE_CARVE_OUTS = {
+    // read-only monitoring, except the one thing it decides
+    center_head: { readOnly: true, extra: { requisitions: ['approve'] } },
+    // exists to run attendance, and writes nothing else
+    course_coordinator: { readOnly: true, extra: { attendance: ['add', 'edit', 'delete'] } },
+    // enrols and corrects; removing a student is not its call
+    admission: { readOnly: true, extra: { students: ['add', 'edit', 'import'] } },
+  };
+  const CEILING_CACHE = {};
+  function roleCeiling(role) {
+    if (CEILING_CACHE[role]) return CEILING_CACHE[role];
+    const out = {};
+    if (role === 'admin') {
+      MODULES.forEach(([key]) => { out[key] = ACTION_KEYS.slice(); });
+      return (CEILING_CACHE[role] = out);
+    }
+    const views = roleViewKeys(role);
+    const carve = ROLE_CARVE_OUTS[role];
+    MODULES.forEach(([key, , mviews]) => {
+      if (!mviews.some(v => views.has(v))) return;
+      let acts = carve && carve.readOnly ? READ_ACTIONS.slice() : ACTION_KEYS.slice();
+      const extra = carve && carve.extra && carve.extra[key];
+      if (extra) acts = [...new Set(acts.concat(extra))];
+      out[key] = ACTION_KEYS.filter(a => acts.includes(a));   // always in the one order
+    });
+    return (CEILING_CACHE[role] = out);
+  }
+
+  /* A stored permission set, in whatever shape it was saved. The two-level
+     form predates actions, so it is read rather than rewritten: an account
+     narrowed years ago keeps working and means the same thing it always did. */
+  function readPermSet(raw) {
+    const val = typeof raw === 'string'
+      ? (() => { try { return JSON.parse(raw); } catch (e) { return null; } })() : raw;
+    if (Array.isArray(val)) {
+      // the oldest form: a plain list of module keys, which meant full access
+      const out = {};
+      val.forEach(k => { if (k) out[String(k)] = ACTION_KEYS.slice(); });
+      return out;
+    }
+    if (!val || typeof val !== 'object') return null;
+    const out = {};
+    Object.keys(val).forEach(k => {
+      const v = val[k];
+      if (!v) return;
+      if (Array.isArray(v)) out[k] = v.filter(a => ACTION_KEYS.includes(a));
+      else if (v === 'view') out[k] = READ_ACTIONS.slice();
+      else out[k] = ACTION_KEYS.slice();          // 'edit', true, 1 — the old full grant
+    });
+    return out;
+  }
+  /** the role template, or null when the role has never been narrowed */
+  function rolePerms(key) {
+    const r = roleRow(key);
+    return r ? readPermSet(r.permissions) : null;
+  }
+  /** the per-user override, or null when the account is not narrowed */
+  function userPerms(u) {
+    if (!u || (u.access || 'full') !== 'restricted') return null;
+    return readPermSet(u.permissions) || {};
+  }
+
+  /* ---------- what this account may actually do ----------
+     ceiling ∩ role template ∩ user override. The override wins over the
+     template — that is the priority, and it is the same everywhere — but both
+     are capped by the ceiling, so neither can hand out more than the code has. */
+  function effectivePerms(u) {
+    if (!u) return {};
+    const ceiling = roleCeiling(baseRoleOf(u.role));
+    if (u.role === 'admin') return ceiling;      // never narrowed, never lost
+    const role = rolePerms(u.role);
+    const own = userPerms(u);
+    const out = {};
+    Object.keys(ceiling).forEach(m => {
+      let acts = ceiling[m];
+      if (role) acts = acts.filter(a => (role[m] || []).includes(a));
+      if (own) acts = acts.filter(a => (own[m] || []).includes(a));
+      if (acts.length) out[m] = acts;
+    });
+    return out;
+  }
+
+  /* Worked out once per render rather than per button — a page draws dozens of
+     them and the answer cannot change while it is drawing. */
+  let PERMS = {};
+  function refreshPerms() { PERMS = effectivePerms(user); }
+  /** may the signed-in account do this, in this module? */
+  function can(module, action) {
+    if (user && user.role === 'admin') return true;
+    return (PERMS[module] || []).includes(action);
+  }
+  /** the module a page belongs to, or null for the pages everyone keeps */
+  function moduleOfView(viewKey) {
+    const owner = MODULES.find(([, , views]) => views.includes(viewKey));
+    return owner ? owner[0] : null;
+  }
+  /** may the signed-in account do this on the page it is looking at? */
+  function canHere(action) {
+    const m = moduleOfView(splitViewKey(currentView).view);
+    return m ? can(m, action) : !roleReadOnly();
+  }
 
   /* What a narrowed account was given, as { moduleKey: 'view' | 'edit' }, or
      null when the account is not narrowed at all. Accounts saved before the
@@ -612,15 +778,16 @@
   }
   /** true when the page belongs to a module this account may only look at */
   function moduleViewOnly(viewKey) {
-    const perms = accountPerms(user);
-    if (!perms) return false;
-    const owner = MODULES.find(([, , views]) => views.includes(viewKey));
-    return !!owner && perms[owner[0]] === 'view';
+    const m = moduleOfView(viewKey);
+    if (!m || !can(m, 'view')) return false;
+    // it opens, and nothing on it writes
+    return !can(m, 'add') && !can(m, 'edit') && !can(m, 'delete')
+        && !can(m, 'approve') && !can(m, 'manage');
   }
   /** every page key a role's own menu leads to */
   function roleViewKeys(role) {
     const out = new Set(ALWAYS_ALLOWED);
-    (MENU[role] || []).forEach(([key, , , url]) => {
+    (rawMenu(role) || []).forEach(([key, , , url]) => {
       if (key === NAV_SECTION || key === NAV_LINK) return;
       out.add(key === NAV_GROUP ? url : key);
     });
@@ -647,7 +814,7 @@
 
   const TITLES = {
     dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
-    usersettings:'User Settings',
+    usersettings:'User Management', roles:'Roles & Permissions',
     faculty:'Employees', facprofile:'Employee Profile', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
@@ -676,18 +843,54 @@
     profile: 'My Profile',
   };
 
+  /* What somebody sees when they open a page by hand that their account does
+     not reach. Deliberately says nothing about what is on the other side. */
+  function accessDenied() {
+    return `<div class="panel" style="text-align:center;padding:46px 22px">
+      <div style="font-size:44px;line-height:1">🔒</div>
+      <h3 style="margin:12px 0 6px;color:var(--primary-dark)">Access Denied</h3>
+      <p style="color:var(--muted);margin:0 0 18px">
+        You do not have permission to access this module.<br>
+        Ask the administrator if you need it.</p>
+      <button class="btn-primary btn-sm" id="adHome">← Back to Dashboard</button></div>`;
+  }
+
+  /* Which action a toolbar control needs. The two patterns are the codebase's
+     own naming — a button that prints is called somethingPrint — and the few
+     that do not follow it are named outright. A control matching nothing is
+     left alone, so a page nobody has considered is never silently disarmed.
+
+     Export and Print are hidden rather than refused: the rows are already in
+     the browser by the time the page draws, so this is a control on the screen
+     and not a gate. Import writes, and the server refuses that one for real. */
+  const ACTION_CONTROL_PATTERNS = [[/Print$/, 'print'], [/(Csv|Xls)$/, 'export']];
+  const ACTION_CONTROL_IDS = { impStu: 'import', impFac: 'import', dashImport: 'import' };
+  function gateControls(root, viewKey) {
+    const m = moduleOfView(viewKey);
+    if (!m) return;
+    root.querySelectorAll('button[id]').forEach(b => {
+      const act = ACTION_CONTROL_IDS[b.id]
+        || (ACTION_CONTROL_PATTERNS.find(([re]) => re.test(b.id)) || [])[1];
+      if (act && !can(m, act)) b.classList.add('hidden');
+    });
+  }
+
   function render() {
     /* A submenu key carries the filter it opens with — the page itself reads
        it from viewPreset and the title says which kind is being shown. */
     const { view, preset } = splitViewKey(currentView);
     viewPreset = preset;
+    /* Worked out once, here, before anything asks: a role edited in another tab
+       or a permission just saved is in force on the very next render. */
+    refreshPerms();
+    applyReadOnly();
     paintUser();
     $('#pageTitle').textContent =
       ((readOnly() && READ_ONLY_TITLES[view]) || TITLES[view] || 'Dashboard')
       + (preset ? ' — ' + preset : '');
     const v = $('#view');
     if (view !== 'dashboard' && !canView(currentView)) {
-      v.innerHTML = `<div class="panel"><p class="empty">You do not have access to this page.</p></div>`;
+      v.innerHTML = accessDenied();
       return;
     }
     const fn = {
@@ -711,9 +914,10 @@
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
-      usersettings: viewUserSettings,
+      usersettings: viewUserSettings, roles: viewRoles,
     }[view] || viewDashboard;
     v.innerHTML = fn();
+    const home = $('#adHome'); if (home) home.onclick = () => navigate('dashboard');
     // every page a read-only role opens says so — views that already carry a
     // banner with a page-specific message keep theirs
     if (readOnly() && !v.querySelector('.ro-banner')) {
@@ -726,6 +930,7 @@
        the write in any case. */
     v.classList.toggle('view-frozen', moduleViewOnly(view));
     if (typeof fn.after === 'function') fn.after();
+    gateControls(v, view);
   }
 
   /* ========================================================= */
@@ -11586,165 +11791,612 @@
      inside it. Full access means everything the role allows. Restricted means
      the ticked modules and nothing else — enforced by the API too, so it is a
      permission rather than a tidier menu. */
-  function viewUserSettings() {
-    if (user.role !== 'admin') {
-      return `<div class="panel"><p class="empty">Only the administrator manages user access.</p></div>`;
+  /* =========================================================
+     THE PERMISSION GRID — one component, two callers.
+
+     Against a role it edits the template every account with that role
+     inherits. Against a user it edits the override that wins over the
+     template. Both are drawn from MODULES × ACTIONS, so a module added to the
+     CMS appears on both screens the same day and neither has to be touched.
+     ========================================================= */
+
+  /** the grid's markup for one subject, capped by what its role's code supports */
+  function permGridHtml(ceiling, current, opts) {
+    const o = opts || {};
+    const rows = MODULES.filter(([key]) => ceiling[key]);
+    if (!rows.length) {
+      return `<p class="empty" style="padding:16px 2px">This role opens the dashboard and its
+        own pages only — there is nothing to narrow.</p>`;
     }
-    const html = `<div class="panel"><div class="panel-head"><h3>User Settings</h3>
+    return `<div class="pg-tools">
+        <input class="search-box" id="pgSearch" placeholder="Search modules...">
+        <button type="button" class="btn-outline btn-sm" id="pgAll">Select all</button>
+        <button type="button" class="btn-outline btn-sm" id="pgNone">Clear all</button>
+        <button type="button" class="btn-outline btn-sm" id="pgReset">Reset</button>
+      </div>
+      <div class="tbl-wrap pg-wrap"><table class="pg-table"><thead><tr>
+        <th class="pg-mod">Module</th>
+        ${ACTIONS.map(([, label]) => `<th>${esc(label)}</th>`).join('')}
+        <th class="pg-all">All</th>
+      </tr></thead><tbody id="pgBody">
+        ${rows.map(([key, label]) => `<tr data-mod="${key}" data-name="${esc(label.toLowerCase())}">
+          <td class="pg-mod">${esc(label)}</td>
+          ${ACTIONS.map(([a]) => {
+            const supported = ceiling[key].includes(a);
+            if (!supported) return `<td class="pg-na" title="Not available for this role">—</td>`;
+            return `<td><input type="checkbox" data-p="${key}:${a}" ${
+              (current[key] || []).includes(a) ? 'checked' : ''}></td>`;
+          }).join('')}
+          <td class="pg-all"><input type="checkbox" data-row="${key}"></td>
+        </tr>`).join('')}
+      </tbody></table></div>
+      <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+        A dash is an action this role's pages have never supported — it cannot be granted here,
+        only in the code. ${o.note || ''}</p>`;
+  }
+
+  /** wire the grid up; returns read(), which hands back what is ticked */
+  function bindPermGrid(ceiling, current) {
+    const boxes = () => [...document.querySelectorAll('#pgBody [data-p]')];
+    const rowBoxes = () => [...document.querySelectorAll('#pgBody [data-row]')];
+    const visible = (tr) => !tr.classList.contains('hidden');
+    const syncRows = () => rowBoxes().forEach(rb => {
+      const tr = rb.closest('tr');
+      const mine = [...tr.querySelectorAll('[data-p]')];
+      rb.checked = mine.length > 0 && mine.every(b => b.checked);
+    });
+    /* Ticking an action nobody could reach is a permission that reads as
+       granted and behaves as refused, so View comes along with every other
+       action and clearing View clears the row. */
+    const syncView = (key) => {
+      const tr = document.querySelector(`#pgBody tr[data-mod="${key}"]`);
+      const view = tr.querySelector('[data-p$=":view"]');
+      if (!view) return;
+      const others = [...tr.querySelectorAll('[data-p]')].filter(b => b !== view);
+      if (others.some(b => b.checked)) view.checked = true;
+    };
+    boxes().forEach(b => b.onchange = () => {
+      const [key, act] = b.dataset.p.split(':');
+      if (act === 'view' && !b.checked) {
+        // nothing is reachable in a module that cannot be opened
+        document.querySelectorAll(`#pgBody tr[data-mod="${key}"] [data-p]`)
+          .forEach(x => { x.checked = false; });
+      } else {
+        syncView(key);
+      }
+      syncRows();
+    });
+    rowBoxes().forEach(rb => rb.onchange = () => {
+      rb.closest('tr').querySelectorAll('[data-p]').forEach(b => { b.checked = rb.checked; });
+    });
+    const setAll = (on) => {
+      boxes().forEach(b => { if (visible(b.closest('tr'))) b.checked = on; });
+      syncRows();
+    };
+    $('#pgAll').onclick = () => setAll(true);
+    $('#pgNone').onclick = () => setAll(false);
+    $('#pgReset').onclick = () => {
+      boxes().forEach(b => {
+        const [key, act] = b.dataset.p.split(':');
+        b.checked = (current[key] || []).includes(act);
+      });
+      syncRows();
+      toast('Back to what is saved.');
+    };
+    $('#pgSearch').oninput = () => {
+      const q = ($('#pgSearch').value || '').trim().toLowerCase();
+      document.querySelectorAll('#pgBody tr').forEach(tr =>
+        tr.classList.toggle('hidden', !!q && !tr.dataset.name.includes(q)));
+    };
+    syncRows();
+    return () => {
+      const out = {};
+      boxes().forEach(b => {
+        if (!b.checked) return;
+        const [key, act] = b.dataset.p.split(':');
+        (out[key] = out[key] || []).push(act);
+      });
+      // capped again on the way out, so a stale ceiling can never widen a grant
+      Object.keys(out).forEach(k => {
+        out[k] = ACTION_KEYS.filter(a => out[k].includes(a) && (ceiling[k] || []).includes(a));
+        if (!out[k].length) delete out[k];
+      });
+      return out;
+    };
+  }
+
+  /** a one-line summary of a permission set, for a table cell */
+  function permSummary(perms, ceiling) {
+    if (perms === null) return 'Everything this role allows';
+    const on = MODULES.filter(([k]) => (perms[k] || []).length);
+    if (!on.length) return 'No modules — dashboard only';
+    return on.map(([k, label]) => {
+      const acts = perms[k];
+      const full = (ceiling[k] || []).length && acts.length === ceiling[k].length;
+      return `${label} (${full ? 'full' : acts.length === 1 && acts[0] === 'view' ? 'view'
+        : acts.length + ' actions'})`;
+    }).join(', ');
+  }
+
+  /* Written where the change is made, because only the code doing the saving
+     knows what the value was a moment ago. One entry per module that moved,
+     with the actions that came on and the ones that went off. */
+  function auditPerms(kind, key, label, before, after) {
+    const keys = [...new Set(Object.keys(before || {}).concat(Object.keys(after || {})))];
+    const changes = [];
+    keys.forEach(m => {
+      const was = (before && before[m]) || [];
+      const now = (after && after[m]) || [];
+      const on = now.filter(a => !was.includes(a));
+      const off = was.filter(a => !now.includes(a));
+      if (on.length || off.length) {
+        const mod = MODULES.find(([k]) => k === m);
+        changes.push({ module: m, label: mod ? mod[1] : m, on, off });
+      }
+    });
+    if (!changes.length) return;
+    const summary = changes.slice(0, 3).map(c =>
+      `${c.label}: ${c.on.map(a => a + ' ON').concat(c.off.map(a => a + ' OFF')).join(', ')}`)
+      .join(' · ') + (changes.length > 3 ? ` · +${changes.length - 3} more` : '');
+    Store.add('auditlog', {
+      at: new Date().toISOString(),
+      actorId: user.id, actorName: displayName(user),
+      subjectType: kind, subjectKey: String(key), subjectName: label,
+      summary, changes,
+    });
+  }
+
+  /* =========================================================
+     ROLES — the templates.
+     ========================================================= */
+  function viewRoles() {
+    if (user.role !== 'admin') return accessDenied();
+    const html = `<div class="panel"><div class="panel-head"><h3>Roles &amp; Permissions</h3>
+      <div class="panel-tools">
+        <input class="search-box" id="rlQ" placeholder="Search roles...">
+        <button class="btn-primary" id="rlAdd">+ Create Role</button>
+      </div></div>
+      <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
+        A role is a permission set several people share. Change it here and everybody holding it
+        follows, unless their own account has an override. A custom role borrows its menu from the
+        built-in role it is based on — that is also the most it can ever be given.</p>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Role</th><th>Type</th><th>Based On</th><th>Users</th><th>Access</th><th>Actions</th>
+      </tr></thead><tbody id="rlBody"></tbody></table></div></div>`;
+
+    viewRoles.after = () => {
+      const draw = () => {
+        const q = ($('#rlQ').value || '').trim().toLowerCase();
+        const rows = allRoleKeys()
+          .filter(k => !q || roleLabel(k).toLowerCase().includes(q) || k.includes(q));
+        $('#rlBody').innerHTML = rows.length ? rows.map(k => {
+          const builtin = BUILTIN_ROLES.includes(k);
+          const row = roleRow(k);
+          const ceiling = roleCeiling(baseRoleOf(k));
+          const users = Store.all('users').filter(u => u.role === k).length;
+          return `<tr>
+            <td><b>${esc(roleLabel(k))}</b><br><small class="mono" style="color:var(--muted)">${esc(k)}</small></td>
+            <td><span class="pill ${builtin ? 'blue' : 'green'}">${builtin ? 'Built-in' : 'Custom'}</span></td>
+            <td>${builtin ? '—' : esc(roleLabel(baseRoleOf(k)))}</td>
+            <td>${users}</td>
+            <td style="max-width:340px;white-space:normal;font-size:12.5px;color:var(--muted)">${
+              esc(permSummary(rolePerms(k), ceiling))}</td>
+            <td><div class="row-actions">
+              <button class="btn-sm btn-edit" data-perm="${esc(k)}">Permissions</button>
+              <button class="btn-sm btn-outline" data-copy="${esc(k)}">Duplicate</button>
+              ${builtin ? '' : `<button class="btn-sm btn-outline" data-edit="${esc(k)}">Rename</button>
+              <button class="btn-sm btn-del" data-del="${esc(k)}" ${users ? 'disabled title="In use"' : ''}>Delete</button>`}
+            </div></td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="empty">No roles match.</td></tr>`;
+
+        $('#rlBody').querySelectorAll('[data-perm]').forEach(b =>
+          b.onclick = () => rolePermsModal(b.dataset.perm, draw));
+        $('#rlBody').querySelectorAll('[data-copy]').forEach(b =>
+          b.onclick = () => roleForm(null, draw, b.dataset.copy));
+        $('#rlBody').querySelectorAll('[data-edit]').forEach(b =>
+          b.onclick = () => roleForm(b.dataset.edit, draw));
+        $('#rlBody').querySelectorAll('[data-del]:not([disabled])').forEach(b =>
+          b.onclick = () => {
+            const row = roleRow(b.dataset.del);
+            confirmDelete('Delete Role', `Remove the role <b>${esc(roleLabel(b.dataset.del))}</b>?`,
+              'Delete Role', () => {
+                if (row) Store.remove('roles', row.id);
+                toast('Role deleted.', 'err'); draw();
+              });
+          });
+      };
+      $('#rlQ').oninput = draw;
+      $('#rlAdd').onclick = () => roleForm(null, draw);
+      draw();
+    };
+    return html;
+  }
+
+  /* Create or rename a role. `copyOf` seeds a new one from an existing role's
+     base and permissions, which is what makes "Duplicate" a starting point
+     rather than a blank page. */
+  function roleForm(key, after, copyOf) {
+    const row = key ? roleRow(key) : null;
+    const seed = copyOf || key;
+    const base = seed ? baseRoleOf(seed) : 'faculty';
+    openModal((key ? 'Rename' : 'Create') + ' Role', `<form id="f">
+      <div class="form-grid">
+        <div class="field"><label>Role Name</label>
+          <input name="label" value="${esc(row ? row.label : (copyOf ? roleLabel(copyOf) + ' (copy)' : ''))}"
+                 placeholder="e.g. Telecaller" required></div>
+        <div class="field"><label>Based On</label>
+          <select name="base" ${key ? 'disabled' : ''}>${BUILTIN_ROLES.filter(r => r !== 'student')
+            .map(r => `<option value="${r}" ${r === base ? 'selected' : ''}>${esc(ROLE_LABEL[r])}</option>`).join('')}</select></div>
+        ${fArea('description', 'What this role is for', row ? row.description : '')}
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:4px 0 0">
+        The base decides which menu this role gets and the most it can ever be given — a permission
+        narrows that, never widens it. It cannot be changed afterwards, because everybody already
+        holding the role would move with it.</p>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const d = formData(e.target);
+      const label = (d.label || '').trim();
+      if (!label) { toast('The role needs a name.', 'err'); return; }
+      if (row) {
+        Store.update('roles', row.id, { label, description: d.description || '' });
+        closeModal(); toast('Role renamed.'); if (after) after(); return;
+      }
+      // a key nobody else holds, from the name, so the login row can carry it
+      let slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'role';
+      const taken = new Set(allRoleKeys());
+      if (taken.has(slug)) { let n = 2; while (taken.has(slug + n)) n++; slug = slug + n; }
+      Store.add('roles', {
+        key: slug, label, base: d.base || 'faculty', builtin: '', status: 'Active',
+        description: d.description || '',
+        // duplicating copies the template; a fresh role starts with its ceiling
+        permissions: copyOf ? (rolePerms(copyOf) || roleCeiling(baseRoleOf(copyOf)))
+                            : roleCeiling(d.base || 'faculty'),
+      });
+      closeModal(); toast('Role created.'); if (after) after();
+    };
+  }
+
+  function rolePermsModal(key, after) {
+    const base = baseRoleOf(key);
+    const ceiling = roleCeiling(base);
+    const current = rolePerms(key) || ceiling;
+    const row = roleRow(key);
+    openModal('Permissions — ' + roleLabel(key), `<form id="f">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
+        Everybody with this role gets what is ticked here, unless their own account overrides it.
+        ${BUILTIN_ROLES.includes(key) ? '' : `Based on <b>${esc(ROLE_LABEL[base])}</b>.`}</p>
+      ${permGridHtml(ceiling, current, {
+        note: 'A user can be given less than this on their own account, never more.' })}
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save Permissions</button></div></form>`, true);
+    const read = bindPermGrid(ceiling, current);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const perms = read();
+      const before = rolePerms(key);
+      if (row) Store.update('roles', row.id, { permissions: perms });
+      else Store.add('roles', { key, label: roleLabel(key), base, builtin: '1',
+                                status: 'Active', permissions: perms });
+      auditPerms('role', key, roleLabel(key), before, perms);
+      closeModal(); toast('Permissions saved.'); if (after) after(); else render();
+    };
+  }
+
+  /* =========================================================
+     USER MANAGEMENT — every login, what it is, and what it reaches.
+     ========================================================= */
+
+  /** the account is switched on unless somebody deliberately switched it off */
+  function userActive(u) { return String((u && u.status) || 'Active') !== 'Inactive'; }
+
+  function viewUserSettings() {
+    if (user.role !== 'admin') return accessDenied();
+    const html = `<div class="panel"><div class="panel-head"><h3>User Management</h3>
         <div class="panel-tools">
-          <input class="search-box" id="usQ" placeholder="Search name / username...">
+          <input class="search-box" id="usQ" placeholder="Search name / user id / email...">
           <select class="filter-sel" id="usRole"><option value="">All Roles</option>
-            ${ROLE_LIST.map(r => `<option value="${r}">${esc(roleLabel(r))}</option>`).join('')}</select>
-          <button class="btn-outline btn-sm" id="usClear">Clear</button>
+            ${allRoleKeys().map(r => `<option value="${esc(r)}">${esc(roleLabel(r))}</option>`).join('')}</select>
+          <select class="filter-sel" id="usStatus"><option value="">Any Status</option>
+            <option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+          <button class="btn-outline btn-sm" id="usRoles">🛡 Roles</button>
+          <button class="btn-outline btn-sm" id="usAudit">🕘 Audit Log</button>
+          <button class="btn-primary" id="usAdd">+ Create User</button>
         </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
-        Every login and what it may open. <b>Full Access</b> gives everything the role allows.
-        <b>Restricted Access</b> limits the account to the modules you tick — the menu follows it,
-        and so does the server.</p>
+        Every login and what it may open. <b>Role Default</b> means the account follows its role —
+        change the role once and everybody on it moves. <b>Custom</b> means this one account has
+        its own answer, which wins over the role. The menu follows both, and so does the server.</p>
+      <div id="usStats" class="stat-grid" style="margin:0 0 16px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Full Name</th><th>Username</th><th>Role</th><th>Type Of Access</th><th>Modules</th><th>Actions</th>
+        <th>Name</th><th>User ID</th><th>Role</th><th>Status</th><th>Access</th><th>Modules</th><th>Actions</th>
       </tr></thead><tbody id="usBody"></tbody></table></div><div id="usPager"></div></div>`;
 
     viewUserSettings.after = () => {
       let page = 1;
       const rowsFor = () => {
         const q = ($('#usQ').value || '').trim().toLowerCase();
-        const role = $('#usRole').value;
+        const role = $('#usRole').value, status = $('#usStatus').value;
         return Store.all('users').filter(u =>
-          (!q || [u.name, u.username].some(v => String(v || '').toLowerCase().includes(q)))
-          && (!role || u.role === role))
-          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          (!q || [u.name, u.username, u.email, u.empId].some(v => String(v || '').toLowerCase().includes(q)))
+          && (!role || u.role === role)
+          && (!status || (userActive(u) ? 'Active' : 'Inactive') === status))
+          .sort((a, b) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9)
+            || String(a.name || '').localeCompare(String(b.name || '')));
       };
       const draw = () => {
         const rows = rowsFor();
+        const all = Store.all('users');
+        $('#usStats').innerHTML = `${statCard('👥', all.length, 'Logins')}
+          ${statCard('✅', all.filter(userActive).length, 'Active', 'c2')}
+          ${statCard('🚫', all.filter(u => !userActive(u)).length, 'Deactivated',
+            all.some(u => !userActive(u)) ? 'c4' : 'c3')}
+          ${statCard('🛡', allRoleKeys().length, 'Roles', 'c3')}`;
         page = Math.min(page, pageCount(rows.length));
         $('#usBody').innerHTML = rows.length ? pageSlice(rows, page).map(u => {
-          const perms = accountPerms(u);
-          const restricted = perms !== null;
-          // each module says which of the two it is, so the column is readable
-          // without opening the box
-          const names = restricted
-            ? (Object.keys(perms).length
-                ? MODULES.filter(([k]) => perms[k])  // in the app's own order, not the tick order
-                    .map(([k, label]) => `${label} (${perms[k] === 'edit' ? 'edit' : 'view'})`).join(', ')
-                : 'None ticked — dashboard only')
-            : 'Everything this role allows';
-          return `<tr>
-            <td>${esc(u.name || '—')}</td>
+          const own = userPerms(u);
+          const ceiling = roleCeiling(baseRoleOf(u.role));
+          const isAdmin = u.role === 'admin';
+          const active = userActive(u);
+          return `<tr class="${active ? '' : 'row-off'}">
+            <td><b>${esc(u.name || '—')}</b>${u.id === user.id
+              ? ' <small style="color:var(--muted)">(you)</small>' : ''}
+              ${u.email ? `<br><small style="color:var(--muted)">${esc(u.email)}</small>` : ''}</td>
             <td class="mono">${esc(u.username || '—')}</td>
             <td>${esc(roleLabel(u.role))}</td>
-            <td><span class="pill ${restricted ? 'amber' : 'green'}">${
-              restricted ? 'Restricted Access' : 'Full Access'}</span></td>
-            <td style="max-width:320px;white-space:normal;font-size:12.5px;color:var(--muted)">${esc(names)}</td>
+            <td><span class="pill ${active ? 'green' : 'red'}">${active ? 'Active' : 'Inactive'}</span></td>
+            <td><span class="pill ${own ? 'amber' : 'blue'}">${own ? 'Custom' : 'Role Default'}</span></td>
+            <td style="max-width:300px;white-space:normal;font-size:12.5px;color:var(--muted)">${
+              isAdmin ? 'Everything — the administrator is never narrowed'
+                      : esc(permSummary(own || rolePerms(u.role), ceiling))}</td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-edit" data-perm="${u.id}">Permissions</button>
-              ${u.id === user.id ? '' : `<button class="btn-sm btn-del" data-del="${u.id}">Delete</button>`}
+              <button class="btn-sm btn-outline" data-view="${u.id}">👁 Access</button>
+              ${isAdmin ? '' : `<button class="btn-sm btn-edit" data-perm="${u.id}">Permissions</button>`}
+              <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
+              ${u.id === user.id ? '' : `<button class="btn-sm btn-outline" data-toggle="${u.id}">${
+                active ? '🚫 Deactivate' : '✅ Activate'}</button>
+              <button class="btn-sm btn-del" data-del="${u.id}">Delete</button>`}
             </div></td></tr>`;
-        }).join('') : `<tr><td colspan="6" class="empty">No login accounts found.</td></tr>`;
+        }).join('') : `<tr><td colspan="7" class="empty">No login accounts found.</td></tr>`;
 
+        $('#usBody').querySelectorAll('[data-view]').forEach(b =>
+          b.onclick = () => accessReportModal(b.dataset.view));
         $('#usBody').querySelectorAll('[data-perm]').forEach(b =>
           b.onclick = () => permissionsModal(b.dataset.perm, draw));
+        $('#usBody').querySelectorAll('[data-edit]').forEach(b =>
+          b.onclick = () => userForm(b.dataset.edit, draw));
+        $('#usBody').querySelectorAll('[data-toggle]').forEach(b =>
+          b.onclick = () => toggleUser(b.dataset.toggle, draw));
         $('#usBody').querySelectorAll('[data-del]').forEach(b =>
           b.onclick = () => delConfirm('users', b.dataset.del, 'login account', draw));
         $('#usPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#usPager'), rows.length, page, (p) => page = p, draw);
       };
-      $('#usQ').oninput = () => { page = 1; draw(); };
-      $('#usRole').onchange = () => { page = 1; draw(); };
-      $('#usClear').onclick = () => { $('#usQ').value = ''; $('#usRole').value = ''; page = 1; draw(); };
+      ['usQ', 'usRole', 'usStatus'].forEach(id => {
+        const el = $('#' + id);
+        el[el.tagName === 'INPUT' ? 'oninput' : 'onchange'] = () => { page = 1; draw(); };
+      });
+      $('#usAdd').onclick = () => userForm(null, draw);
+      $('#usRoles').onclick = () => navigate('roles');
+      $('#usAudit').onclick = () => auditModal();
       draw();
     };
     return html;
   }
 
+  /* An account switched off keeps everything it had — it simply cannot sign in.
+     Deleting is the other button, and it says so. */
+  function toggleUser(uid, after) {
+    const u = Store.find('users', uid); if (!u) return;
+    const active = userActive(u);
+    const act = () => {
+      Store.update('users', uid, { status: active ? 'Inactive' : 'Active' });
+      toast(`${u.name || u.username} ${active ? 'deactivated' : 'activated'}.`, active ? 'err' : '');
+      if (after) after();
+    };
+    if (!active) return act();
+    confirmAction('Deactivate User',
+      `Stop <b>${esc(u.name || u.username)}</b> from signing in? Their record and permissions are
+       kept — switching them back on restores everything.`, 'Deactivate', act);
+  }
+
+  /* Create a login, or correct one. The role picker offers every role there is,
+     built-in and custom, because that is the whole point of the roles page. */
+  function userForm(uid, after) {
+    const u = uid ? Store.find('users', uid) : null;
+    const isSelf = u && u.id === user.id;
+    const rec = u ? loginRecord(u) : null;
+    openModal((uid ? 'Edit' : 'Create') + ' User', `<form id="f">
+      <div class="form-grid">
+        <div class="field"><label>Full Name</label>
+          <input name="name" value="${esc(u ? (u.name || '') : '')}" required></div>
+        ${fText('empId', 'Employee ID', u ? (u.empId || (rec && rec.empId) || '') : '')}
+        <div class="field"><label>User ID</label>
+          <input name="username" value="${esc(u ? (u.username || '') : '')}"
+                 placeholder="what they sign in with" required></div>
+        ${fText('email', 'Email', u ? (u.email || (rec && rec.email) || '') : '',
+                'type="email" placeholder="name@example.com"')}
+        ${fText('phone', 'Mobile', u ? (u.phone || (rec && rec.phone) || '') : '',
+                'inputmode="numeric" maxlength="10"')}
+        <div class="field"><label>Role</label>
+          <select name="role" ${isSelf ? 'disabled' : ''}>${allRoleKeys().map(r =>
+            `<option value="${esc(r)}" ${u && u.role === r ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
+          ).join('')}</select></div>
+        <div class="field"><label>Status</label>
+          <select name="status" ${isSelf ? 'disabled' : ''}>
+            <option ${u && !userActive(u) ? '' : 'selected'}>Active</option>
+            <option ${u && !userActive(u) ? 'selected' : ''}>Inactive</option></select></div>
+        <div class="field"><label>Password</label>
+          <input name="password" type="text" value=""
+                 placeholder="${uid ? 'leave blank to keep current' : DEFAULT_PASSWORD}"></div>
+      </div>
+      ${isSelf ? `<p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+        This is the account you are signed in with, so its role and status are locked — nobody can
+        lock themselves out or hand themselves a bigger role from here.</p>` : ''}
+      <div class="form-actions">
+        ${uid ? `<button type="button" class="btn-outline" id="uxReset">↺ Reset Password</button>` : ''}
+        <button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    bindPhoneInput(document.querySelector('#modalBody [name="phone"]'));
+    const reset = $('#uxReset');
+    if (reset) reset.onclick = () => {
+      confirmAction('Reset Password',
+        `Set <b>${esc(u.name || u.username)}</b>'s password back to
+         <b>${esc(DEFAULT_PASSWORD)}</b>? They can change it after signing in.`,
+        'Reset Password', () => {
+          Store.update('users', uid, { password: DEFAULT_PASSWORD });
+          closeModal(); toast('Password reset.'); if (after) after();
+        });
+    };
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const d = formData(e.target);
+      const username = (d.username || '').trim();
+      if (!username) { toast('The account needs a user id.', 'err'); return; }
+      const clash = Store.all('users').find(x =>
+        (x.username || '').toLowerCase() === username.toLowerCase() && x.id !== uid);
+      if (clash) { toast(`User id "${username}" is already taken.`, 'err'); return; }
+      if (d.phone && !phoneValid(d.phone)) { toast('Mobile must be exactly 10 digits.', 'err'); return; }
+      const patch = { name: (d.name || '').trim(), username, empId: d.empId || '',
+                      email: d.email || '', phone: d.phone || '' };
+      // the signed-in account cannot change its own role or switch itself off
+      if (!isSelf) { patch.role = d.role; patch.status = d.status || 'Active'; }
+      if (d.password) patch.password = d.password;
+      if (uid) {
+        Store.update('users', uid, patch);
+        if (isSelf) { user.name = patch.name; paintUser(); }
+      } else {
+        Store.add('users', Object.assign({ password: d.password || DEFAULT_PASSWORD,
+                                           access: 'full', permissions: {} }, patch));
+      }
+      closeModal(); toast('User saved.'); if (after) after(); else render();
+    };
+  }
+
+  /* The override that wins over the role. "Role Default" clears it, which is
+     how an account is put back on the template rather than pinned to a copy of
+     whatever the template said the day it was pinned. */
   function permissionsModal(uid, after) {
     const u = Store.find('users', uid);
     if (!u) return;
-    const perms = accountPerms(u) || {};
-    const restricted = accountPerms(u) !== null;
-    const rows = modulesForRole(u.role, perms);
+    if (u.role === 'admin') {
+      toast('The administrator is never narrowed.', 'err'); return;
+    }
+    const ceiling = roleCeiling(baseRoleOf(u.role));
+    const fromRole = rolePerms(u.role) || ceiling;
+    const own = userPerms(u);
+    const current = own || fromRole;
 
     openModal('Permissions — ' + (u.name || u.username), `<form id="f">
       <p style="font-size:13px;color:var(--muted);margin:0 0 14px">
-        <b>${esc(u.name || '—')}</b> · ${esc(roleLabel(u.role))} · <span class="mono">${esc(u.username)}</span></p>
-      <h4 class="ro-sub">Type of Access</h4>
+        <b>${esc(u.name || '—')}</b> · ${esc(roleLabel(u.role))} ·
+        <span class="mono">${esc(u.username)}</span></p>
+      <h4 class="ro-sub">Where this account's access comes from</h4>
       <div class="chk-grid">
-        <label class="chk"><input type="radio" name="access" value="full" ${restricted ? '' : 'checked'}>
-          Full Access — everything this role allows</label>
-        <label class="chk"><input type="radio" name="access" value="restricted" ${restricted ? 'checked' : ''}>
-          Restricted Access — only the modules ticked below</label>
+        <label class="chk"><input type="radio" name="access" value="full" ${own ? '' : 'checked'}>
+          <b>Role Default</b> — follows ${esc(roleLabel(u.role))}, and moves when that role does</label>
+        <label class="chk"><input type="radio" name="access" value="restricted" ${own ? 'checked' : ''}>
+          <b>Custom</b> — this account only, and it wins over the role</label>
       </div>
-      <h4 class="ro-sub">Access Permissions
-        <button type="button" class="btn-outline btn-sm" id="pmAll" style="float:right">Tick all</button></h4>
-      <div class="perm-list" id="pmModules">
-        <div class="perm-row perm-head"><span>Module</span><span>View</span><span>Can Edit</span></div>
-        ${rows.length ? rows.map(([key, label]) => `<div class="perm-row">
-          <label class="perm-name"><input type="checkbox" name="mod_${key}" ${
-            perms[key] ? 'checked' : ''}> <span>${esc(label)}</span></label>
-          <span class="perm-cell perm-view" title="Ticking the module opens its pages">✓</span>
-          <label class="perm-cell"><input type="checkbox" name="edit_${key}" ${
-            perms[key] === 'edit' ? 'checked' : ''}></label>
-        </div>`).join('') : `<p class="empty" style="padding:14px 2px">
-          This role only opens the dashboard and its own pages — there is nothing to narrow.</p>`}
-      </div>
-      <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0">
-        Ticking a module opens its pages. <b>Can Edit</b> on top of that lets them add, change and
-        delete there — leave it off and the pages open read-only. The dashboard and a person's own
-        pages are always open, and the server refuses a change outside these modules whatever the
-        screen shows.</p>
+      <h4 class="ro-sub">Module Access</h4>
+      ${permGridHtml(ceiling, current, {
+        note: 'On <b>Role Default</b> the grid shows what the role gives and saving does not pin it.' })}
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
+        <button type="submit" class="btn-primary">Save Permissions</button></div></form>`, true);
 
+    const read = bindPermGrid(ceiling, current);
+    const grid = $('#pgBody').closest('.pg-wrap');
+    const syncMode = () => {
+      const custom = document.querySelector('[name="access"][value="restricted"]').checked;
+      grid.style.opacity = custom ? '1' : '.55';
+      document.querySelectorAll('#pgBody input, .pg-tools button').forEach(el => { el.disabled = !custom; });
+      $('#pgSearch').disabled = false;
+    };
+    document.querySelectorAll('[name="access"]').forEach(r => { r.onchange = syncMode; });
+    syncMode();
     $('#cx').onclick = closeModal;
-    const modBox = (k) => document.querySelector(`[name="mod_${k}"]`);
-    const editBox = (k) => document.querySelector(`[name="edit_${k}"]`);
-    const keys = rows.map(([k]) => k);
-    const syncEnabled = () => {
-      const restrictedNow = document.querySelector('[name="access"][value="restricted"]').checked;
-      keys.forEach(k => {
-        const m = modBox(k), ed = editBox(k);
-        m.disabled = !restrictedNow;
-        // "Can Edit" only means something once the module itself is open
-        ed.disabled = !restrictedNow || !m.checked;
-        if (ed.disabled && !m.checked) ed.checked = false;
-        ed.closest('.perm-row').classList.toggle('off', !m.checked);
-      });
-      $('#pmModules').style.opacity = restrictedNow ? '1' : '.5';
-      $('#pmAll').disabled = !restrictedNow;
-    };
-    document.querySelectorAll('[name="access"]').forEach(r => { r.onchange = syncEnabled; });
-    keys.forEach(k => { modBox(k).onchange = syncEnabled; });
-    $('#pmAll').onclick = () => {
-      // first press opens everything with editing, second clears the lot
-      const some = keys.some(k => !modBox(k).checked || !editBox(k).checked);
-      keys.forEach(k => { modBox(k).checked = some; editBox(k).checked = some; });
-      syncEnabled();
-    };
-    syncEnabled();
-
     $('#f').onsubmit = (e) => {
       e.preventDefault();
-      const access = document.querySelector('[name="access"]:checked').value;
-      const picked = {};
-      keys.forEach(k => {
-        if (modBox(k).checked) picked[k] = editBox(k).checked ? 'edit' : 'view';
-      });
-      const count = Object.keys(picked).length;
-      const canEdit = Object.values(picked).filter(v => v === 'edit').length;
-      if (access === 'restricted' && u.id === user.id) {
-        toast('You cannot restrict your own account — ask another admin to do it.', 'err');
+      const custom = document.querySelector('[name="access"][value="restricted"]').checked;
+      const before = userPerms(u);
+      if (!custom) {
+        Store.update('users', uid, { access: 'full', permissions: {} });
+        auditPerms('user', u.username, u.name || u.username, before, fromRole);
+        closeModal(); toast(`${u.name || u.username} follows ${roleLabel(u.role)}.`);
+        if (after) after(); else render();
         return;
       }
-      Store.update('users', uid, {
-        access,
-        permissions: access === 'restricted' ? picked : {},
-      });
+      const perms = read();
+      Store.update('users', uid, { access: 'restricted', permissions: perms });
+      auditPerms('user', u.username, u.name || u.username, before || fromRole, perms);
       closeModal();
-      toast(access === 'restricted'
-        ? `${u.name || u.username}: ${count} module(s), ${canEdit} editable.`
-        : `${u.name || u.username} has full access.`);
+      toast(`${u.name || u.username}: ${plural(Object.keys(perms).length, 'module')}.`);
       if (after) after(); else render();
     };
+  }
+
+  /* Everything this account can actually do, worked out the same way the app
+     works it out — so the answer on this screen is the answer in the app. */
+  function accessReportModal(uid) {
+    const u = Store.find('users', uid); if (!u) return;
+    const perms = effectivePerms(u);
+    const rows = MODULES.filter(([k]) => (perms[k] || []).length);
+    const src = u.role === 'admin' ? 'Administrator — never narrowed'
+      : userPerms(u) ? 'Custom permissions on this account (overrides the role)'
+      : rolePerms(u.role) ? `The ${roleLabel(u.role)} role template`
+      : `Everything the ${roleLabel(u.role)} role allows`;
+    openModal('Access — ' + (u.name || u.username), `
+      <p style="font-size:13px;color:var(--muted);margin:0 0 4px">
+        <b>${esc(u.name || '—')}</b> · ${esc(roleLabel(u.role))} ·
+        <span class="mono">${esc(u.username)}</span> ·
+        <span class="pill ${userActive(u) ? 'green' : 'red'}">${userActive(u) ? 'Active' : 'Inactive'}</span></p>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px">Source: ${esc(src)}</p>
+      ${rows.length ? `<div class="tbl-wrap pg-wrap"><table class="pg-table"><thead><tr>
+        <th class="pg-mod">Module</th>${ACTIONS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}
+      </tr></thead><tbody>${rows.map(([k, label]) => `<tr>
+        <td class="pg-mod">${esc(label)}</td>
+        ${ACTIONS.map(([a]) => `<td>${perms[k].includes(a)
+          ? '<span style="color:var(--green);font-weight:700">✓</span>'
+          : '<span style="color:var(--border)">·</span>'}</td>`).join('')}
+      </tr>`).join('')}</tbody></table></div>`
+        : `<p class="empty" style="padding:18px 2px">No modules — this account opens the dashboard
+           and its own pages only.</p>`}
+      <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
+    $('#cx').onclick = closeModal;
+  }
+
+  /* Who changed whose access, newest first. Read-only by design — the rows are
+     never updated or deleted anywhere in the app. */
+  function auditModal() {
+    const rows = Store.all('auditlog').slice()
+      .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
+      .slice(0, 200);
+    const when = (iso) => { try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso; } };
+    openModal('Permission Audit Log', `
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">
+        Every permission change, newest first. ${rows.length >= 200 ? 'Showing the latest 200.' : ''}</p>
+      ${rows.length ? `<div class="tbl-wrap"><table><thead><tr>
+        <th>When</th><th>Who</th><th>Changed</th><th>What moved</th>
+      </tr></thead><tbody>${rows.map(r => `<tr>
+        <td style="white-space:nowrap">${esc(when(r.at))}</td>
+        <td>${esc(r.actorName || '—')}</td>
+        <td>${esc(r.subjectName || r.subjectKey || '—')}
+          <br><small style="color:var(--muted)">${esc(r.subjectType === 'role' ? 'role' : 'user')}</small></td>
+        <td style="white-space:normal;font-size:12.5px">${(Array.isArray(r.changes) ? r.changes : [])
+          .map(c => `<div><b>${esc(c.label)}</b> ${
+            (c.on || []).map(a => `<span style="color:var(--green)">${esc(a)} ON</span>`)
+              .concat((c.off || []).map(a => `<span style="color:var(--red)">${esc(a)} OFF</span>`))
+              .join(', ')}</div>`).join('') || esc(r.summary || '—')}</td>
+      </tr>`).join('')}</tbody></table></div>`
+        : `<p class="empty" style="padding:18px 2px">Nothing has been changed yet.</p>`}
+      <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
+    $('#cx').onclick = closeModal;
   }
 
   /* =========================== COMPANIES =========================== */
@@ -13520,6 +14172,7 @@
   function startApp() {
     $('#loginScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
+    refreshPerms();
     paintUser();
     // a read-only session is flagged on <body> so the whole app can style itself
     document.body.classList.toggle('read-only', roleReadOnly());
