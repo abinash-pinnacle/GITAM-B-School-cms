@@ -1,0 +1,43 @@
+# Apache/LiteSpeed rules for the document root.
+#
+# Hostinger serves this repository straight out of public_html, which means
+# every file the project needs in order to be BUILT is also a file the browser
+# can ask for. Most are harmless; the SQLite database is not — with no DB_*
+# environment set, config.php falls back to sqlite and nmiet.db IS the live
+# database. It was downloadable in full until this file existed.
+#
+# Denying it costs nothing: PHP opens it from disk, not over HTTP.
+
+<IfModule mod_authz_core.c>
+    # data, and anything holding credentials or infrastructure
+    <FilesMatch "\.(db|db-shm|db-wal|sqlite|sqlite3|env|keystore|jks|log)$">
+        Require all denied
+    </FilesMatch>
+
+    # how the project is built and deployed — of no use to a visitor
+    <FilesMatch "\.(ya?ml|conf|md|py|lock|dist|sh|bat|ps1)$">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "^(Dockerfile|.+\.Dockerfile|Procfile|composer\.json|router\.php|manage\.py)$">
+        Require all denied
+    </FilesMatch>
+
+    # every dotfile except .well-known, which Chrome fetches to verify that the
+    # Android app owns this domain — deny that and the app stops opening links
+    <FilesMatch "^\.(?!well-known)">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+# directories that exist for the build, not for the browser
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(vendor|tools|android|\.git|\.claude)/ - [F,L]
+</IfModule>
+
+# the app's own files must never be served stale after a deploy
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|js|css|webmanifest)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>
