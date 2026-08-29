@@ -1,0 +1,9 @@
+# The login page is what a search engine should find — everything past it needs
+# credentials, and the API is not a page at all.
+User-agent: *
+Allow: /$
+Disallow: /api/
+Disallow: /apk/
+Disallow: /tools/
+
+Sitemap: https://cmsnmietbschool.in/sitemap.xml

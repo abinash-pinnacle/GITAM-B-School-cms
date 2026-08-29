@@ -12,6 +12,10 @@ COPY assets /usr/share/nginx/html/assets
 COPY manifest.webmanifest /usr/share/nginx/html/manifest.webmanifest
 COPY sw.js /usr/share/nginx/html/sw.js
 
+# what a crawler is allowed to look at, and the one page worth looking at
+COPY robots.txt /usr/share/nginx/html/robots.txt
+COPY sitemap.xml /usr/share/nginx/html/sitemap.xml
+
 # the Android app and the Digital Asset Links that verify it owns this domain
 COPY apk /usr/share/nginx/html/apk
 COPY .well-known /usr/share/nginx/html/.well-known
