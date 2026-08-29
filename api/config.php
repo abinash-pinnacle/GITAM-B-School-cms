@@ -10,6 +10,26 @@
 
 const BASE_DIR = __DIR__ . DIRECTORY_SEPARATOR . '..';
 
+/* Where this install's credentials come from.
+
+   They belong to the install and not to the repository, so they live in a file
+   beside this one that git ignores and a deploy never overwrites. It returns a
+   plain array — no directives to get wrong — and if it is missing, unreadable
+   or malformed nothing happens: db_driver() falls back to sqlite and the site
+   keeps running on the file it was already using. That fallback is deliberate.
+   It means switching to MySQL can be undone by deleting one file. */
+$__local = __DIR__ . DIRECTORY_SEPARATOR . 'env.local.php';
+if (is_file($__local)) {
+    $__vars = require $__local;
+    if (is_array($__vars)) {
+        foreach ($__vars as $__k => $__v) {
+            $_SERVER[(string) $__k] = (string) $__v;
+        }
+    }
+    unset($__vars, $__k, $__v);
+}
+unset($__local);
+
 function env(string $key, ?string $default = null): ?string
 {
     $v = getenv($key);

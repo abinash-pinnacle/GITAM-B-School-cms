@@ -23,3 +23,6 @@ android.keystore
 # local backups of replaced assets
 *.old.png
 *.old.webp
+
+# this install's database credentials — belongs to the server, never the repo
+api/env.local.php
