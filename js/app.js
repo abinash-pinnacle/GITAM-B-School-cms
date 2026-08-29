@@ -5952,29 +5952,11 @@
     return profileCard([['Username',user.username],['Role',roleLabel(user.role)]]);
   }
 
-  // self-service password change — any signed-in user changes only their own login
-  function changePasswordForm() {
-    openModal('Change Password', `<form id="f">
-      <div class="form-grid">
-        <div class="field full"><label>Current Password</label><input name="old" type="password" required></div>
-        <div class="field full"><label>New Password</label><input name="pw1" type="password" minlength="6" required></div>
-        <div class="field full"><label>Confirm New Password</label><input name="pw2" type="password" minlength="6" required></div>
-      </div>
-      <p style="font-size:12px;color:var(--muted);margin-top:10px">Use at least 6 characters.</p>
-      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Update Password</button></div></form>`);
-    $('#cx').onclick = closeModal;
-    $('#f').onsubmit = (e) => {
-      e.preventDefault();
-      const d = formData(e.target);
-      if (d.old !== user.password) { toast('Current password is not correct.', 'err'); return; }
-      if (d.pw1.length < 6) { toast('New password must be at least 6 characters.', 'err'); return; }
-      if (d.pw1 !== d.pw2) { toast('The two new passwords do not match.', 'err'); return; }
-      Store.update('users', user.id, { password: d.pw1 });
-      user.password = d.pw1;
-      closeModal(); toast('Password changed.');
-    };
-  }
+  /* There were two of these. This one checked the typed password against a
+     copy the browser was holding — which no longer exists, and could never have
+     checked a hash anyway. The other asks the server, which is the only thing
+     that can. */
+  function changePasswordForm() { return changePasswordModal(); }
   // faculty can maintain their own academic details without going through the admin
   function academicForm(id) {
     const f = Store.find('faculty', id) || {};
@@ -6752,7 +6734,6 @@
   const ROLE_ORDER = { admin: 0, center_head: 1, accountant: 2, placement_officer: 3,
                        course_coordinator: 4, admission: 5, faculty: 6, librarian: 7, student: 8 };
   const DEFAULT_PASSWORD = 'pass123';
-  let pwRevealed = false;   // "Show Passwords" state, kept while the page is open
 
   // who the account belongs to, in human terms
   function accountOwner(u) {
@@ -6810,11 +6791,12 @@
           <option value="librarian">Librarian</option>
           <option value="student">Student</option>
         </select>
-        <button class="btn-outline" id="accReveal">👁 Show Passwords</button>
         <button class="btn-outline" id="accPrint">🖨 Print List</button>
       </div></div>
       <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
-        Every login in the system — admin, faculty, librarian and student. Use <b>Edit</b> to change a user id or reset a password.</p>
+        Every login in the system — admin, faculty, librarian and student. Passwords are stored
+        hashed and cannot be read back by anyone, including you — use <b>↺ Reset</b> to set a known
+        one and hand it over.</p>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Role</th><th>Name</th><th>User ID</th><th>Password</th><th>Linked To</th><th>Actions</th>
       </tr></thead><tbody id="accBody"></tbody></table></div><div id="accPager"></div></div>
@@ -6836,7 +6818,7 @@
           <td><span class="pill ${ROLE_PILL[u.role] || 'blue'}">${esc(u.role)}</span></td>
           <td>${esc(u.name || '—')}${self ? ' <small style="color:var(--muted)">(you)</small>' : ''}</td>
           <td class="mono">${esc(u.username || '—')}</td>
-          <td class="mono">${pwRevealed ? esc(u.password || '—') : '••••••••'}</td>
+          <td class="mono">••••••••</td>
           <td><small>${esc(accountOwner(u))}</small></td>
           <td><div class="row-actions">
             <button class="btn-sm btn-edit" data-edit-acc="${u.id}">Edit</button>
@@ -6891,11 +6873,6 @@
 
       $('#accSearch').oninput = () => { page = 1; draw(); };
       $('#accRole').onchange = () => { page = 1; draw(); };
-      $('#accReveal').onclick = () => {
-        pwRevealed = !pwRevealed;
-        $('#accReveal').textContent = pwRevealed ? '🙈 Hide Passwords' : '👁 Show Passwords';
-        draw();
-      };
       $('#accPrint').onclick = printAccounts;
       draw();
     };
@@ -6909,7 +6886,8 @@
       <div class="form-grid">
         <div class="field full"><label>Display Name</label><input name="name" value="${esc(u.name || '')}" required></div>
         <div class="field"><label>User ID</label><input name="username" value="${esc(u.username || '')}" required></div>
-        <div class="field"><label>Password</label><input name="password" type="text" value="${esc(u.password || '')}" required></div>
+        <div class="field"><label>New Password</label><input name="password" type="text" value=""
+               placeholder="leave blank to keep the current one"></div>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:10px">Role: <b>${esc(u.role)}</b> · ${esc(accountOwner(u))}</p>
       <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
@@ -6919,11 +6897,13 @@
       e.preventDefault();
       const d = formData(e.target);
       const username = (d.username || '').trim();
-      if (!username || !d.password) { toast('User id and password cannot be blank.', 'err'); return; }
+      if (!username) { toast('User id cannot be blank.', 'err'); return; }
       const clash = Store.all('users').find(x =>
         (x.username || '').toLowerCase() === username.toLowerCase() && x.id !== id);
       if (clash) { toast('User id "' + username + '" is already taken.', 'err'); return; }
-      Store.update('users', id, { name: d.name, username, password: d.password });
+      const patch = { name: d.name, username };
+      if (d.password) patch.password = d.password;   // blank means "leave it alone"
+      Store.update('users', id, patch);
       // the top bar shows the logged-in user's name — keep it in sync
       if (id === user.id) { user.name = d.name; user.username = username; paintUser(); }
       closeModal(); toast('Login updated.'); after ? after() : render();
@@ -6944,13 +6924,17 @@
     };
   }
 
+  /* The user ids, not the passwords. A password cannot be read back any more,
+     and a sheet listing every one of them was never something that should have
+     been left on a printer in the first place. */
   function printAccounts() {
     const rows = accountsSorted();
     printDoc('Login Accounts', `<h2>LOGIN ACCOUNTS</h2>
-      <p>Generated on ${today()} — confidential, hand over to the account holder only.</p>
-      <table><thead><tr><th>Role</th><th>Name</th><th>User ID</th><th>Password</th><th>Linked To</th></tr></thead>
+      <p>Generated on ${today()} — user ids only. Passwords are stored hashed and cannot be
+         printed; use <b>Reset</b> on the Login Accounts page to set one.</p>
+      <table><thead><tr><th>Role</th><th>Name</th><th>User ID</th><th>Status</th><th>Linked To</th></tr></thead>
       <tbody>${rows.map(u => `<tr><td>${esc(u.role)}</td><td>${esc(u.name || '')}</td>
-        <td>${esc(u.username || '')}</td><td>${esc(u.password || '')}</td>
+        <td>${esc(u.username || '')}</td><td>${userActive(u) ? 'Active' : 'Inactive'}</td>
         <td>${esc(accountOwner(u))}</td></tr>`).join('')}</tbody></table>`);
   }
 

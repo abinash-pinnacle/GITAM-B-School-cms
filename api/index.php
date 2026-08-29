@@ -33,6 +33,98 @@ function body(): array
     return is_array($data) ? $data : [];
 }
 
+/* ---------------- passwords ----------------
+   Stored as a bcrypt hash. A row still holding plain text is accepted once —
+   the login that uses it rewrites it — so nothing had to be migrated and no
+   account was locked out by the change. */
+
+/** true when the stored value is a hash rather than somebody's password */
+function is_password_hash(string $stored): bool
+{
+    return $stored !== '' && (bool) preg_match('/^\$(2[aby]|argon2)/', $stored);
+}
+
+/** turn a password into what gets stored */
+function hash_password(string $plain): string
+{
+    return password_hash($plain, PASSWORD_DEFAULT);
+}
+
+/**
+ * Does this password open this account? A stored hash is verified; a stored
+ * plaintext is compared in constant time, so a wrong guess takes as long as a
+ * right one either way.
+ */
+function password_matches(string $given, string $stored): bool
+{
+    if ($stored === '') {
+        return false;
+    }
+    return is_password_hash($stored)
+        ? password_verify($given, $stored)
+        : hash_equals($stored, $given);
+}
+
+/**
+ * A row on its way into `users`, with any password it carries hashed. Applied
+ * to every write rather than trusting the caller: the caller is a web page.
+ * A value that is already a hash is left alone, so a row can be copied without
+ * being hashed twice into something nobody can sign in with.
+ */
+function hash_row_password(string $col, array $row): array
+{
+    if ($col !== 'users' || !array_key_exists('password', $row)) {
+        return $row;
+    }
+    $pw = (string) $row['password'];
+    if ($pw === '' || is_password_hash($pw)) {
+        return $row;
+    }
+    $row['password'] = hash_password($pw);
+    return $row;
+}
+
+/**
+ * One sweep, once: every password still in plain text becomes a hash.
+ *
+ * Signing in does this too, but "eventually" means a dormant account keeps a
+ * readable password for as long as nobody uses it — which is most of the risk,
+ * because those are exactly the accounts nobody is watching. Nobody is locked
+ * out: the value being hashed is the password its owner already knows.
+ *
+ * Marked in `_meta` so it is one query on every later request and not a table
+ * scan. If a plaintext row somehow appears afterwards the login path still
+ * upgrades it, so this is a floor and not the only defence.
+ */
+function migrate_plaintext_passwords(): void
+{
+    try {
+        $done = fetch_one('SELECT ' . qi('v') . ' AS v FROM ' . qi('_meta') . " WHERE " . qi('k') . " = 'pwhash'");
+        if ($done && ($done['v'] ?? '') === '1') {
+            return;
+        }
+        $rows = fetch_all('SELECT ' . qi('id') . ', ' . qi('password') . ' FROM ' . qi('users'));
+    } catch (PDOException $e) {
+        return;              // the table is not there yet; init_db() runs first
+    }
+    $stmt = db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?');
+    foreach ($rows as $r) {
+        $pw = (string) ($r['password'] ?? '');
+        if ($pw === '' || is_password_hash($pw)) {
+            continue;
+        }
+        $stmt->execute([hash_password($pw), $r['id']]);
+    }
+    meta_set('pwhash', '1');
+}
+
+/** rewrite a plaintext row as a hash, the first time its owner signs in */
+function upgrade_password(string $id, string $plain): void
+{
+    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
+        ->execute([hash_password($plain), $id]);
+}
+
 /**
  * The caller's user row, identified by the X-User-Id header the frontend sends
  * after login, or null when the request is anonymous.
@@ -770,13 +862,23 @@ function api_list(string $col): void
 function api_login(): void
 {
     $d = body();
+    $given = (string) ($d['password'] ?? '');
+    /* The password is no longer part of the query — a hash cannot be matched in
+       SQL. The row is found by username and the password checked in PHP. */
     $rows = fetch_all(
-        'SELECT * FROM ' . qi('users') . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)
-         AND ' . qi('password') . ' = ?',
-        [$d['username'] ?? '', $d['password'] ?? '']
+        'SELECT * FROM ' . qi('users') . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)',
+        [$d['username'] ?? '']
     );
+    $rows = array_values(array_filter(
+        $rows,
+        fn($r) => password_matches($given, (string) ($r['password'] ?? ''))
+    ));
     if (!$rows) {
         send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
+    }
+    // signing in is what migrates the row; after this it is a hash for good
+    if (!is_password_hash((string) ($rows[0]['password'] ?? ''))) {
+        upgrade_password((string) $rows[0]['id'], $given);
     }
     if ((string) ($rows[0]['status'] ?? 'Active') === 'Inactive') {
         // deliberately the same wording as a wrong password: whether an account
@@ -815,7 +917,7 @@ function api_change_password(): void
     $current = (string) ($d['current'] ?? '');
     $next = (string) ($d['next'] ?? '');
 
-    if ((string) ($me['password'] ?? '') !== $current) {
+    if (!password_matches($current, (string) ($me['password'] ?? ''))) {
         send_json(['error' => 'wrong-password', 'message' => 'Your current password is not right.'], 403);
     }
     if (strlen($next) < MIN_PASSWORD_LENGTH) {
@@ -827,7 +929,7 @@ function api_change_password(): void
     }
 
     db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
-        ->execute([$next, $me['id']]);
+        ->execute([hash_password($next), $me['id']]);
     send_json(['ok' => true]);
 }
 
@@ -863,6 +965,7 @@ function api_create(string $col): void
                 if (empty($row['id'])) {
                     $row['id'] = next_id($col);
                 }
+                $row = hash_row_password($col, $row);
                 upsert($col, $row);
                 $rows[] = $row;
             }
@@ -881,8 +984,9 @@ function api_create(string $col): void
     if (empty($d['id'])) {
         $d['id'] = next_id($col);
     }
+    $d = hash_row_password($col, $d);
     upsert($col, $d);
-    send_json($d, 201);
+    send_json(row_out($col, $d), 201);
 }
 
 function api_update(string $col, string $id): void
@@ -894,6 +998,7 @@ function api_update(string $col, string $id): void
     }
     // a role with a column allowlist gets everything else in the body dropped,
     // so a crafted payload cannot ride along with a legitimate one
+    $d = hash_row_password($col, $d);
     $allowed = writable_fields($col);
     $fields = array_values(array_filter(
         COLLECTIONS[$col],
@@ -934,6 +1039,7 @@ $isCollection = isset(COLLECTIONS[$resource]) && $resource !== '';
 function dispatch(string $method, string $resource, ?string $id, bool $isCollection): void
 {
     ensure_schema();
+    migrate_plaintext_passwords();
     guard_request($resource, $method);
 
     if ($method === 'GET' && $resource === 'bootstrap') {

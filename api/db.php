@@ -449,6 +449,13 @@ function serialize_value(string $col, string $field, $value)
 /** DB row -> the shape the frontend expects (JSON objects, numeric fields as numbers) */
 function row_out(string $col, array $row): array
 {
+    /* The password hash never leaves the server. Handed to every signed-in
+       browser it becomes something an attacker can work on offline at their
+       leisure, and no screen has needed to read one since they stopped being
+       readable at all. */
+    if ($col === 'users') {
+        unset($row['password']);
+    }
     foreach (JSON_FIELDS[$col] ?? [] as $f) {
         if (!empty($row[$f]) && is_string($row[$f])) {
             $decoded = json_decode($row[$f], true);
