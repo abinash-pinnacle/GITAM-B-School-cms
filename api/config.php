@@ -109,7 +109,7 @@ const COLLECTIONS = [
                      /* the columns the rest of the app reads directly — an ID
                         card wants the blood group, payroll wants the joining
                         date, the roll wants to know who is still on staff */
-                     'category', 'joiningDate', 'dob', 'gender', 'bloodGroup',
+                     'role', 'category', 'joiningDate', 'dob', 'gender', 'bloodGroup',
                      'maritalStatus', 'bputRegdNo', 'attendanceCardId', 'aadhaar', 'status',
                      /* and these six hold the tabs */
                      'personal', 'guardians', 'addressInfo', 'otherInfo',

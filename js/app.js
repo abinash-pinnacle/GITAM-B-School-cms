@@ -212,6 +212,23 @@
   function roleLabel(role) { return ROLE_LABEL[role] || role; }
   const ROLE_LIST = Object.keys(ROLE_LABEL);
 
+  /* ---------- who the college employs ----------
+     Derived from ROLE_LABEL rather than listed a second time, so a role added
+     there is offered on the Employees form the same day and there is only ever
+     one place a role is defined. The student is the one role left out: a
+     student is enrolled, not employed. */
+  function employeeRoles() { return ROLE_LIST.filter(r => r !== 'student'); }
+  /* Records written before the register carried a role are faculty — that is
+     the only kind of employee it could hold. */
+  function employeeRole(f) { return (f && f.role) || 'faculty'; }
+  /** the role key behind whatever was written — "Center Head", "center_head", "CENTERHEAD" */
+  function roleKeyFromLabel(v) {
+    const k = String(v || '').trim().toLowerCase().replace(/[^a-z]+/g, '');
+    if (!k) return '';
+    return employeeRoles().find(r => r.replace(/[^a-z]+/g, '') === k
+      || roleLabel(r).toLowerCase().replace(/[^a-z]+/g, '') === k) || '';
+  }
+
   /* ========================================================= */
   /*  AUTH                                                      */
   /* ========================================================= */
@@ -2789,6 +2806,8 @@
       columns: [
         { key:'empId', header:'Employee ID', required:true, aliases:['emp id','employee no','staff id'] },
         { key:'name', header:'Full Name', required:true, aliases:['name','faculty name','employee name'] },
+        { key:'role', header:'Employee Role', def:'Faculty', store:false,
+          aliases:['role','user role','staff role','employee type'] },
         { key:'bputRegdNo', header:'BPUT Regd No', aliases:['bput'] },
         { key:'department', header:'Department', aliases:['dept'] },
         { key:'designation', header:'Designation' },
@@ -2854,7 +2873,7 @@
         { key:'password', header:'Password', store:false },
       ],
       sample: {
-        empId:'NM-F-1010', name:'Dr. Meena Sahu', bputRegdNo:'BPUT-2015-1010',
+        empId:'NM-F-1010', name:'Dr. Meena Sahu', role:'Faculty', bputRegdNo:'BPUT-2015-1010',
         department:'MBA', designation:'Assistant Professor', category:'Teaching',
         email:'meena@nmiet.edu', phone:'9876500010', joiningDate:'2019-07-01', status:'Active',
         qualification:'Ph.D. (Management)', expertise:'Marketing Analytics',
@@ -2875,7 +2894,7 @@
         username:'meena', password:'pass123',
       },
       login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
-                         role: 'faculty', name: row.name }),
+                         role: roleKeyFromLabel(row.role) || 'faculty', name: row.name }),
     },
   };
 
@@ -2973,6 +2992,14 @@
       }
 
       const data = {};
+      if (spec.collection === 'faculty') {
+        const role = roleKeyFromLabel(raw.role || 'Faculty');
+        if (!role) {
+          return { raw, error: `"${raw.role}" is not one of: `
+            + employeeRoles().map(roleLabel).join(', ') };
+        }
+        data.role = role;
+      }
       // "Reporting To" names a person, not an id — accept either their
       // employee id or their name. A manager listed further down the same
       // sheet does not exist yet, so those are linked after the import.
@@ -3351,62 +3378,88 @@
     let html = `<div class="panel"><div class="panel-head">
       <h3>Employees</h3>
       <div class="panel-tools">
-        <input class="search-box" id="facSearch" placeholder="Search name / dept...">
+        <input class="search-box" id="facSearch" placeholder="Search name / id / role / dept...">
+        <select class="filter-sel" id="facRole"><option value="">All Roles</option>
+          ${employeeRoles().map(r =>
+            `<option value="${r}">${esc(roleLabel(r))}</option>`).join('')}</select>
+        <select class="filter-sel" id="facDept"><option value="">All Departments</option>
+          ${employeeValues('department').map(d => `<option>${esc(d)}</option>`).join('')}</select>
+        <select class="filter-sel" id="facDesig"><option value="">All Designations</option>
+          ${employeeValues('designation').map(d => `<option>${esc(d)}</option>`).join('')}</select>
         ${canEdit ? `<button class="btn-outline" id="impFac">⬆ Bulk Upload</button>
           <button class="btn-primary" id="addFac">+ Add Employee</button>` : `
-          <select class="filter-sel" id="facDept"><option value="">All Departments</option>
-            ${departmentList().map(d => `<option>${esc(d)}</option>`).join('')}</select>
           <button class="btn-outline btn-sm" id="facPrint">🖨 Print</button>
           <button class="btn-outline btn-sm" id="facCsv">📑 CSV</button>
           <button class="btn-primary btn-sm" id="facXls">⬇ Excel</button>`}
       </div></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th></th><th>Emp ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
+        <th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
       </tr></thead><tbody id="facBody"></tbody></table></div><div id="facPager"></div></div>`;
     viewFaculty.after = () => {
       let page = 1;
+      /* Every filter narrows, none of them hides: a role, a department or a
+         designation left on "All" is not a condition. */
       const filtered = () => {
-        const q = ($('#facSearch').value||'').toLowerCase();
-        const dept = $('#facDept') ? $('#facDept').value : '';
-        return Store.all('faculty').filter(f =>
-          (!q || f.name.toLowerCase().includes(q) || (f.department||'').toLowerCase().includes(q)) &&
-          (!dept || f.department === dept));
+        const q = ($('#facSearch').value || '').toLowerCase();
+        const role = $('#facRole').value, dept = $('#facDept').value, desig = $('#facDesig').value;
+        return employeeRows().filter(f =>
+          (!role || f.role === role) &&
+          (!dept || String(f.department || '') === dept) &&
+          (!desig || String(f.designation || '') === desig) &&
+          (!q || [f.name, f.empId, f.department, f.designation, f.email, f.phone, roleLabel(f.role)]
+            .some(v => String(v || '').toLowerCase().includes(q))));
       };
       const draw = () => {
         const rows = filtered();
         page = Math.min(page, pageCount(rows.length));
         const pageRows = pageSlice(rows, page);
-        $('#facBody').innerHTML = pageRows.length ? pageRows.map(f => `<tr>
+        /* The full profile, the ID card and the class list belong to the
+           register — the four smaller staff tables hold a name and a number and
+           nothing to print. Those rows still edit and delete, through the form
+           that owns them. */
+        $('#facBody').innerHTML = pageRows.length ? pageRows.map(f => {
+          const own = f.col === 'faculty';
+          const key = f.col + ':' + f.id;
+          return `<tr>
           <td>${avatarHtml(f.photo, f.name)}</td>
-          <td>${esc(f.empId)}</td>
-          <td><button class="linkish" data-profile="${f.id}">${esc(f.name)}</button></td>
-          <td>${esc(f.department)}</td>
-          <td>${esc(f.designation)}</td><td>${esc(reportingToName(f) || '—')}</td>
-          <td>${esc(f.email)}</td><td>${esc(f.phone)}</td>
+          <td>${esc(f.empId || '—')}</td>
+          <td>${own ? `<button class="linkish" data-profile="${f.id}">${esc(f.name)}</button>`
+                    : esc(f.name || '—')}</td>
+          <td><span class="pill ${ROLE_PILL[f.role] || 'blue'}">${esc(roleLabel(f.role))}</span></td>
+          <td>${esc(f.department || '—')}</td>
+          <td>${esc(f.designation || '—')}</td>
+          <td>${esc((own && reportingToName(f)) || '—')}</td>
+          <td>${esc(f.email || '—')}</td><td>${esc(f.phone || '—')}</td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>
-            ${canEdit ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>` : ''}
-            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>
-            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${f.id}">Edit</button>
-            <button class="btn-sm btn-del" data-del="${f.id}">Delete</button>` : ''}</div></td></tr>`).join('')
-          : `<tr><td colspan="9" class="empty">No employees found.</td></tr>`;
+            ${own ? `<button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>` : ''}
+            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>` : ''}
+            ${own ? `<button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>` : ''}
+            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}">Edit</button>
+            <button class="btn-sm btn-del" data-del="${key}">Delete</button>` : ''}</div></td></tr>`;
+        }).join('')
+          : `<tr><td colspan="10" class="empty">No employees found.</td></tr>`;
         $('#facBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printFacultyIdCard(b.dataset.id));
         $('#facBody').querySelectorAll('[data-profile]').forEach(b => b.onclick = () => openFacultyProfile(b.dataset.profile));
         if (canEdit) {
           $('#facBody').querySelectorAll('[data-classes]').forEach(b => b.onclick = () => facultyClassesModal(b.dataset.classes, draw));
-          $('#facBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => facultyForm(b.dataset.edit));
-          $('#facBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('faculty', b.dataset.del, 'employee', draw));
+          $('#facBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openEmployeeForm(b.dataset.edit, draw));
+          $('#facBody').querySelectorAll('[data-del]').forEach(b => {
+            const i = b.dataset.del.indexOf(':');
+            b.onclick = () => delConfirm(b.dataset.del.slice(0, i), b.dataset.del.slice(i + 1), 'employee', draw);
+          });
         }
         $('#facPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#facPager'), rows.length, page, (p) => page = p, draw);
       };
       $('#facSearch').oninput = () => { page = 1; draw(); };
+      ['facRole', 'facDept', 'facDesig'].forEach(id => {
+        $('#' + id).onchange = () => { page = 1; draw(); };
+      });
       if (canEdit) {
-        $('#addFac').onclick = () => facultyForm();
+        $('#addFac').onclick = () => facultyForm(null, draw);
         $('#impFac').onclick = () => bulkImportModal('faculty');
       }
       else {
-        $('#facDept').onchange = () => { page = 1; draw(); };
         const report = () => facultyReport(filtered());
         $('#facPrint').onclick = () => printReport(report());
         $('#facCsv').onclick = () => downloadCsv(report());
@@ -3415,6 +3468,51 @@
       draw();
     };
     return html;
+  }
+
+  /* The staff tables that are not the register, the role each one implies, and
+     the form each one opens. Their own pages still own them — the Employees
+     page borrows the form so a center head listed here can be corrected
+     without going hunting for the page that made them. */
+  const STAFF_FORM_DEFS = {
+    accountants: { table: 'accountants', role: 'accountant', label: 'Accountant',
+                   defaultDesignation: 'Accountant', phoneId: 'acPhone' },
+    centerheads: { table: 'centerheads', role: 'center_head', label: 'Center Head',
+                   defaultDesignation: 'Center Head', phoneId: 'chPhone' },
+    coordinators: { table: 'coordinators', role: 'course_coordinator', label: 'Course Coordinator',
+                    defaultDesignation: 'Course Coordinator', phoneId: 'ccPhone' },
+    admissions: { table: 'admissions', role: 'admission', label: 'Admission Officer',
+                  defaultDesignation: 'Admission Officer', phoneId: 'adPhone' },
+  };
+
+  /* One row per person the college employs. The register carries whatever role
+     it was given; the other tables carry the role their own module implies. Both
+     are listed, so nobody is invisible on the page that claims to list everyone. */
+  function employeeRows() {
+    const rows = [];
+    const push = (x, col, role) => rows.push(
+      Object.assign({}, x, { col, role, roleName: roleLabel(role) }));
+    Store.all('faculty').forEach(f => push(f, 'faculty', employeeRole(f)));
+    Object.entries(STAFF_FORM_DEFS).forEach(([col, def]) =>
+      Store.all(col).forEach(x => push(x, col, def.role)));
+    Store.all('placementofficers').forEach(x =>
+      push(x, 'placementofficers', 'placement_officer'));
+    return rows.sort((a, b) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9)
+      || String(a.name || '').localeCompare(String(b.name || '')));
+  }
+  /** the distinct values one field holds across every employee, for a filter */
+  function employeeValues(field) {
+    return [...new Set(employeeRows().map(r => String(r[field] || '').trim()).filter(Boolean))].sort();
+  }
+  /** open whichever form owns this row — "<table>:<id>" */
+  function openEmployeeForm(key, after) {
+    const i = String(key).indexOf(':');
+    const col = String(key).slice(0, i), id = String(key).slice(i + 1);
+    if (col === 'faculty') return facultyForm(id, after);
+    if (col === 'placementofficers') return placementOfficerForm(id, after);
+    const def = STAFF_FORM_DEFS[col];
+    if (def) return staffForm(def, id, after);
+    toast('That record is managed on its own page.', 'err');
   }
 
   /* ---------- read-only faculty profile (center head) ---------- */
@@ -3484,6 +3582,10 @@
       prev = v;
     };
   }
+
+  /* Who can be put in front of a class. The register holds every kind of
+     employee now, and the accountant is not one of them. */
+  function teachingStaff() { return Store.all('faculty').filter(f => employeeRole(f) === 'faculty'); }
 
   /** Who a faculty member reports to: a linked faculty name, or a plain name. */
   function reportingToName(f) {
@@ -3745,6 +3847,7 @@
       columns: [
         { header: 'Emp ID', key: 'empId', width: 14 },
         { header: 'Name', key: 'name', width: 26 },
+        { header: 'Role', key: 'roleName', width: 18 },
         { header: 'Department', key: 'department', width: 20 },
         { header: 'Designation', key: 'designation', width: 20 },
         { header: 'Reporting To', key: 'reportingToName', width: 22 },
@@ -3789,12 +3892,25 @@
     };
   }
   const STAFF_CATEGORIES = ['Teaching', 'Non-Teaching', 'Administrative', 'Support'];
+  /* Starting points for the two master lists every staff form reads. Neither is
+     the whole truth and neither has to be: listValues() folds in every value
+     already sitting on a record, so a designation typed years before this list
+     existed stays selectable and nobody's record is quietly orphaned. */
+  const DESIGNATIONS = ['Professor', 'Associate Professor', 'Assistant Professor',
+    'Lecturer', 'Visiting Faculty', 'Head of Department', 'Dean', 'Principal',
+    'Director', 'Registrar', 'Librarian', 'Lab Assistant', 'Accountant',
+    'Senior Accountant', 'Center Head', 'Placement Officer',
+    'Training & Placement Head', 'Course Coordinator', 'Admission Officer',
+    'Office Assistant', 'System Administrator', 'Support Staff'];
+  const DEPARTMENTS = ['MBA', 'Management', 'Computer Applications', 'Finance',
+    'Marketing', 'Human Resources', 'Administration', 'Accounts', 'Library',
+    'Training & Placement', 'Examination Cell', 'IT & Systems', 'Maintenance'];
   const MARITAL_STATUS = ['Unmarried', 'Married', 'Widowed', 'Divorced'];
 
   function facultyForm(id, after) {
     const f = id ? Store.find('faculty', id) : {};
     // existing login account linked to this faculty (for edit)
-    const acct = id ? Store.all('users').find(u => u.refId === id && u.role === 'faculty') : null;
+    const acct = id ? Store.all('users').find(u => u.refId === id) : null;
     const per = stuPart(f, 'personal');
     const other = stuPart(f, 'otherInfo');
     const addr = stuPart(f, 'addressInfo');
@@ -3829,8 +3945,16 @@
           ${fText('bputRegdNo', 'BPUT Regd No.', f.bputRegdNo)}
           <div class="field"><label>Full Name</label>
             <input name="name" value="${esc(f.name || '')}" required></div>
-          ${fText('department', 'Department', f.department)}
-          ${fText('designation', 'Designation', f.designation)}
+          <div class="field"><label>Employee Role</label>
+            <select name="role">${employeeRoles().map(r =>
+              `<option value="${r}" ${r === employeeRole(f) ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
+            ).join('')}</select></div>
+          <div class="field"><label>Department</label>
+            <select name="department"><option value=""></option>${
+              listOptions('department', f.department || '', true)}</select></div>
+          <div class="field"><label>Designation</label>
+            <select name="designation"><option value=""></option>${
+              listOptions('designation', f.designation || '', true)}</select></div>
           ${fSel('category', 'Category', f.category || 'Teaching', STAFF_CATEGORIES, false)}
           <div class="field"><label>Reporting To</label>
             <select name="reportingTo">${reportingToOptions(f.reportingTo, id)}</select></div>
@@ -3940,6 +4064,8 @@
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#facPhoneInput'));
     bindReportingTo($('select[name="reportingTo"]'), id);
+    bindCustomList($('select[name="department"]'), 'department');
+    bindCustomList($('select[name="designation"]'), 'designation');
     bindPhotoField();
 
     $('#ffTabs').querySelectorAll('[data-pane]').forEach(btn => {
@@ -4058,17 +4184,23 @@
       d.guardians = guardianRows;
       d.documents = documents;
 
+      /* One answer, in two places: the register records what the person is and
+         the login records what they may do, and the form is the only thing that
+         sets either — so they cannot disagree. */
+      const role = employeeRoles().includes(d.role) ? d.role : 'faculty';
+      d.role = role;
       let newId = id;
       if (id) {
         Store.update('faculty', id, d);
-        const patch = { username, role: 'faculty', refId: id, name: d.name };
+        const patch = { username, role, refId: id, name: d.name };
         if (password) patch.password = password;
         if (acct) Store.update('users', acct.id, patch);
-        else Store.add('users', { username, password: password || 'pass123', role: 'faculty', refId: id, name: d.name });
+        else Store.add('users', { username, password: password || 'pass123', role, refId: id, name: d.name });
+        if (acct && acct.id === user.id) { user.name = d.name; paintUser(); }
       } else {
         const fac = Store.add('faculty', d);
         newId = fac.id;
-        Store.add('users', { username, password, role: 'faculty', refId: fac.id, name: fac.name });
+        Store.add('users', { username, password, role, refId: fac.id, name: fac.name });
       }
       closeModal(); toast('Employee saved.');
       if (after) after(newId); else render();
@@ -4695,7 +4827,7 @@
           <input id="atPaperName" readonly placeholder="fills from the paper code"></label>
         <label class="att-field"><span>Faculty</span>
           <select id="atFaculty"><option value="">Select faculty...</option>
-            ${Store.all('faculty').slice().sort((a, b) => String(a.name).localeCompare(String(b.name)))
+            ${teachingStaff().slice().sort((a, b) => String(a.name).localeCompare(String(b.name)))
               .map(f => `<option value="${f.id}">${esc(f.name)}${f.department ? ' · ' + esc(f.department) : ''}</option>`).join('')}
           </select></label>
         <label class="att-field"><span>Date of Class</span>
@@ -6367,9 +6499,10 @@
   /*  LOGIN ACCOUNTS — every user id + password in one place    */
   /* ========================================================= */
   const ROLE_PILL = { admin: 'red', center_head: 'amber', placement_officer: 'green',
-                      faculty: 'blue', student: 'green', librarian: 'amber', accountant: 'blue' };
+                      faculty: 'blue', student: 'green', librarian: 'amber', accountant: 'blue',
+                      course_coordinator: 'green', admission: 'amber' };
   const ROLE_ORDER = { admin: 0, center_head: 1, accountant: 2, placement_officer: 3,
-                       faculty: 4, librarian: 5, student: 6 };
+                       course_coordinator: 4, admission: 5, faculty: 6, librarian: 7, student: 8 };
   const DEFAULT_PASSWORD = 'pass123';
   let pwRevealed = false;   // "Show Passwords" state, kept while the page is open
 
@@ -8689,25 +8822,17 @@
     return html;
   }
 
-  function accountantForm(id, after) {
-    return staffForm({
-      table: 'accountants', role: 'accountant', label: 'Accountant',
-      defaultDesignation: 'Accountant', phoneId: 'acPhone',
-    }, id, after);
-  }
+  /* Both read their shape out of STAFF_FORM_DEFS, which is also what the
+     Employees page routes an Edit through — one definition per staff table. */
+  function accountantForm(id, after) { return staffForm(STAFF_FORM_DEFS.accountants, id, after); }
 
   /* The center head staff record had no form of its own — the login was seeded
      but the person behind it could never be edited. Same shape as the
      accountant form, against the `centerheads` table. */
-  function centerHeadForm(id, after) {
-    return staffForm({
-      table: 'centerheads', role: 'center_head', label: 'Center Head',
-      defaultDesignation: 'Center Head', phoneId: 'chPhone',
-    }, id, after);
-  }
+  function centerHeadForm(id, after) { return staffForm(STAFF_FORM_DEFS.centerheads, id, after); }
 
   /** staff tables that carry a department column */
-  const COLLECTION_HAS_DEPT = ['placementofficers'];
+  const COLLECTION_HAS_DEPT = ['placementofficers', 'coordinators'];
 
   /* One form for the staff records that share the same shape — employee id,
      name, designation, contact, photo — plus the login that goes with them.
@@ -8722,8 +8847,12 @@
     openModal((id ? 'Edit ' : 'Add ') + def.label, `<form id="f"><div class="form-grid">
       <div class="field"><label>Employee ID</label><input name="empId" value="${esc(s.empId || '')}" required></div>
       <div class="field"><label>Full Name</label><input name="name" value="${esc(s.name || '')}" required></div>
-      <div class="field"><label>Designation</label><input name="designation" value="${esc(s.designation || def.defaultDesignation || '')}"></div>
-      ${hasDept ? `<div class="field"><label>Department</label><input name="department" value="${esc(s.department || def.defaultDepartment || '')}"></div>` : ''}
+      <div class="field"><label>Designation</label>
+        <select name="designation"><option value=""></option>${
+          listOptions('designation', s.designation || def.defaultDesignation || '', true)}</select></div>
+      ${hasDept ? `<div class="field"><label>Department</label>
+        <select name="department"><option value=""></option>${
+          listOptions('department', s.department || def.defaultDepartment || '', true)}</select></div>` : ''}
       <div class="field"><label>Email</label><input name="email" type="email" value="${esc(s.email || '')}"></div>
       <div class="field"><label>Phone</label><input name="phone" id="${def.phoneId}" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone || '')}"></div>
       ${photoField(s.photo)}
@@ -8737,6 +8866,8 @@
       <button type="submit" class="btn-primary">Save</button></div></form>`, true);
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#' + def.phoneId));
+    bindCustomList($('select[name="designation"]'), 'designation');
+    bindCustomList($('select[name="department"]'), 'department');
     bindPhotoField();
     $('#f').onsubmit = (e) => {
       e.preventDefault();
@@ -9386,6 +9517,24 @@
     // People a faculty member reports to who are not faculty themselves — a
     // director, a registrar, the HR head. Faculty come from the faculty table
     // and are stored by id; these are stored as the plain name.
+    /* What an employee is called. Spans every staff table, so a designation
+       entered on the Accountant form is offered on the Employees form too and
+       neither list can drift from the other. */
+    designation: {
+      setting: 'designationList', defaults: DESIGNATIONS,
+      prompt: 'New designation (e.g. Dean — Academics):',
+      used: () => STAFF_TABLES.reduce((a, col) =>
+        a.concat(Store.all(col).map(x => x.designation)), []),
+    },
+    /* Which part of the college they belong to. departmentList() stays what it
+       always was — the departments actually in use, which is what the reports
+       count; this is the wider list a form may offer. */
+    department: {
+      setting: 'departmentList', defaults: DEPARTMENTS,
+      prompt: 'New department (e.g. Computer Applications):',
+      used: () => STAFF_TABLES.reduce((a, col) =>
+        a.concat(Store.all(col).map(x => x.department)), []),
+    },
     reportingTo: {
       setting: 'reportingToList', defaults: [],
       prompt: 'Name of the person reported to (e.g. Director — Dr. S. Rath):',
@@ -9489,7 +9638,7 @@
     draw();
   }
   function facultyOptions(sel, withAddNew) {
-    return Store.all('faculty').map(f =>
+    return teachingStaff().map(f =>
       `<option value="${f.id}" ${f.id===sel?'selected':''}>${esc(f.name)}</option>`).join('') + (withAddNew ? addNewOpt() : '');
   }
 
@@ -9565,8 +9714,13 @@
     course_coordinator: 'coordinators', admission: 'admissions',
   };
   function loginRecord(u) {
-    const col = u && LOGIN_RECORD[u.role];
-    return (col && u.refId) ? Store.find(col, u.refId) : null;
+    if (!u || !u.refId) return null;
+    const col = LOGIN_RECORD[u.role];
+    const rec = col ? Store.find(col, u.refId) : null;
+    /* The register can hold any role now, so an accountant added there has a
+       login whose mapped table knows nothing about them. Ask the register
+       second rather than leave the top bar without a name. */
+    return rec || (u.role === 'student' ? null : Store.find('faculty', u.refId)) || null;
   }
   function displayName(u) {
     const rec = loginRecord(u) || {};
@@ -10572,9 +10726,10 @@
     }
 
     if (kind === 'faculty') {
-      const rows = Store.all('faculty').filter(x =>
-        !f.q || [x.empId, x.name, x.department, x.designation, x.expertise].some(v =>
-          String(v || '').toLowerCase().includes(f.q)));
+      const rows = Store.all('faculty')
+        .map(x => Object.assign({}, x, { roleName: roleLabel(employeeRole(x)) }))
+        .filter(x => !f.q || [x.empId, x.name, x.department, x.designation, x.expertise, x.roleName]
+          .some(v => String(v || '').toLowerCase().includes(f.q)));
       const r = facultyReport(rows);
       r.note = 'Faculty roster with department, qualification and teaching load.';
       r.stats = [
@@ -13358,8 +13513,12 @@
       <div class="form-grid">
         <div class="field"><label>Employee ID</label><input name="empId" value="${esc(p.empId || '')}" required></div>
         <div class="field"><label>Full Name</label><input name="name" value="${esc(p.name || '')}" required></div>
-        <div class="field"><label>Designation</label><input name="designation" value="${esc(p.designation || 'Placement Officer')}"></div>
-        <div class="field"><label>Department</label><input name="department" value="${esc(p.department || 'Training & Placement Cell')}"></div>
+        <div class="field"><label>Designation</label>
+          <select name="designation"><option value=""></option>${
+            listOptions('designation', p.designation || 'Placement Officer', true)}</select></div>
+        <div class="field"><label>Department</label>
+          <select name="department"><option value=""></option>${
+            listOptions('department', p.department || 'Training & Placement', true)}</select></div>
         <div class="field"><label>Email</label><input name="email" type="email" value="${esc(p.email || '')}"></div>
         <div class="field"><label>Phone</label><input name="phone" id="poPhone" inputmode="numeric" placeholder="10-digit number" value="${esc(p.phone || '')}"></div>
         ${photoField(p.photo)}
@@ -13373,6 +13532,8 @@
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
     $('#cx').onclick = closeModal;
     bindPhoneInput($('#poPhone'));
+    bindCustomList($('select[name="designation"]'), 'designation');
+    bindCustomList($('select[name="department"]'), 'department');
     bindPhotoField();
     $('#f').onsubmit = (e) => {
       e.preventDefault();
