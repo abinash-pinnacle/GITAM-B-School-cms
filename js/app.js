@@ -1883,12 +1883,12 @@
 
     if (tab === 'documents') {
       const rows = docs.length ? docs.map(d => `<tr>
-          <td>${esc(d.name || '—')}</td><td>${esc(d.type || '—')}</td><td>${esc(d.issued || '—')}</td>
+          <td>${esc(d.type || '—')}</td><td>${esc(d.name || '—')}</td><td>${esc(d.copy || '—')}</td>
         </tr>`).join('')
         : `<tr><td colspan="3" class="empty">No documents on record.</td></tr>`;
       return `<h4 class="ro-sub">Original Docs</h4>
         <div class="tbl-wrap"><table><thead><tr>
-          <th>Document</th><th>Type</th><th>Issued On</th>
+          <th>Document Type</th><th>Document Name</th><th>Original / Photo Copy</th>
         </tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
@@ -2162,6 +2162,10 @@
   const DOC_TYPES = ['Aadhaar', 'PAN', 'Marksheet', 'Certificate', 'Transfer Certificate',
                      'Migration Certificate', 'Caste Certificate', 'Income Certificate',
                      'Photograph', 'Other'];
+  /* Which of the two the college is holding. A date of issue is printed on the
+     document itself; what the desk needs to know later is whether the original
+     is in the cabinet or only a copy of it. */
+  const DOC_COPIES = ['Original', 'Photo Copy'];
 
   const fText = (name, label, val, extra) =>
     `<div class="field"><label>${label}</label>
@@ -2210,11 +2214,10 @@
   function originalDocRow(d) {
     d = d || {};
     return `<div class="sub-card" data-document>
-      <div class="sub-card-head"><strong>Original Docs</strong></div>
       <div class="form-grid">
+        ${fSel('d_type', 'Document Type', d.type, DOC_TYPES)}
         ${fText('d_name', 'Document Name', d.name)}
-        ${fSel('d_type', 'Type', d.type, DOC_TYPES)}
-        ${fDate('d_issued', 'Issued On', d.issued)}
+        ${fSel('d_copy', 'Original / Photo Copy', d.copy, DOC_COPIES)}
       </div></div>`;
   }
 
@@ -2538,8 +2541,8 @@
 
       const documents = [...f.querySelectorAll('[data-document]')].map(card => {
         const val = (n) => (card.querySelector(`[name="d_${n}"]`).value || '').trim();
-        return { name: val('name'), type: val('type'), issued: val('issued') };
-      }).filter(x => x.name);
+        return { type: val('type'), name: val('name'), copy: val('copy') };
+      }).filter(x => x.name || x.type);
 
       d.personal = personal;
       d.academicInfo = academicInfo;
