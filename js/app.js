@@ -13450,8 +13450,10 @@
     $('#pwdBtn').onclick = changePasswordModal;
     $('#modalClose').onclick = closeModal;
     $('#modal2Close').onclick = closeModal2;
-    $('#modal2Overlay').onclick = (e) => { if (e.target.id === 'modal2Overlay') closeModal2(); };
-    $('#modalOverlay').onclick = (e) => { if (e.target.id === 'modalOverlay') closeModal(); };
+    /* Clicking the sheet behind a dialog does nothing. A half-filled admission
+       form is twenty minutes of typing, and the mouse slipping past the edge of
+       the box was throwing all of it away without asking. The × and the Cancel
+       button close a dialog; nothing else does. */
     $('#menuToggle').onclick = toggleSidebar;
     // apply saved collapsed preference (desktop)
     if (localStorage.getItem(SIDEBAR_KEY) === '1') document.body.classList.add('sidebar-collapsed');
