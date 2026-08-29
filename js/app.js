@@ -2494,25 +2494,23 @@
       keyField: 'roll',
       fileBase: 'NMIET-BSCHOOL-Students-Template',
       columns: [
-        { key:'roll', header:'Student ID', required:true,
-          aliases:['reg no','regno','reg. no','roll','roll no','registration',
+        { key:'roll', header:'Registration No', required:true,
+          aliases:['reg no','regno','reg. no','registration',
                    'registration no','registration number','student id'] },
         { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
         { key:'middleName', header:'Middle Name' },
         { key:'lastName', header:'Last Name', aliases:['surname'] },
-        { key:'serialNo', header:'Serial No' },
+        { key:'serialNo', header:'Roll No', aliases:['serial no','serial'] },
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
         { key:'domainEmail', header:'Domain Email', aliases:['college email','institute email'] },
         { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
         { key:'whatsapp', header:'WhatsApp No', aliases:['whatsapp'] },
         { key:'course', header:'Course' },
-        { key:'branch', header:'Department', aliases:['dept','branch'] },
         { key:'specialisation', header:'Specialisation I', aliases:['stream','spec','specialisation'] },
         { key:'specialisation2', header:'Specialisation II', aliases:['second specialisation','spec 2'] },
-        { key:'year', header:'Year', number:true, def:1 },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
-        { key:'house', header:'House' },
+        { key:'house', header:'Clubs', aliases:['house','club'] },
         { key:'batch', header:'Batch' },
         { key:'academicYear', header:'Academic Year', aliases:['session'] },
         { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
@@ -2532,6 +2530,16 @@
         { key:'nationality', header:'Nationality', into:'personal', as:'nationality' },
         { key:'birthplace', header:'Birthplace', into:'personal', as:'birthplace', aliases:['birth place'] },
         { key:'aadhaar', header:'Aadhaar No', aliases:['aadhar','aadhaar','adhaar'] },
+        { key:'identificationMark', header:'Identification Mark', into:'personal', as:'identificationMark' },
+        { key:'thumbId', header:'Biometric Scan', into:'personal', as:'thumbId', aliases:['thumb id'] },
+        { key:'voterId', header:'Voter ID', into:'personal', as:'voterId' },
+        { key:'pan', header:'PAN No', into:'personal', as:'pan' },
+        { key:'drivingLicense', header:'Driving License No', into:'personal', as:'drivingLicense' },
+        { key:'passport', header:'Passport No', into:'personal', as:'passport' },
+        { key:'hostel', header:'Hostel', into:'personal', as:'hostel' },
+        { key:'transport', header:'Transport', into:'personal', as:'transport' },
+        { key:'lunch', header:'Lunch', into:'personal', as:'lunch' },
+        { key:'nss', header:'NSS', into:'personal', as:'nss' },
         { key:'languages', header:'Languages Known', into:'personal', as:'languages', aliases:['languages'] },
         { key:'hobbies', header:'Hobbies', into:'personal', as:'hobbies' },
 
@@ -2567,23 +2575,38 @@
         { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
         { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
 
-        // ---- health ----
-        { key:'emergencyName', header:'Emergency Contact', into:'health', as:'emergencyName' },
-        { key:'emergencyPhone', header:'Emergency Phone', into:'health', as:'emergencyPhone' },
+        // ---- health: the two contact columns are on the Basic tab of the form ----
+        { key:'emergencyName', header:'Emergency Contact Name', into:'health', as:'emergencyName',
+          aliases:['emergency contact'] },
+        { key:'emergencyPhone', header:'Emergency Contact No', into:'health', as:'emergencyPhone',
+          aliases:['emergency phone'] },
         { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
       ],
-      sample: ['2025180010','Rahul','Kumar','Das','10','rahul@nmiet.in','rahul@nmiet.edu.in',
-               '9810000010','9810000010','MBA','MBA','Marketing','Finance',1,2,'A','ANAND','2025-2027',
-               '2026-27','2025-08-17','Dr. Rajesh Mehta','8.2',0,'Active',
-               'Mr.','Male','2003-05-14','B+','General','OBC','Hindu','Indian','Cuttack','123456789012',
-               'Odia, Hindi, English','Cricket, Reading',
-               'Saraswati Vidya Mandir','2019','88.4','Kendriya Vidyalaya','2021','79.2','CAT','4521',
-               'Bhikari Das','Farmer','7978851886','240000',
-               'Sunita Das','Homemaker','7978851887',
-               'Ramesh Das','7978851888',
-               'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','India','752054',
-               'AT- Harekrushnapur, PO- Chhatabar','Khordha','Odisha','752054',
-               'Bhikari Das','7978851886','None'],
+      sample: {
+        roll:'2025180010', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
+        email:'rahul@nmiet.in', domainEmail:'rahul@nmiet.edu.in',
+        phone:'9810000010', whatsapp:'9810000010',
+        course:'MBA', specialisation:'Marketing', specialisation2:'Finance',
+        semester:2, section:'A', house:'Marketing Club', batch:'2025-2027', academicYear:'2026-27',
+        admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta', cgpa:'8.2', backlogs:0, status:'Active',
+        title:'Mr.', gender:'Male', dob:'2003-05-14', bloodGroup:'B+',
+        admissionCategory:'General', religion:'Hindu', nationality:'Indian', birthplace:'Cuttack',
+        aadhaar:'123456789012', identificationMark:'Mole on left cheek', thumbId:'BIO-10',
+        voterId:'', pan:'', drivingLicense:'', passport:'',
+        hostel:'No', transport:'Yes', lunch:'Yes', nss:'No',
+        languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
+        q10Institute:'Saraswati Vidya Mandir', q10Year:'2019', q10Marks:'88.4',
+        q12Institute:'Kendriya Vidyalaya', q12Year:'2021', q12Marks:'79.2',
+        entranceExam:'CAT', entranceRank:'4521',
+        fName:'Bhikari Das', fOccupation:'Farmer', fMobile:'7978851886', fIncome:'240000',
+        mName:'Sunita Das', mOccupation:'Homemaker', mMobile:'7978851887',
+        lgName:'Ramesh Das', lgMobile:'7978851888',
+        address:'AT- Harekrushnapur, PO- Chhatabar', city:'Khordha', state:'Odisha',
+        country:'India', pincode:'752054',
+        permAddress:'AT- Harekrushnapur, PO- Chhatabar', permCity:'Khordha',
+        permState:'Odisha', permPincode:'752054',
+        emergencyName:'Bhikari Das', emergencyPhone:'7978851886', allergies:'None',
+      },
       // students sign in with their registration number, same as the form does
       login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
@@ -2629,7 +2652,6 @@
         { key:'bankAccount', header:'Bank Account No', into:'otherInfo', as:'bankAccount' },
         { key:'bankName', header:'Bank Name', into:'otherInfo', as:'bankName' },
         { key:'ifsc', header:'IFSC Code', into:'otherInfo', as:'ifsc' },
-        { key:'motherName', header:'Mother Name', into:'otherInfo', as:'motherName' },
         { key:'languages', header:'Languages', into:'otherInfo', as:'languages' },
         { key:'hobbies', header:'Hobbies', into:'otherInfo', as:'hobbies' },
 
@@ -2660,17 +2682,27 @@
         { key:'username', header:'Username', store:false },
         { key:'password', header:'Password', store:false },
       ],
-      sample: ['NM-F-1010','Dr. Meena Sahu','BPUT-2015-1010','MBA','Assistant Professor','Teaching',
-               'meena@nmiet.edu','9876500010','2019-07-01','Active','Ph.D. (Management)',
-               'Marketing Analytics','4 journal papers','NM-F-1001',
-               'Dr.','Female','1985-02-11','O+','Married','Cuttack','9 years','General','Hindu','Indian',
-               '1010','559343140635','PSUPS3169H','','34986453071','SBI','SBIN0008214','Prativa Sahu',
-               'Odia, English','Gardening',
-               'Prativa Sahu','Mother','7978851886',
-               'Plot 45, Patia','Bhubaneswar','Odisha','India','751024',
-               'Plot 45, Patia','Bhubaneswar','Odisha','751024',
-               'Prativa Sahu','7978851886',
-               'meena','pass123'],
+      sample: {
+        empId:'NM-F-1010', name:'Dr. Meena Sahu', bputRegdNo:'BPUT-2015-1010',
+        department:'MBA', designation:'Assistant Professor', category:'Teaching',
+        email:'meena@nmiet.edu', phone:'9876500010', joiningDate:'2019-07-01', status:'Active',
+        qualification:'Ph.D. (Management)', expertise:'Marketing Analytics',
+        publications:'4 journal papers', reportingTo:'NM-F-1001',
+        title:'Dr.', gender:'Female', dob:'1985-02-11', bloodGroup:'O+', maritalStatus:'Married',
+        birthplace:'Cuttack', experience:'9 years', caste:'General', religion:'Hindu',
+        nationality:'Indian',
+        attendanceCardId:'1010', aadhaar:'559343140635', pan:'PSUPS3169H', voterId:'',
+        bankAccount:'34986453071', bankName:'SBI', ifsc:'SBIN0008214',
+        languages:'Odia, English', hobbies:'Gardening',
+        fName:'Gopal Sahu', fOccupation:'Teacher', fMobile:'7978851885',
+        mName:'Prativa Sahu', mOccupation:'Homemaker', mMobile:'7978851886',
+        address:'Plot 45, Patia', city:'Bhubaneswar', state:'Odisha',
+        country:'India', pincode:'751024',
+        permAddress:'Plot 45, Patia', permCity:'Bhubaneswar',
+        permState:'Odisha', permPincode:'751024',
+        emergencyName:'Prativa Sahu', emergencyPhone:'7978851886',
+        username:'meena', password:'pass123',
+      },
       login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
                          role: 'faculty', name: row.name }),
     },
@@ -2794,6 +2826,15 @@
         data[c.key] = v;
       });
 
+      // the sheet does not ask for the year; it is the semester, halved and
+      // rounded up, exactly as the admission form works it out
+      /* Neither is asked for on the sheet: the year is the semester halved and
+         the department is the course, exactly as the admission form works them
+         out when somebody is enrolled one at a time. */
+      if (spec.collection === 'students') {
+        data.year = yearForSemester(data.semester);
+        data.branch = data.course;
+      }
       if (parts.personal) data.personal = parts.personal;
       if (parts.otherInfo) data.otherInfo = parts.otherInfo;
       if (parts.health) data.health = parts.health;
@@ -2826,7 +2867,9 @@
     XLSXLite.download(spec.fileBase, [{
       name: spec.title,
       columns: spec.columns.map((c) => ({ header: c.header, key: c.key, width: 20 })),
-      rows: [Object.fromEntries(spec.columns.map((c, i) => [c.key, spec.sample[i]]))],
+      // by key, not by position: a column added in the middle used to shift
+      // every example value after it one place down the row
+      rows: [Object.fromEntries(spec.columns.map((c) => [c.key, spec.sample[c.key] ?? '']))],
     }]);
     toast('Template downloaded — fill it in and upload it back.');
   }
@@ -3404,7 +3447,6 @@
         ${infoRow('Driving License No.', esc(other.drivingLicense || '—'))}
         ${infoRow('Bank Account No', esc(other.bankAccount || '—'))}
         ${infoRow2('Bank Name', esc(other.bankName || '—'), 'IFSC Code', esc(other.ifsc || '—'))}
-        ${infoRow('Mother Name', esc(other.motherName || '—'))}
         ${infoRow('Reference', esc(other.reference || '—'))}
         ${infoRow2('Qualification', esc(f.qualification || '—'), 'Specialization', esc(f.expertise || '—'))}
         ${infoRow('Papers Published', esc(f.publications || '—'))}
@@ -3684,7 +3726,6 @@
           ${fText('oth_bankAccount', 'Bank Account No', other.bankAccount)}
           ${fText('oth_bankName', 'Bank Name', other.bankName)}
           ${fText('oth_ifsc', 'IFSC Code', other.ifsc)}
-          ${fText('oth_motherName', 'Mother Name', other.motherName)}
           ${fText('oth_reference', 'Reference', other.reference)}
           ${fText('qualification', 'Qualification', f.qualification, 'placeholder="e.g. Ph.D. (Management)"')}
           ${fText('expertise', 'Specialization', f.expertise, 'placeholder="e.g. Marketing, Consumer Research"')}
