@@ -2423,6 +2423,34 @@
       : null;
   }
 
+  /* Staff sit in one table per kind, but an employee id is printed on one
+     card and typed into one attendance machine — it has to be unique across all
+     of them, not merely within the table the form happens to write to. The same
+     goes for a university registration number and an Aadhaar: one number, one
+     person. Blank is never a clash; plenty of records carry none of these. */
+  const STAFF_TABLES = ['faculty', 'accountants', 'centerheads', 'placementofficers',
+                        'coordinators', 'admissions'];
+  const STAFF_FIELD_LABEL = { empId: 'Employee ID', bputRegdNo: 'BPUT Regd No.',
+                              aadhaar: 'Aadhaar number', attendanceCardId: 'Attendance Card ID' };
+  function staffFieldTaken(field, value, excludeId) {
+    const v = String(value || '').trim().toLowerCase();
+    if (!v) return null;
+    for (const col of STAFF_TABLES) {
+      const clash = Store.all(col).find(x =>
+        String(x[field] || '').trim().toLowerCase() === v && x.id !== excludeId);
+      if (clash) {
+        return `${STAFF_FIELD_LABEL[field] || field} "${String(value).trim()}" already belongs to ${
+          clash.name || 'another employee'}.`;
+      }
+    }
+    return null;
+  }
+  /** the first of these that somebody else already holds, as a message */
+  function staffClash(d, excludeId) {
+    return ['empId', 'bputRegdNo', 'aadhaar', 'attendanceCardId']
+      .map(f => staffFieldTaken(f, d[f], excludeId)).find(Boolean) || null;
+  }
+
   const DEFAULT_REG_LENGTH = 10;
   function regNoLength() {
     const row = settingRow('regNoLength');
@@ -2677,6 +2705,8 @@
   /** Turn sheet rows into { data, login, error } — one entry per input row. */
   function validateRows(spec, rows, map) {
     const seen = new Set();
+    // a second identifier the sheet must not repeat: staff carry one each
+    const seenIds = new Set();
     const existingKeys = new Set(Store.all(spec.collection)
       .map((x) => String(x[spec.keyField] || '').toLowerCase()));
     const existingUsers = new Set(Store.all('users').map((u) => String(u.username || '').toLowerCase()));
@@ -2716,6 +2746,21 @@
         if (raw[field] && !phoneValid(raw[field])) return { raw, error: `${who} mobile must be 10 digits` };
       }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
+      /* An id unique within this sheet can still belong to somebody already on
+         another staff table, so the check spans all of them — and the sheet
+         itself must not repeat a registration or Aadhaar number either. */
+      if (spec.collection === 'faculty') {
+        const idBad = staffClash(raw, null);
+        if (idBad) return { raw, error: idBad };
+        for (const f of ['bputRegdNo', 'aadhaar']) {
+          const v = (raw[f] || '').trim().toLowerCase();
+          if (!v) continue;
+          if (seenIds.has(f + ':' + v)) {
+            return { raw, error: `Duplicate ${STAFF_FIELD_LABEL[f]} in this file` };
+          }
+          seenIds.add(f + ':' + v);
+        }
+      }
       if (raw.cgpa && (isNaN(+raw.cgpa) || +raw.cgpa < 0 || +raw.cgpa > 10)) {
         return { raw, error: 'CGPA must be 0-10' };
       }
@@ -3750,6 +3795,8 @@
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('AADHAAR number must be exactly 12 digits.', 'err'); return;
       }
+      const idClash = staffClash(d, id);
+      if (idClash) { toast(idClash, 'err'); return; }
       const username = (d.username || '').trim();
       const password = (d.password || '').trim();
       delete d.username; delete d.password;
@@ -8487,9 +8534,8 @@
       const password = (d.password || '').trim();
       delete d.username; delete d.password;
       if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
-      const dup = Store.all(def.table).find(x => x.id !== id &&
-        String(x.empId || '').toLowerCase() === String(d.empId).toLowerCase());
-      if (dup) { toast('Employee ID "' + d.empId + '" is already in use.', 'err'); return; }
+      const idClash = staffClash(d, id);
+      if (idClash) { toast(idClash, 'err'); return; }
       if (username) {
         const clash = Store.all('users').find(u =>
           (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
@@ -13334,6 +13380,8 @@
       e.preventDefault();
       const d = formData(e.target);
       if (!phoneValid(d.phone)) { toast('Phone must be exactly 10 digits.', 'err'); return; }
+      const idClash = staffClash(d, id);
+      if (idClash) { toast(idClash, 'err'); return; }
       const rec = { empId: d.empId, name: d.name, designation: d.designation,
                     department: d.department, email: d.email, phone: d.phone, photo: d.photo };
       const saved = id ? Store.update('placementofficers', id, rec) : Store.add('placementofficers', rec);
