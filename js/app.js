@@ -302,7 +302,7 @@
   const MENU = {
     admin: [
       ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['students','🎓','Students'],
-      ['batchsem','🎯','Semester Update'], ['faculty','👨‍🏫','Faculty'],
+      ['batchsem','🎯','Semester Update'], ['faculty','🧑‍💼','Employees'],
       ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
       ['assignments','🗂️','Assignments'], ['attendance','✅','Attendance'],
       ['attrecords','🗂️','Attendance Records'],
@@ -341,7 +341,7 @@
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
     center_head: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'], ['faculty','👨‍🏫','Faculty'],
+      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'], ['faculty','🧑‍💼','Employees'],
       ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Specialisations'],
       ['syllabus','🧾','Subjects by Semester'],
       ['attendance','✅','Attendance'], ['timetable','🗓️','Timetable'],
@@ -631,7 +631,7 @@
   const TITLES = {
     dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
     usersettings:'User Settings',
-    faculty:'Faculty', facprofile:'Employee Profile', courses:'Courses',
+    faculty:'Employees', facprofile:'Employee Profile', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
@@ -3349,11 +3349,11 @@
   function viewFaculty() {
     const canEdit = !readOnly();
     let html = `<div class="panel"><div class="panel-head">
-      <h3>Faculty Members</h3>
+      <h3>Employees</h3>
       <div class="panel-tools">
         <input class="search-box" id="facSearch" placeholder="Search name / dept...">
         ${canEdit ? `<button class="btn-outline" id="impFac">⬆ Bulk Upload</button>
-          <button class="btn-primary" id="addFac">+ Add Faculty</button>` : `
+          <button class="btn-primary" id="addFac">+ Add Employee</button>` : `
           <select class="filter-sel" id="facDept"><option value="">All Departments</option>
             ${departmentList().map(d => `<option>${esc(d)}</option>`).join('')}</select>
           <button class="btn-outline btn-sm" id="facPrint">🖨 Print</button>
@@ -3395,7 +3395,7 @@
         if (canEdit) {
           $('#facBody').querySelectorAll('[data-classes]').forEach(b => b.onclick = () => facultyClassesModal(b.dataset.classes, draw));
           $('#facBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => facultyForm(b.dataset.edit));
-          $('#facBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('faculty', b.dataset.del, 'faculty', draw));
+          $('#facBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('faculty', b.dataset.del, 'employee', draw));
         }
         $('#facPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#facPager'), rows.length, page, (p) => page = p, draw);
@@ -3463,7 +3463,7 @@
       if (v === REMOVE_OPT) {
         const list = listValues('reportingTo');
         if (!list.length) {
-          toast('Nothing to remove — faculty are removed from the Faculty page.', 'err');
+          toast('Nothing to remove — employees are removed from the Employees page.', 'err');
           select.value = prev; return;
         }
         const raw = (window.prompt('Remove which name?\n(' + list.join(', ') + ')') || '').trim();
@@ -3530,7 +3530,7 @@
     </div>`;
 
     const html = `<div class="panel-tools" style="margin-bottom:14px">
-        <button class="btn-outline btn-sm" id="fpBack">← Faculty</button>
+        <button class="btn-outline btn-sm" id="fpBack">← Employees</button>
         ${canEdit ? `<button class="btn-primary btn-sm" id="fpEdit">✎ Edit Employee</button>` : ''}
         <button class="btn-outline btn-sm" id="fpCard">🪪 ID Card</button>
         <button class="btn-outline btn-sm" id="fpPdf">📄 Generate PDF</button>
@@ -3695,7 +3695,7 @@
         <td>${esc(c.code || '—')} — ${esc(c.name || '—')}</td><td>${esc(t.room || '—')}</td></tr>`;
     }).join('') : `<tr><td colspan="4" class="empty">No periods scheduled.</td></tr>`;
 
-    openModal('Faculty Profile — ' + f.name, `
+    openModal('Employee Profile — ' + f.name, `
       <div style="display:flex;gap:18px;align-items:center;margin-bottom:18px">
         <div class="logo-circle">${f.photo ? `<img src="${esc(f.photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : esc((f.name || '?')[0])}</div>
         <div><h3 style="color:var(--primary-dark)">${esc(f.name)}</h3>
@@ -3738,10 +3738,10 @@
     $('#pid').onclick = () => printFacultyIdCard(fid);
   }
 
-  /* the Faculty page as an exportable report */
+  /* the Employees page as an exportable report */
   function facultyReport(rows) {
     return {
-      title: 'Faculty Report', sheetName: 'Faculty', subtitle: reportStamp(),
+      title: 'Employee Report', sheetName: 'Employees', subtitle: reportStamp(),
       columns: [
         { header: 'Emp ID', key: 'empId', width: 14 },
         { header: 'Name', key: 'name', width: 26 },
