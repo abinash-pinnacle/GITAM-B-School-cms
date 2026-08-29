@@ -1332,6 +1332,50 @@
   }
 
   // ---- STUDENTS ----
+  /* What the Advanced Filter can narrow on, in the order the panel lists it.
+     The text fields match anywhere in the value; the dropdowns are built from
+     the values the roll actually holds, so neither offers a batch nobody is
+     in nor a name nobody has. */
+  const ADV_TEXT = [['roll', 'Student ID'], ['firstName', 'First Name'],
+                    ['middleName', 'Middle Name'], ['lastName', 'Last Name'],
+                    ['phone', 'Phone No.']];
+  const ADV_SELECT = [['branch', 'Department'], ['specialisation', 'Specialisation'],
+                      ['section', 'Section'], ['batch', 'Batch'], ['course', 'Course'],
+                      ['status', 'Status']];
+  /* Each range reads one number off the record. Four of them live on the
+     Academic tab as the marks for that qualification; the fifth is the CGPA
+     column the roll already prints. */
+  const ADV_RANGES = [['q10', '10th Percentage', '10th'], ['q12', '12th Percentage', '12th'],
+                      ['dip', 'Diploma Percentage', 'Diploma'], ['p3', '+3 Percentage', '+3'],
+                      ['cgpa', 'CGPA', null]];
+
+  /* A percentage as the office typed it — "88.4", "88.4 %", "88.4/100" — so
+     only the number at the front of it can be compared. A level nobody filled
+     in returns null, which is not the same as a zero. */
+  function qualPct(stu, level) {
+    const rows = stuPart(stu, 'academicInfo').qualifications;
+    const row = (Array.isArray(rows) ? rows : []).find(q => q && q.level === level);
+    const n = parseFloat(String((row && row.marks) || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  }
+  /** the number a range filter compares against, or null when unrecorded */
+  function advValue(stu, key, level) {
+    if (key === 'cgpa') {
+      const n = parseFloat(String(stu.cgpa ?? '').replace(/[^0-9.]/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+    return qualPct(stu, level);
+  }
+  /** an empty advanced filter — every field blank, every range open */
+  function emptyAdv() {
+    return { fields: {}, ranges: Object.fromEntries(ADV_RANGES.map(([k]) => [k, { min: '', max: '' }])) };
+  }
+  /** how many of its filters are actually set */
+  function advCount(adv) {
+    return Object.keys(adv.fields).length
+      + ADV_RANGES.filter(([k]) => adv.ranges[k].min !== '' || adv.ranges[k].max !== '').length;
+  }
+
   /* Options for a column filter, built from the values actually present so
      the dropdown never offers a branch or a batch nobody is in. */
   function colFilterOptions(rows, key, label) {
@@ -1359,12 +1403,18 @@
       <h3>${deptBranch ? deptBranch + ' Department Students' : 'All Students'}</h3>
       <div class="panel-tools">
         <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
+        <button class="btn-outline btn-sm" id="stuFilter">🔎 Filter</button>
         <button class="btn-outline btn-sm" id="stuPrint">🖨 PDF</button>
         <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
         <button class="btn-outline btn-sm" id="stuXls">⬇ Excel</button>
         ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
         <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
       </div></div>
+      <div class="filter-bar hidden" id="stuFilterBar">
+        <span class="fb-count" id="stuFilterCount"></span>
+        <span class="fb-note" id="stuFilterNote"></span>
+        <button type="button" class="btn-outline btn-sm" id="stuFilterClear">Reset Filter</button>
+      </div>
       <div class="tbl-wrap tbl-sticky"><table class="tbl-filter"><thead>
         <tr>
           <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
@@ -1390,6 +1440,9 @@
 
     viewStudents.after = () => {
       let page = 1;
+      // survives redraws and paging, because the list redraws without this
+      // function running again
+      let adv = emptyAdv();
       const filters = () => {
         const out = {};
         $('#view').querySelectorAll('[data-f]').forEach(el => {
@@ -1398,23 +1451,46 @@
         });
         return out;
       };
+      // a text filter matches anywhere in the cell; a dropdown is exact
+      const EXACT = ADV_SELECT.map(([k]) => k);
+      const passes = (s, f) => Object.entries(f).every(([k, v]) => {
+        const cell = String(s[k] ?? '').toLowerCase();
+        return EXACT.includes(k) ? cell === v : cell.includes(v);
+      });
+      /* An open end is no bound at all. A student with nothing recorded is out
+         of every range that has one — the office cannot say a blank is between
+         70 and 90. */
+      const inRange = (v, r) => {
+        if (r.min === '' && r.max === '') return true;
+        if (v === null) return false;
+        if (r.min !== '' && v < +r.min) return false;
+        if (r.max !== '' && v > +r.max) return false;
+        return true;
+      };
       const matching = () => {
         const q = ($('#stuSearch').value || '').toLowerCase();
         const f = filters();
         return rosterStudents().filter(s => {
           if (q && !(String(s.name || '').toLowerCase().includes(q)
                   || String(s.roll || '').toLowerCase().includes(q))) return false;
-          // a text filter matches anywhere in the cell; a dropdown is exact
-          return Object.entries(f).every(([k, v]) => {
-            const cell = String(s[k] ?? '').toLowerCase();
-            const isSelect = ['branch', 'specialisation', 'section', 'batch', 'course', 'status'].includes(k);
-            return isSelect ? cell === v : cell.includes(v);
-          });
+          // the search box, the column row and the panel all have to agree
+          if (!passes(s, f) || !passes(s, adv.fields)) return false;
+          return ADV_RANGES.every(([k, , level]) => inRange(advValue(s, k, level), adv.ranges[k]));
         });
       };
 
+      const paintBar = (total) => {
+        const n = advCount(adv);
+        $('#stuFilterBar').classList.toggle('hidden', !n);
+        $('#stuFilterCount').textContent = `${total} ${total === 1 ? 'Student' : 'Students'} Found`;
+        $('#stuFilterNote').textContent = `${n} advanced ${n === 1 ? 'filter' : 'filters'} applied`;
+        $('#stuFilter').classList.toggle('btn-primary', !!n);
+        $('#stuFilter').classList.toggle('btn-outline', !n);
+        $('#stuFilter').textContent = n ? `🔎 Filter · ${n}` : '🔎 Filter';
+      };
       const draw = () => {
         const rows = matching();
+        paintBar(rows.length);
         page = Math.min(page, pageCount(rows.length));
         const pageRows = pageSlice(rows, page);
         const from = (page - 1) * PAGE_SIZE;
@@ -1462,6 +1538,10 @@
       };
 
       $('#stuSearch').oninput = () => { page = 1; draw(); };
+      $('#stuFilter').onclick = () => advFilterModal(rosterStudents(), adv, (next) => {
+        adv = next; page = 1; draw();
+      });
+      $('#stuFilterClear').onclick = () => { adv = emptyAdv(); page = 1; draw(); };
       $('#view').querySelectorAll('[data-f]').forEach(el => {
         const ev = el.tagName === 'SELECT' ? 'onchange' : 'oninput';
         el[ev] = () => { page = 1; draw(); };
@@ -1477,6 +1557,86 @@
       draw();
     };
     return html;
+  }
+
+  /* Tick nothing and it changes nothing: the panel opens on whatever is
+     already applied, and Apply hands back a new filter rather than editing the
+     one the list is using — so Cancel really does cancel. */
+  function advFilterModal(rows, current, onApply) {
+    const adv = current;
+    const val = (k) => esc(adv.fields[k] || '');
+    const textField = ([k, label]) =>
+      `<div class="field"><label>${esc(label)}</label>
+        <input data-a="${k}" value="${val(k)}" placeholder="Any"></div>`;
+    /* Built from the roll itself, so a dropdown never offers a batch or a
+       section nobody is in. The applied value is held folded to lower case,
+       which is what it is compared against. */
+    const selectField = ([k, label]) => {
+      const cur = adv.fields[k] || '';
+      const vals = [...new Set(rows.map(r => String(r[k] ?? '').trim()).filter(Boolean))].sort();
+      return `<div class="field"><label>${esc(label)}</label><select data-a="${k}">
+        <option value="">Any</option>
+        ${vals.map(v => `<option ${v.toLowerCase() === cur ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select></div>`;
+    };
+    const rangeRow = ([k, label]) => `<div class="adv-range">
+      <label>${esc(label)}</label>
+      <input type="number" step="0.01" data-a-min="${k}" value="${esc(adv.ranges[k].min)}" placeholder="Min">
+      <span class="adv-to">to</span>
+      <input type="number" step="0.01" data-a-max="${k}" value="${esc(adv.ranges[k].max)}" placeholder="Max">
+    </div>`;
+
+    openModal('Advanced Filter', `
+      <h4 class="ro-sub">Personal / Academic Details</h4>
+      <div class="form-grid">
+        ${ADV_TEXT.map(textField).join('')}
+        ${ADV_SELECT.map(selectField).join('')}
+      </div>
+      <h4 class="ro-sub" style="margin-top:18px">Academic Performance</h4>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">
+        Leave both boxes empty to ignore a row. A student with nothing recorded for
+        a qualification is left out of that range.</p>
+      <div class="adv-ranges">${ADV_RANGES.map(rangeRow).join('')}</div>
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="advReset">Reset Filter</button>
+        <button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="button" class="btn-primary" id="advGo">Apply Filter</button>
+      </div>`, true);
+
+    const read = () => {
+      const next = emptyAdv();
+      document.querySelectorAll('#modalBody [data-a]').forEach(el => {
+        const v = (el.value || '').trim();
+        if (v) next.fields[el.dataset.a] = v.toLowerCase();
+      });
+      ADV_RANGES.forEach(([k]) => {
+        const lo = document.querySelector(`[data-a-min="${k}"]`).value.trim();
+        const hi = document.querySelector(`[data-a-max="${k}"]`).value.trim();
+        next.ranges[k] = { min: lo, max: hi };
+      });
+      return next;
+    };
+    $('#cx').onclick = closeModal;
+    $('#advReset').onclick = () => {
+      document.querySelectorAll('#modalBody [data-a]').forEach(el => { el.value = ''; });
+      ADV_RANGES.forEach(([k]) => {
+        document.querySelector(`[data-a-min="${k}"]`).value = '';
+        document.querySelector(`[data-a-max="${k}"]`).value = '';
+      });
+      onApply(emptyAdv());
+      closeModal();
+      toast('Filter cleared.');
+    };
+    $('#advGo').onclick = () => {
+      const next = read();
+      const backwards = ADV_RANGES.find(([k, label]) => {
+        const r = next.ranges[k];
+        return r.min !== '' && r.max !== '' && +r.min > +r.max;
+      });
+      if (backwards) { toast(`${backwards[1]}: the minimum is above the maximum.`, 'err'); return; }
+      onApply(next);
+      closeModal();
+    };
   }
 
   /* ---------- read-only student profile (center head) ----------
@@ -2550,6 +2710,12 @@
         { key:'q12Institute', header:'Class 12 School', into:'qual12', as:'institute' },
         { key:'q12Year', header:'Class 12 Year', into:'qual12', as:'year' },
         { key:'q12Marks', header:'Class 12 Marks', into:'qual12', as:'marks' },
+        { key:'qDipInstitute', header:'Diploma Institute', into:'qualDip', as:'institute' },
+        { key:'qDipYear', header:'Diploma Year', into:'qualDip', as:'year' },
+        { key:'qDipMarks', header:'Diploma Marks', into:'qualDip', as:'marks', aliases:['diploma percentage'] },
+        { key:'q3Institute', header:'+3 Institute', into:'qual3', as:'institute' },
+        { key:'q3Year', header:'+3 Year', into:'qual3', as:'year' },
+        { key:'q3Marks', header:'+3 Marks', into:'qual3', as:'marks', aliases:['+3 percentage'] },
         { key:'entranceExam', header:'Entrance Exam', into:'academicInfo', as:'entranceExam' },
         { key:'entranceRank', header:'Entrance Rank', into:'academicInfo', as:'entranceRank' },
 
@@ -2597,6 +2763,8 @@
         languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
         q10Institute:'Saraswati Vidya Mandir', q10Year:'2019', q10Marks:'88.4',
         q12Institute:'Kendriya Vidyalaya', q12Year:'2021', q12Marks:'79.2',
+        qDipInstitute:'', qDipYear:'', qDipMarks:'',
+        q3Institute:'Ravenshaw University', q3Year:'2024', q3Marks:'72.5',
         entranceExam:'CAT', entranceRank:'4521',
         fName:'Bhikari Das', fOccupation:'Farmer', fMobile:'7978851886', fIncome:'240000',
         mName:'Sunita Das', mOccupation:'Homemaker', mMobile:'7978851887',
@@ -2851,8 +3019,10 @@
       // schooling arrives as two sets of three columns and is filed as the
       // qualification rows the profile page prints
       const quals = [];
-      if (parts.qual10) quals.push(Object.assign({ level: '10th' }, parts.qual10));
-      if (parts.qual12) quals.push(Object.assign({ level: '12th' }, parts.qual12));
+      [['qual10', '10th'], ['qual12', '12th'], ['qualDip', 'Diploma'], ['qual3', '+3']]
+        .forEach(([key, level]) => {
+          if (parts[key]) quals.push(Object.assign({ level }, parts[key]));
+        });
       if (quals.length) {
         data.academicInfo = Object.assign({}, data.academicInfo, { qualifications: quals });
       }
