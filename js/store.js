@@ -88,6 +88,12 @@ const Store = {
         const detail = data && data.detail ? ` (${data.detail})` : '';
         return { error: `Server error — the database is unreachable.${detail}` };
       }
+      // 429: too many wrong passwords. The server's own message names the wait,
+      // so it is shown rather than replaced with "invalid password" — which
+      // would send somebody off retyping a password that was right.
+      if (res.status === 429) {
+        return { error: (data && data.message) || 'Too many attempts. Please wait a few minutes.' };
+      }
       return { error: (data && data.message) || 'Invalid username or password.' };
     }
     // the one response that carries it; it is kept out of every other one

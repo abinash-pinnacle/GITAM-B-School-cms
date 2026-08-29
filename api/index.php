@@ -129,6 +129,92 @@ function upgrade_password(string $id, string $plain): void
  * The caller's user row, identified by the X-User-Id header the frontend sends
  * after login, or null when the request is anonymous.
  */
+/* ---------------- failed sign-ins ----------------
+   Kept in a table of its own, created on demand. Deliberately not a COLLECTIONS
+   entry: those become API routes, and the record of who has been failing to
+   sign in is not something to serve. */
+function attempts_table(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $t = qi('_login_attempts');
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('k') . " $kType PRIMARY KEY, "
+        . qi('fails') . " $iType, " . qi('first_at') . " $iType, "
+        . qi('locked_until') . " $iType)");
+}
+
+/**
+ * Who is asking. Behind a CDN the socket address is the CDN's, so the
+ * forwarded header is read first — knowing full well it can be set by hand.
+ * That is why the username is counted as well: an attacker who forges a new
+ * address every request still has to keep attacking the same account.
+ */
+function client_ip(): string
+{
+    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'] as $h) {
+        $v = trim((string) ($_SERVER[$h] ?? ''));
+        if ($v !== '') {
+            $first = trim(explode(',', $v)[0]);
+            if (filter_var($first, FILTER_VALIDATE_IP)) {
+                return $first;
+            }
+        }
+    }
+    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+}
+
+/** how long this key must wait, in seconds — 0 when it may try now */
+function login_wait(string $key): int
+{
+    attempts_table();
+    $row = fetch_one('SELECT * FROM ' . qi('_login_attempts') . ' WHERE ' . qi('k') . ' = ?', [$key]);
+    if (!$row) {
+        return 0;
+    }
+    $until = (int) ($row['locked_until'] ?? 0);
+    return $until > time() ? $until - time() : 0;
+}
+
+/** record one wrong password against a key, and lock it once it has had enough */
+function login_failed(string $key, int $max): void
+{
+    attempts_table();
+    $now = time();
+    $row = fetch_one('SELECT * FROM ' . qi('_login_attempts') . ' WHERE ' . qi('k') . ' = ?', [$key]);
+    // a window that has run out starts again from one, so yesterday's typos
+    // are not held against anybody
+    $fails = ($row && $now - (int) ($row['first_at'] ?? 0) < LOGIN_WINDOW_SECONDS)
+        ? (int) ($row['fails'] ?? 0) + 1 : 1;
+    $firstAt = $fails === 1 ? $now : (int) ($row['first_at'] ?? $now);
+    $lock = $fails >= $max ? $now + LOGIN_LOCK_SECONDS : 0;
+    if ($row) {
+        run_sql('UPDATE ' . qi('_login_attempts') . ' SET ' . qi('fails') . ' = ?, '
+            . qi('first_at') . ' = ?, ' . qi('locked_until') . ' = ? WHERE ' . qi('k') . ' = ?',
+            [$fails, $firstAt, $lock, $key]);
+    } else {
+        run_sql('INSERT INTO ' . qi('_login_attempts') . ' (' . qi('k') . ', ' . qi('fails')
+            . ', ' . qi('first_at') . ', ' . qi('locked_until') . ') VALUES (?, ?, ?, ?)',
+            [$key, $fails, $firstAt, $lock]);
+    }
+}
+
+/** getting in clears the slate — for the address and for the account */
+function login_succeeded(array $keys): void
+{
+    attempts_table();
+    foreach ($keys as $k) {
+        run_sql('DELETE FROM ' . qi('_login_attempts') . ' WHERE ' . qi('k') . ' = ?', [$k]);
+    }
+    // and sweep what has aged out, so the table cannot grow without end
+    run_sql('DELETE FROM ' . qi('_login_attempts') . ' WHERE ' . qi('locked_until') . ' < ? AND '
+        . qi('first_at') . ' < ?', [time(), time() - LOGIN_WINDOW_SECONDS]);
+}
+
 /** 32 random bytes, hex — unguessable, and belonging to one account */
 function new_token(): string
 {
@@ -907,6 +993,22 @@ function api_login(): void
 {
     $d = body();
     $given = (string) ($d['password'] ?? '');
+    $name = strtolower(trim((string) ($d['username'] ?? '')));
+
+    /* Checked before the password is looked at, so a locked-out attacker
+       cannot even learn whether the account exists. */
+    $keys = ['ip:' . client_ip(), 'user:' . $name];
+    foreach ($keys as $k) {
+        $wait = login_wait($k);
+        if ($wait > 0) {
+            send_json([
+                'error'   => 'too-many-attempts',
+                'retryAfter' => $wait,
+                'message' => 'Too many failed sign-ins. Try again in '
+                    . max(1, (int) ceil($wait / 60)) . ' minute(s).',
+            ], 429);
+        }
+    }
     /* The password is no longer part of the query — a hash cannot be matched in
        SQL. The row is found by username and the password checked in PHP. */
     $rows = fetch_all(
@@ -918,6 +1020,8 @@ function api_login(): void
         fn($r) => password_matches($given, (string) ($r['password'] ?? ''))
     ));
     if (!$rows) {
+        login_failed($keys[0], LOGIN_MAX_PER_IP);
+        login_failed($keys[1], LOGIN_MAX_PER_USER);
         send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
     }
     // signing in is what migrates the row; after this it is a hash for good
@@ -948,6 +1052,7 @@ function api_login(): void
         db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
             ->execute([$token, $rows[0]['id']]);
     }
+    login_succeeded($keys);
     $out = row_out('users', $rows[0]);
     $out['token'] = $token;          // the only response that carries it
     send_json($out);

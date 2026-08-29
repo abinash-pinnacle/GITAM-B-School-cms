@@ -328,6 +328,17 @@ const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
    obtained or are deliberately public. Everything else is refused. */
 const OPEN_ENDPOINTS = ['login', 'health'];
 
+/* ---------------- how many wrong passwords before waiting ----------------
+   Counted over the window, forgotten once it passes. The address limit is the
+   lower of the two because that is the ordinary attack; the username limit is
+   higher because reaching it locks a real person out, and somebody else can
+   reach it on their behalf. Both lockouts are short: long enough to make
+   guessing pointless, short enough that being wrongly caught is a coffee. */
+const LOGIN_WINDOW_SECONDS = 900;      // 15 minutes
+const LOGIN_LOCK_SECONDS   = 900;      // 15 minutes
+const LOGIN_MAX_PER_IP     = 10;
+const LOGIN_MAX_PER_USER   = 15;
+
 /* The old scheme identified a caller by `X-User-Id`, and the ids are u1, u2,
    u3 — so it was not authentication, it was a claim the server believed. There
    is no grace period for that: leaving it on for the convenience of open tabs
