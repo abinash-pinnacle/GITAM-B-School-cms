@@ -3358,7 +3358,7 @@
         ${infoRow('Title', esc(per.title || '—'))}
         ${infoRow2('First Name', esc(per.firstName || (f.name || '').split(' ')[0] || '—'),
                    'Last Name', esc(per.lastName || '—'))}
-        ${infoRow2('Middle Name', esc(per.middleName || '—'), 'Name Alias', esc(per.alias || '—'))}
+        ${infoRow('Middle Name', esc(per.middleName || '—'))}
         ${infoRow2('Joining Date', esc(f.joiningDate || '—'), 'Date of Birth', esc(f.dob || '—'))}
         ${infoRow2('Gender', esc(f.gender || '—'), 'Birth Place', esc(per.birthplace || '—'))}
         ${infoRow2('Department', esc(f.department || '—'), 'Designation', esc(f.designation || '—'))}
@@ -3643,7 +3643,6 @@
           ${fText('per_firstName', 'First Name', per.firstName)}
           ${fText('per_middleName', 'Middle Name', per.middleName)}
           ${fText('per_lastName', 'Last Name', per.lastName)}
-          ${fText('per_alias', 'Name Alias', per.alias)}
           ${fDate('dob', 'Date of Birth', f.dob)}
           ${fSel('gender', 'Gender', f.gender, GENDERS)}
           ${fText('per_birthplace', 'Birth Place', per.birthplace)}
