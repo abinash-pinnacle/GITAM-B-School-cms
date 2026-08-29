@@ -1994,7 +1994,6 @@
   const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   const YES_NO = ['No', 'Yes'];
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SC', 'ST', 'EWS', 'Management', 'NRI'];
-  const RELATIONS = ['Father', 'Mother', 'Guardian', 'Brother', 'Sister', 'Uncle', 'Aunt', 'Spouse'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
   /* A club is the specialisation's own society — Marketing has the Marketing
      Club — so the list is built from the specialisations rather than typed
@@ -2023,6 +2022,10 @@
   /* The three a student's file always has. Named here, so the form does not
      ask who each one is. */
   const GUARDIAN_ROLES = ['Father', 'Mother', 'Local Guardian'];
+  /* An employee's file keeps the two the college asks for. No local guardian:
+     that is an admission question, asked of somebody who has moved cities to
+     study, not of the staff member who is already here. */
+  const EMP_GUARDIAN_ROLES = ['Father', 'Mother'];
 
   /** one of the three fixed blocks on the admission form */
   function fixedGuardianCard(g, role) {
@@ -2037,25 +2040,6 @@
         ${fText('g_income', 'Annual Income (₹)', g.income, 'inputmode="numeric"')}
         ${fText('g_email', 'Email', g.email, 'type="email"')}
         ${fText('g_qualification', 'Qualification', g.qualification)}
-        ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
-      </div></div>`;
-  }
-
-  function guardianCard(g, i) {
-    g = g || {};
-    return `<div class="sub-card" data-guardian>
-      <div class="sub-card-head"><strong>Guardian ${i + 1}</strong>
-        <button type="button" class="btn-outline btn-sm" data-remove-guardian>Remove</button></div>
-      <div class="form-grid">
-        ${fText('g_name', 'Name', g.name)}
-        ${fSel('g_relation', 'Relation', g.relation, RELATIONS)}
-        ${fText('g_occupation', 'Occupation', g.occupation)}
-        ${fText('g_mobile', 'Mobile No', g.mobile, 'inputmode="numeric" maxlength="10"')}
-        ${fText('g_phone', 'Phone No', g.phone)}
-        ${fText('g_income', 'Annual Income (₹)', g.income, 'inputmode="numeric"')}
-        ${fText('g_email', 'Email', g.email, 'type="email"')}
-        ${fText('g_qualification', 'Qualification', g.qualification)}
-        ${fSel('g_emergency', 'Emergency Contact', g.emergency || 'No', YES_NO, false)}
         ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
       </div></div>`;
   }
@@ -2473,9 +2457,9 @@
   const DEFAULT_IMPORT_PASSWORD = 'pass123';
 
   /* Columns marked `into` are collected into one of the record's JSON blobs —
-     `into:'personal', as:'title'` writes personal.title. `into:'guardian'`
-     builds the single guardian a sheet can carry; the form takes as many as
-     you like. `into:'current'` / `'permanent'` build the two addresses. */
+     `into:'personal', as:'title'` writes personal.title. `into:'father'` and
+     the rest build the named family blocks the forms ask for. `into:'current'`
+     / `'permanent'` build the two addresses. */
   const IMPORT_SPECS = {
     students: {
       title: 'Students',
@@ -2623,10 +2607,13 @@
         { key:'languages', header:'Languages', into:'otherInfo', as:'languages' },
         { key:'hobbies', header:'Hobbies', into:'otherInfo', as:'hobbies' },
 
-        // ---- guardian ----
-        { key:'gName', header:'Guardian Name', into:'guardian', as:'name' },
-        { key:'gRelation', header:'Guardian Relation', into:'guardian', as:'relation' },
-        { key:'gMobile', header:'Guardian Mobile', into:'guardian', as:'mobile' },
+        // ---- guardian: the same two the form asks for ----
+        { key:'fName', header:'Father Name', into:'father', as:'name', aliases:['father'] },
+        { key:'fOccupation', header:'Father Occupation', into:'father', as:'occupation' },
+        { key:'fMobile', header:'Father Mobile', into:'father', as:'mobile' },
+        { key:'mName', header:'Mother Name', into:'mother', as:'name', aliases:['mother'] },
+        { key:'mOccupation', header:'Mother Occupation', into:'mother', as:'occupation' },
+        { key:'mMobile', header:'Mother Mobile', into:'mother', as:'mobile' },
 
         // ---- address ----
         { key:'address', header:'Address', into:'current', as:'address' },
@@ -2725,7 +2712,7 @@
       if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
       if (raw.whatsapp && !phoneValid(raw.whatsapp)) return { raw, error: 'WhatsApp must be 10 digits' };
       for (const [field, who] of [['fMobile', "Father's"], ['mMobile', "Mother's"],
-                                  ['lgMobile', "Local guardian's"], ['gMobile', "Guardian's"]]) {
+                                  ['lgMobile', "Local guardian's"]]) {
         if (raw[field] && !phoneValid(raw[field])) return { raw, error: `${who} mobile must be 10 digits` };
       }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
@@ -2771,11 +2758,11 @@
       if (parts.current || parts.permanent) {
         data.addressInfo = { current: parts.current || {}, permanent: parts.permanent || {} };
       }
-      if (parts.guardian) data.guardians = [parts.guardian];
+      // each family block is filed under the name the form gives it
       const family = [['father', 'Father'], ['mother', 'Mother'], ['localGuardian', 'Local Guardian']]
         .filter(([key]) => parts[key])
         .map(([key, relation]) => Object.assign({ relation }, parts[key]));
-      if (family.length) data.guardians = (data.guardians || []).concat(family);
+      if (family.length) data.guardians = family;
       if (raw.name && !data.name) data.name = raw.name;
       // schooling arrives as two sets of three columns and is filed as the
       // qualification rows the profile page prints
@@ -3343,11 +3330,11 @@
     if (tab === 'guardians') {
       if (!guardians.length) return `<h4 class="ro-sub">Guardian Info</h4><p class="empty">No guardian recorded.</p>`;
       return `<h4 class="ro-sub">Guardian Info</h4>` + guardians.map((g, i) => `
-        ${guardians.length > 1 ? `<h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${i + 1} · ${esc(g.name || 'Guardian')}</h4>` : ''}
+        <h4 class="ro-sub" style="margin-top:${i ? 22 : 10}px">${esc(g.relation || 'Guardian')}</h4>
         ${infoTable(`
-          ${infoRow('Guardian Name', esc(g.name || '—'))}
+          ${infoRow('Name', esc(g.name || '—'))}
           ${infoRow('Qualification', esc(g.qualification || '—'))}
-          ${infoRow2('Relation', esc(g.relation || '—'), 'Occupation', esc(g.occupation || '—'))}
+          ${infoRow('Occupation', esc(g.occupation || '—'))}
           ${infoRow2('Total Income', g.income ? '₹' + esc(g.income) : '—', 'Mobile No', esc(g.mobile || '—'))}
           ${infoRow2('Phone No', esc(g.phone || '—'), 'Email ID', esc(g.email || '—'))}
           ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
@@ -3632,8 +3619,8 @@
       </div>
 
       <div class="sf-pane hidden" data-pane="guardians">
-        <div id="ffGuardians">${(guardians.length ? guardians : [{}]).map(guardianCard).join('')}</div>
-        <button type="button" class="btn-outline btn-sm" id="ffAddGuardian">+ Add Guardian</button>
+        <div id="ffGuardians">${EMP_GUARDIAN_ROLES.map(role =>
+          fixedGuardianCard(guardians.find(g => g.relation === role), role)).join('')}</div>
       </div>
 
       <div class="sf-pane hidden" data-pane="address">
@@ -3713,17 +3700,6 @@
         if (h) h.textContent = `${word} ${i + 1}`;
       });
     };
-    const bindGuardianRemovals = () => {
-      document.querySelectorAll('[data-remove-guardian]').forEach(b => {
-        b.onclick = () => {
-          if (document.querySelectorAll('[data-guardian]').length === 1) {
-            toast('At least one guardian block stays on the form.', 'err'); return;
-          }
-          b.closest('[data-guardian]').remove();
-          renumber('[data-guardian]', 'Guardian');
-        };
-      });
-    };
     const bindDocRemovals = () => {
       document.querySelectorAll('[data-remove-document]').forEach(b => {
         b.onclick = () => { b.closest('[data-document]').remove(); renumber('[data-document]', 'Document'); };
@@ -3749,13 +3725,8 @@
         };
       });
     };
-    bindGuardianRemovals(); bindDocRemovals(); bindDocFiles();
+    bindDocRemovals(); bindDocFiles();
 
-    $('#ffAddGuardian').onclick = () => {
-      const wrap = $('#ffGuardians');
-      wrap.insertAdjacentHTML('beforeend', guardianCard({}, wrap.children.length));
-      bindGuardianRemovals();
-    };
     $('#ffAddDoc').onclick = () => {
       const wrap = $('#ffDocs');
       wrap.insertAdjacentHTML('beforeend', documentRow({}, wrap.children.length));
@@ -3802,16 +3773,18 @@
       const permanent = take('perm_');
       Object.keys(d).forEach(k => { if (k.startsWith('g_') || k.startsWith('d_')) delete d[k]; });
 
+      // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...form.querySelectorAll('[data-guardian]')].map(card => {
         const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
-        return { name: val('name'), relation: val('relation'), occupation: val('occupation'),
+        return { relation: card.dataset.role, name: val('name'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
-                 emergency: val('emergency'), homeAddress: val('homeAddress') };
-      }).filter(g => g.name);
+                 homeAddress: val('homeAddress') };
+      }).filter(g => g.name || g.mobile);
       const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
       if (badGuardian) {
-        toast(`${badGuardian.name}'s mobile number must be exactly 10 digits.`, 'err'); return;
+        toast(`The ${badGuardian.relation.toLowerCase()}'s mobile number must be exactly 10 digits.`, 'err');
+        return;
       }
 
       const documents = [...form.querySelectorAll('[data-document]')].map(card => {
