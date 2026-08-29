@@ -280,7 +280,7 @@ const MODULES = [
                       'views' => ['students', 'stuprofile', 'batchsem'],
                       'write' => ['students', 'users']],
     'staff'       => ['label' => 'Faculty & Staff',
-                      'views' => ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers'],
+                      'views' => ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                       'write' => ['faculty', 'accountants', 'centerheads', 'placementofficers',
                                   'coordinators', 'admissions', 'users']],
     'academics'   => ['label' => 'Courses & Curriculum',

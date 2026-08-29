@@ -307,7 +307,7 @@
       ['assignments','🗂️','Assignments'], ['attendance','✅','Attendance'],
       ['attrecords','🗂️','Attendance Records'],
       ['marks','📝','Marks & Results'], ['timetable','🗓️','Timetable'], ['library','📖','Library'], ['reports','📊','Library Reports'], ['fees','💳','Fees'],
-      ['employees','🧑‍💼','Employees'], ['accounts','🔑','Login Accounts'],
+      ['accounts','🔑','Login Accounts'],
       // the accounts-office modules — the admin gets every one of them
       [NAV_SECTION,'','Finance'],
       ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'], ['fixedfee','📋','Fixed Fee'],
@@ -533,7 +533,7 @@
   const MODULES = [
     ['students',     'Students',                    ['students', 'stuprofile', 'batchsem'],
                                                     ['students', 'users']],
-    ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'employees', 'accountants', 'placementofficers'],
+    ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                                                     ['faculty', 'accountants', 'centerheads', 'placementofficers',
                                                      'coordinators', 'admissions', 'users']],
     ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable'],
@@ -648,7 +648,7 @@
     plstudents:'Students — Placement', companies:'Companies', drives:'Placement Drives',
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
     offers:'Offers', plcalendar:'Placement Calendar', plreports:'Placement Reports',
-    placementofficers:'Placement Officers', employees:'Employees',
+    placementofficers:'Placement Officers',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -692,7 +692,7 @@
       plstudents: viewPlacementStudents, companies: viewCompanies, drives: viewDrives,
       applications: viewApplications, interviews: viewInterviews, placements: viewPlacements,
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
-      placementofficers: viewPlacementOfficers, employees: viewEmployees,
+      placementofficers: viewPlacementOfficers,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
       usersettings: viewUserSettings,
     }[view] || viewDashboard;
@@ -8771,219 +8771,6 @@
       toast(def.label + ' saved.');
       after ? after() : render();
     };
-  }
-
-  /* =========================================================
-     EMPLOYEES — every member of staff in one place.
-
-     Staff live in four different tables (faculty, accountants, centerheads,
-     placementofficers) plus two roles that are login-only (admin, librarian).
-     This page joins all of them with their `users` row so the admin sees one
-     list: who they are, what they do, and the id/password they log in with.
-     Students are deliberately excluded — they are not employees.
-     ========================================================= */
-  const EMPLOYEE_KINDS = {
-    admin:             { label: 'Admin',             table: null,                pill: 'red' },
-    center_head:       { label: 'Center Head',       table: 'centerheads',       pill: 'amber' },
-    accountant:        { label: 'Accountant',        table: 'accountants',       pill: 'blue' },
-    placement_officer: { label: 'Placement Officer', table: 'placementofficers', pill: 'green' },
-    faculty:           { label: 'Faculty',           table: 'faculty',           pill: 'blue' },
-    librarian:         { label: 'Librarian',         table: null,                pill: 'amber' },
-  };
-
-  function employeeRows() {
-    const users = Store.all('users');
-    const rows = [];
-    const claimed = new Set();
-    Object.entries(EMPLOYEE_KINDS).forEach(([role, def]) => {
-      if (!def.table) return;
-      Store.all(def.table).forEach(s => {
-        const login = users.find(u => u.role === role && u.refId === s.id);
-        if (login) claimed.add(login.id);
-        rows.push({
-          role, roleLabel: def.label, pill: def.pill, table: def.table, staffId: s.id,
-          empId: s.empId || '—', name: s.name || '—',
-          designation: s.designation || '—', department: s.department || '—',
-          email: s.email || '—', phone: s.phone || '—', photo: s.photo || null,
-          userId: login ? login.id : null,
-          username: login ? login.username : '', password: login ? login.password : '',
-        });
-      });
-    });
-    // admin and librarian have no staff table; so does any login whose staff
-    // record was deleted out from under it — both show up here rather than vanish
-    users.filter(u => u.role !== 'student' && EMPLOYEE_KINDS[u.role] && !claimed.has(u.id))
-      .forEach(u => {
-        const def = EMPLOYEE_KINDS[u.role];
-        rows.push({
-          role: u.role, roleLabel: def.label, pill: def.pill, table: def.table, staffId: null,
-          empId: '—', name: u.name || u.username || '—',
-          designation: '—', department: '—', email: '—', phone: '—', photo: null,
-          userId: u.id, username: u.username || '', password: u.password || '',
-          loginOnly: true,
-        });
-      });
-    return rows.sort((a, b) =>
-      (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9) ||
-      String(a.name).localeCompare(String(b.name)));
-  }
-
-  /** open the right form for whichever kind of employee this row is */
-  function editEmployee(row, after) {
-    if (!row.staffId) {
-      // login-only: the librarian has its own form, everything else edits the login
-      if (row.role === 'librarian') return librarianForm(row.userId);
-      return accountForm(row.userId, after);
-    }
-    const form = { faculty: facultyForm, accountants: accountantForm,
-                   centerheads: centerHeadForm, placementofficers: placementOfficerForm }[row.table];
-    if (form) form(row.staffId, after);
-  }
-
-  function deleteEmployee(row, after) {
-    if (row.userId && row.userId === user.id) {
-      toast('You cannot delete the account you are signed in with.', 'err');
-      return;
-    }
-    // say out loud what else disappears, so a faculty deletion is never a surprise
-    const extras = [];
-    if (row.role === 'faculty' && row.staffId) {
-      const n = Store.all('courses').filter(c => c.facultyId === row.staffId).length;
-      if (n) extras.push(`${n} course assignment(s) will be left unassigned`);
-    }
-    if (row.userId) extras.push('their login will be removed');
-    confirmAction('Delete Employee',
-      `Remove <b>${esc(row.name)}</b> (${esc(row.roleLabel)}${row.empId !== '—' ? ' · ' + esc(row.empId) : ''})?
-       ${extras.length ? '<br><small style="color:var(--muted)">' + esc(extras.join(' · ')) + '.</small>' : ''}`,
-      'Delete Employee', () => {
-        if (row.staffId && row.table) Store.remove(row.table, row.staffId);
-        if (row.userId) Store.remove('users', row.userId);
-        toast('Employee removed.', 'err');
-        after ? after() : render();
-      });
-  }
-
-  function viewEmployees() {
-    if (user.role !== 'admin') {
-      return `<div class="panel"><p class="empty">Only the administrator can manage employee records.</p></div>`;
-    }
-    const html = `<div class="panel"><div class="panel-head">
-      <h3>Employees</h3>
-      <div class="panel-tools">
-        <input class="search-box" id="emQ" placeholder="Search name / emp id / user id...">
-        <select class="filter-sel" id="emRole"><option value="">All Roles</option>
-          ${Object.entries(EMPLOYEE_KINDS).map(([r, d]) => `<option value="${r}">${esc(d.label)}</option>`).join('')}
-        </select>
-        <select class="filter-sel" id="emNew">
-          <option value="">+ Add Employee...</option>
-          <option value="faculty">Faculty</option>
-          <option value="accountant">Accountant</option>
-          <option value="center_head">Center Head</option>
-          <option value="placement_officer">Placement Officer</option>
-          <option value="librarian">Librarian</option>
-        </select>
-        <button class="btn-outline" id="emReveal">👁 Show Passwords</button>
-        <button class="btn-outline btn-sm" id="emPrint">🖨 Print</button>
-        <button class="btn-primary btn-sm" id="emXls">⬇ Excel</button>
-      </div></div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
-        Every member of staff — faculty, accounts, library, placement and administration —
-        with the id and password they sign in with. Students are listed separately on the
-        <b>Students</b> page.</p>
-      <div id="emStats" class="stat-grid" style="margin:6px 0 18px"></div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Designation</th><th>Department</th>
-        <th>Email</th><th>Phone</th><th>User ID</th><th>Password</th><th>Actions</th>
-      </tr></thead><tbody id="emBody"></tbody></table></div><div id="emPager"></div></div>`;
-
-    viewEmployees.after = () => {
-      let page = 1;
-      const rowsFor = () => {
-        const q = ($('#emQ').value || '').trim().toLowerCase();
-        const role = $('#emRole').value;
-        return employeeRows().filter(r =>
-          (!role || r.role === role) &&
-          (!q || [r.name, r.empId, r.username, r.email, r.designation, r.department]
-            .some(v => String(v || '').toLowerCase().includes(q))));
-      };
-      const draw = () => {
-        const rows = rowsFor();
-        page = Math.min(page, pageCount(rows.length));
-        const byRole = (r) => rows.filter(x => x.role === r).length;
-        $('#emStats').innerHTML = `${statCard('🧑‍💼', rows.length, 'Employees Listed')}
-          ${statCard('👨‍🏫', byRole('faculty'), 'Faculty', 'c2')}
-          ${statCard('🗝️', rows.filter(r => r.userId).length, 'With a Login', 'c3')}
-          ${statCard('⚠️', rows.filter(r => !r.userId).length, 'Without a Login',
-            rows.some(r => !r.userId) ? 'c4' : 'c3')}`;
-        $('#emBody').innerHTML = rows.length ? pageSlice(rows, page).map((r, i) => {
-          const idx = (page - 1) * PAGE_SIZE + i;
-          const self = r.userId && r.userId === user.id;
-          return `<tr>
-          <td>${avatarHtml(r.photo, r.name)}</td>
-          <td class="mono">${esc(r.empId)}</td>
-          <td>${esc(r.name)}${self ? ' <small style="color:var(--muted)">(you)</small>' : ''}</td>
-          <td><span class="pill ${r.pill}">${esc(r.roleLabel)}</span></td>
-          <td>${esc(r.designation)}</td><td>${esc(r.department)}</td>
-          <td>${esc(r.email)}</td><td>${esc(r.phone)}</td>
-          <td class="mono">${r.username ? esc(r.username) : '<small style="color:var(--red)">no login</small>'}</td>
-          <td class="mono">${r.password ? (pwRevealed ? esc(r.password) : '••••••••') : '—'}</td>
-          <td><div class="row-actions">
-            <button class="btn-sm btn-edit" data-edit="${idx}">Edit</button>
-            ${r.userId ? `<button class="btn-sm btn-outline" data-reset="${idx}" title="Set password back to ${DEFAULT_PASSWORD}">↺ Reset</button>` : ''}
-            ${self ? '' : `<button class="btn-sm btn-del" data-del="${idx}">Delete</button>`}
-          </div></td></tr>`;
-        }).join('') : `<tr><td colspan="11" class="empty">No employees match these filters.</td></tr>`;
-
-        $('#emBody').querySelectorAll('[data-edit]').forEach(b =>
-          b.onclick = () => editEmployee(rows[+b.dataset.edit], draw));
-        $('#emBody').querySelectorAll('[data-del]').forEach(b =>
-          b.onclick = () => deleteEmployee(rows[+b.dataset.del], draw));
-        $('#emBody').querySelectorAll('[data-reset]').forEach(b =>
-          b.onclick = () => resetPassword(rows[+b.dataset.reset].userId, draw));
-        $('#emPager').innerHTML = pagerHtml(rows.length, page);
-        bindPager($('#emPager'), rows.length, page, (p) => page = p, draw);
-      };
-      ['emQ', 'emRole'].forEach(id => {
-        const el = $('#' + id);
-        el[el.tagName === 'INPUT' ? 'oninput' : 'onchange'] = () => { page = 1; draw(); };
-      });
-      $('#emReveal').onclick = () => {
-        pwRevealed = !pwRevealed;
-        $('#emReveal').textContent = pwRevealed ? '🙈 Hide Passwords' : '👁 Show Passwords';
-        draw();
-      };
-      $('#emNew').onchange = (e) => {
-        const kind = e.target.value;
-        e.target.value = '';
-        if (!kind) return;
-        ({ faculty: () => facultyForm(null, draw),
-           accountant: () => accountantForm(null, draw),
-           center_head: () => centerHeadForm(null, draw),
-           placement_officer: () => placementOfficerForm(null, draw),
-           librarian: () => librarianForm(null) }[kind])();
-      };
-      const report = () => {
-        const rows = rowsFor();
-        return {
-          title: 'Employee Report', sheetName: 'Employees',
-          subtitle: `NMIET B-SCHOOL · Staff Directory · Generated on ${new Date().toLocaleString('en-IN')}`,
-          columns: [
-            { header: 'Emp ID', key: 'empId', width: 14 }, { header: 'Name', key: 'name', width: 26 },
-            { header: 'Role', key: 'roleLabel', width: 18 },
-            { header: 'Designation', key: 'designation', width: 22 },
-            { header: 'Department', key: 'department', width: 22 },
-            { header: 'Email', key: 'email', width: 26 }, { header: 'Phone', key: 'phone', width: 14 },
-            { header: 'User ID', key: 'username', width: 18 },
-          ],
-          rows,
-          totals: { empId: 'TOTAL', name: rows.length + ' employees' },
-        };
-      };
-      $('#emPrint').onclick = () => printReport(report());
-      $('#emXls').onclick = () => downloadXlsx(report());
-      draw();
-    };
-    return html;
   }
 
   /* =========================================================
