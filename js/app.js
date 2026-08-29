@@ -3469,27 +3469,19 @@
     return html;
   }
 
-  /* The staff tables that are not the register, the role each one implies, and
-     the form each one opens. Their own pages still own them — the Employees
-     page borrows the form so a center head listed here can be corrected
-     without going hunting for the page that made them. */
-  const STAFF_FORM_DEFS = {
-    accountants: { table: 'accountants', role: 'accountant', label: 'Accountant',
-                   defaultDesignation: 'Accountant', phoneId: 'acPhone' },
-    centerheads: { table: 'centerheads', role: 'center_head', label: 'Center Head',
-                   defaultDesignation: 'Center Head', phoneId: 'chPhone' },
-    coordinators: { table: 'coordinators', role: 'course_coordinator', label: 'Course Coordinator',
-                    defaultDesignation: 'Course Coordinator', phoneId: 'ccPhone' },
-    admissions: { table: 'admissions', role: 'admission', label: 'Admission Officer',
-                  defaultDesignation: 'Admission Officer', phoneId: 'adPhone' },
+  /* Which role a staff table implies. Only a default: the record's own `role`
+     wins, because the Employees form may be told otherwise and the login has to
+     agree with whatever it was told. */
+  const STAFF_TABLE_ROLE = {
+    faculty: 'faculty', accountants: 'accountant', centerheads: 'center_head',
+    placementofficers: 'placement_officer', coordinators: 'course_coordinator',
+    admissions: 'admission',
   };
 
   /* What role a row in this table implies. The register carries whatever it
      was given; the others carry the role their own module exists to serve. */
   function tableRole(col, rec) {
-    if (col === 'faculty') return employeeRole(rec);
-    if (col === 'placementofficers') return 'placement_officer';
-    return (STAFF_FORM_DEFS[col] || {}).role || 'faculty';
+    return (rec && rec.role) || STAFF_TABLE_ROLE[col] || 'faculty';
   }
   /** the same row shape the employees list uses, from any staff table */
   function employeeRow(rec, col) {
@@ -3520,15 +3512,10 @@
   function employeeValues(field) {
     return [...new Set(employeeRows().map(r => String(r[field] || '').trim()).filter(Boolean))].sort();
   }
-  /** open whichever form owns this row — "<table>:<id>" */
+  /** the one employee form, against whichever table holds the row — "<table>:<id>" */
   function openEmployeeForm(key, after) {
     const i = String(key).indexOf(':');
-    const col = String(key).slice(0, i), id = String(key).slice(i + 1);
-    if (col === 'faculty') return facultyForm(id, after);
-    if (col === 'placementofficers') return placementOfficerForm(id, after);
-    const def = STAFF_FORM_DEFS[col];
-    if (def) return staffForm(def, id, after);
-    toast('That record is managed on its own page.', 'err');
+    return facultyForm(String(key).slice(i + 1), after, String(key).slice(0, i));
   }
 
   /* ---------- read-only faculty profile (center head) ---------- */
@@ -3627,10 +3614,6 @@
     const f = findEmployee(profileFacultyId);
     if (!f) return `<div class="panel"><p class="empty">That employee is no longer on the staff list.</p></div>`;
     const canEdit = !viewsMasterOnly();
-    /* Only the register carries the six tabs — the other staff tables hold a
-       name, a number and a designation, and saying so is more honest than six
-       tabs of dashes. */
-    const full = f.col === 'faculty';
 
     const side = `<div class="panel stu-side">
       <div class="stu-photo">${f.photo
@@ -3638,14 +3621,14 @@
         : `<span>${esc((f.name || '?').trim()[0] || '?')}</span>`}</div>
       <div class="tbl-wrap"><table class="info-tbl"><tbody>
         ${infoRow('Employee ID', `<span class="mono">${esc(f.empId || '—')}</span>`)}
-        ${full ? infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—')) : ''}
+        ${infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—'))}
         ${infoRow('Name', esc(f.name || '—'))}
         ${infoRow('Employee Role', `<span class="pill ${ROLE_PILL[f.role] || 'blue'}">${
           esc(f.roleName)}</span>`)}
         ${infoRow('Department', esc(f.department || '—'))}
         ${infoRow('Designation', esc(f.designation || '—'))}
-        ${full ? infoRow('Category', esc(f.category || '—')) : ''}
-        ${full ? infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—')) : ''}
+        ${infoRow('Category', esc(f.category || '—'))}
+        ${infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—'))}
         ${infoRow('Mobile No', esc(f.phone || '—'))}
         ${infoRow('Email ID', esc(f.email || '—'))}
         ${infoRow('Status', `<span class="pill ${(f.status || 'Active') === 'Active' ? 'green' : 'red'}">${
@@ -3662,13 +3645,9 @@
       <div class="stu-profile">
         ${side}
         <div class="panel stu-main">
-          ${full ? `<div class="fin-tabs" id="fpTabs">${FAC_TABS.map(([k, label]) =>
+          <div class="fin-tabs" id="fpTabs">${FAC_TABS.map(([k, label]) =>
             `<button class="fin-tab ${k === facTab ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
-          <div id="fpBody">${facultyTabHtml(f, facTab)}</div>`
-          : `<p class="empty" style="padding:28px 18px;line-height:1.7">
-              A ${esc(f.roleName.toLowerCase())} record holds the details on the left and no more.<br>
-              Personal, family, address, document and health records are kept for employees
-              added on this page — use <b>Edit</b> to change what is held here.</p>`}
+          <div id="fpBody">${facultyTabHtml(f, facTab)}</div>
         </div>
       </div>`;
 
@@ -3793,7 +3772,7 @@
     const inner = `<h2 style="margin:0 0 4px">${esc(f.name || '')}</h2>
       <p style="margin:0 0 14px;color:#555">${esc(f.roleName)} · ${esc(f.designation || '')}
         · ${esc(f.department || '')} · ${esc(f.empId || '')}</p>
-      ${f.col !== 'faculty' ? '' : FAC_TABS.map(([key, label]) =>
+      ${FAC_TABS.map(([key, label]) =>
         section(label.replace(/^[^ ]+ /, ''), facultyTabHtml(f, key))).join('')}`;
     printDoc('Employee Profile - ' + (f.empId || f.name), inner);
   }
@@ -3934,10 +3913,19 @@
     'Training & Placement', 'Examination Cell', 'IT & Systems', 'Maintenance'];
   const MARITAL_STATUS = ['Unmarried', 'Married', 'Widowed', 'Divorced'];
 
-  function facultyForm(id, after) {
-    const f = id ? Store.find('faculty', id) : {};
-    // existing login account linked to this faculty (for edit)
+  /* One form for every employee. `col` is the table the record is filed in —
+     the register by default, or the table whose own page opened it. All six
+     hold the same columns, so the only thing that changes is where it is
+     written. */
+  function facultyForm(id, after, col) {
+    col = col || 'faculty';
+    const f = id ? (Store.find(col, id) || {}) : {};
+    // existing login account linked to this employee (for edit)
     const acct = id ? Store.all('users').find(u => u.refId === id) : null;
+    /* Logins are the admin's to set. An accountant opening their own record
+       from the accounts page sees the same fields they always saw — everything
+       except the block that would let them change their own password. */
+    const withLogin = user.role === 'admin';
     const per = stuPart(f, 'personal');
     const other = stuPart(f, 'otherInfo');
     const addr = stuPart(f, 'addressInfo');
@@ -3974,7 +3962,7 @@
             <input name="name" value="${esc(f.name || '')}" required></div>
           <div class="field"><label>Employee Role</label>
             <select name="role">${employeeRoles().map(r =>
-              `<option value="${r}" ${r === employeeRole(f) ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
+              `<option value="${r}" ${r === tableRole(col, f) ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
             ).join('')}</select></div>
           <div class="field"><label>Department</label>
             <select name="department"><option value=""></option>${
@@ -3993,14 +3981,15 @@
           ${fSel('status', 'Status', f.status || 'Active', ['Active', 'Inactive'], false)}
           ${photoField(f.photo)}
         </div>
-        <h4 class="ro-sub">Login Account</h4>
+        ${withLogin ? `<h4 class="ro-sub">Login Account</h4>
         <div class="form-grid">
           <div class="field"><label>Username</label>
-            <input name="username" value="${esc(acct ? acct.username : '')}" required></div>
+            <input name="username" value="${esc(acct ? acct.username : '')}"
+                   placeholder="auto from employee id"></div>
           <div class="field"><label>Password</label>
             <input name="password" type="text" value=""
-                   placeholder="${id ? 'leave blank to keep current' : 'set a password'}" ${id ? '' : 'required'}></div>
-        </div>
+                   placeholder="${id ? 'leave blank to keep current' : DEFAULT_PASSWORD}"></div>
+        </div>` : ''}
       </div>
 
       <div class="sf-pane hidden" data-pane="personal">
@@ -4166,9 +4155,11 @@
       delete d.username; delete d.password;
 
       // username must be unique across all login accounts
-      const clash = Store.all('users').find(u =>
-        (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
-      if (clash) { toast('Username "' + username + '" already taken.', 'err'); return; }
+      if (username) {
+        const clash = Store.all('users').find(u =>
+          (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
+        if (clash) { toast('Username "' + username + '" already taken.', 'err'); return; }
+      }
 
       const take = (prefix) => {
         const out = {};
@@ -4214,20 +4205,27 @@
       /* One answer, in two places: the register records what the person is and
          the login records what they may do, and the form is the only thing that
          sets either — so they cannot disagree. */
-      const role = employeeRoles().includes(d.role) ? d.role : 'faculty';
+      const role = employeeRoles().includes(d.role) ? d.role : tableRole(col, f);
       d.role = role;
+      // a user id nobody else holds, from the employee id, unless one was typed
+      const uid = username || freeUsername(
+        String(d.empId || d.name || role).replace(/\s+/g, '').toLowerCase(), acct && acct.id);
       let newId = id;
       if (id) {
-        Store.update('faculty', id, d);
-        const patch = { username, role, refId: id, name: d.name };
-        if (password) patch.password = password;
+        Store.update(col, id, d);
+        const patch = { role, refId: id, name: d.name };
+        if (withLogin) { patch.username = uid; if (password) patch.password = password; }
         if (acct) Store.update('users', acct.id, patch);
-        else Store.add('users', { username, password: password || 'pass123', role, refId: id, name: d.name });
+        else if (withLogin) {
+          Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
+                               role, refId: id, name: d.name });
+        }
         if (acct && acct.id === user.id) { user.name = d.name; paintUser(); }
       } else {
-        const fac = Store.add('faculty', d);
-        newId = fac.id;
-        Store.add('users', { username, password, role, refId: fac.id, name: fac.name });
+        const rec = Store.add(col, d);
+        newId = rec.id;
+        Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
+                             role, refId: rec.id, name: rec.name });
       }
       closeModal(); toast('Employee saved.');
       if (after) after(newId); else render();
@@ -8851,87 +8849,12 @@
     return html;
   }
 
-  /* Both read their shape out of STAFF_FORM_DEFS, which is also what the
-     Employees page routes an Edit through — one definition per staff table. */
-  function accountantForm(id, after) { return staffForm(STAFF_FORM_DEFS.accountants, id, after); }
-
-  /* The center head staff record had no form of its own — the login was seeded
-     but the person behind it could never be edited. Same shape as the
-     accountant form, against the `centerheads` table. */
-  function centerHeadForm(id, after) { return staffForm(STAFF_FORM_DEFS.centerheads, id, after); }
-
-  /** staff tables that carry a department column */
-  const COLLECTION_HAS_DEPT = ['placementofficers', 'coordinators'];
-
-  /* One form for the staff records that share the same shape — employee id,
-     name, designation, contact, photo — plus the login that goes with them.
-     Faculty keeps its own form because it carries qualifications and classes. */
-  function staffForm(def, id, after) {
-    const s = id ? (Store.find(def.table, id) || {}) : {};
-    const acct = id ? Store.all('users').find(u => u.role === def.role && u.refId === id) : null;
-    const hasDept = COLLECTION_HAS_DEPT.includes(def.table);
-    // only the admin manages logins here — an accountant editing their own
-    // profile sees exactly the fields they saw before
-    const withLogin = user.role === 'admin';
-    openModal((id ? 'Edit ' : 'Add ') + def.label, `<form id="f"><div class="form-grid">
-      <div class="field"><label>Employee ID</label><input name="empId" value="${esc(s.empId || '')}" required></div>
-      <div class="field"><label>Full Name</label><input name="name" value="${esc(s.name || '')}" required></div>
-      <div class="field"><label>Designation</label>
-        <select name="designation"><option value=""></option>${
-          listOptions('designation', s.designation || def.defaultDesignation || '', true)}</select></div>
-      ${hasDept ? `<div class="field"><label>Department</label>
-        <select name="department"><option value=""></option>${
-          listOptions('department', s.department || def.defaultDepartment || '', true)}</select></div>` : ''}
-      <div class="field"><label>Email</label><input name="email" type="email" value="${esc(s.email || '')}"></div>
-      <div class="field"><label>Phone</label><input name="phone" id="${def.phoneId}" inputmode="numeric" placeholder="10-digit number" value="${esc(s.phone || '')}"></div>
-      ${photoField(s.photo)}
-    </div>
-    ${withLogin ? `<h4 style="font-size:13px;color:var(--primary-dark);margin:18px 0 8px">LOGIN ACCOUNT</h4>
-    <div class="form-grid">
-      <div class="field"><label>User ID</label><input name="username" value="${esc(acct ? acct.username : '')}" placeholder="auto from employee id"></div>
-      <div class="field"><label>Password</label><input name="password" type="text" value="${esc(acct ? acct.password : DEFAULT_PASSWORD)}"></div>
-    </div>` : ''}
-    <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-      <button type="submit" class="btn-primary">Save</button></div></form>`, true);
-    $('#cx').onclick = closeModal;
-    bindPhoneInput($('#' + def.phoneId));
-    bindCustomList($('select[name="designation"]'), 'designation');
-    bindCustomList($('select[name="department"]'), 'department');
-    bindPhotoField();
-    $('#f').onsubmit = (e) => {
-      e.preventDefault();
-      const d = formData(e.target);
-      const username = (d.username || '').trim();
-      const password = (d.password || '').trim();
-      delete d.username; delete d.password;
-      if (!phoneValid(d.phone)) { toast('Phone number must be exactly 10 digits.', 'err'); return; }
-      const idClash = staffClash(d, id);
-      if (idClash) { toast(idClash, 'err'); return; }
-      if (username) {
-        const clash = Store.all('users').find(u =>
-          (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
-        if (clash) { toast('User id "' + username + '" is already taken.', 'err'); return; }
-      }
-      const rec = id ? Store.update(def.table, id, d) : Store.add(def.table, d);
-      if (!rec) return;
-      const uid = username || freeUsername(
-        String(d.empId || d.name || def.role).replace(/\s+/g, '').toLowerCase(), acct && acct.id);
-      if (acct) {
-        // the display name always follows the staff record; the login itself
-        // only moves when the admin edited it
-        const patch = { name: d.name };
-        if (withLogin) { patch.username = uid; if (password) patch.password = password; }
-        Store.update('users', acct.id, patch);
-        if (acct.id === user.id) { user.name = d.name; paintUser(); }
-      } else {
-        Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
-                             role: def.role, refId: rec.id, name: d.name });
-      }
-      closeModal();
-      toast(def.label + ' saved.');
-      after ? after() : render();
-    };
-  }
+  /* Their own pages still open these; all three are the Employees form against
+     a different table, so a person's record holds the same things wherever the
+     office happened to add them. */
+  function accountantForm(id, after) { return facultyForm(id, after, 'accountants'); }
+  function centerHeadForm(id, after) { return facultyForm(id, after, 'centerheads'); }
+  function placementOfficerForm(id, after) { return facultyForm(id, after, 'placementofficers'); }
 
   /* =========================================================
      REQUISITIONS — purchase requests raised by staff.
@@ -13532,57 +13455,6 @@
       draw();
     };
     return html;
-  }
-
-  function placementOfficerForm(id, after) {
-    const p = id ? (Store.find('placementofficers', id) || {}) : {};
-    const acct = id ? Store.all('users').find(u => u.refId === id && u.role === 'placement_officer') : null;
-    const isAdmin = user.role === 'admin';
-    openModal((id ? 'Edit' : 'Add') + ' Placement Officer', `<form id="f">
-      <div class="form-grid">
-        <div class="field"><label>Employee ID</label><input name="empId" value="${esc(p.empId || '')}" required></div>
-        <div class="field"><label>Full Name</label><input name="name" value="${esc(p.name || '')}" required></div>
-        <div class="field"><label>Designation</label>
-          <select name="designation"><option value=""></option>${
-            listOptions('designation', p.designation || 'Placement Officer', true)}</select></div>
-        <div class="field"><label>Department</label>
-          <select name="department"><option value=""></option>${
-            listOptions('department', p.department || 'Training & Placement', true)}</select></div>
-        <div class="field"><label>Email</label><input name="email" type="email" value="${esc(p.email || '')}"></div>
-        <div class="field"><label>Phone</label><input name="phone" id="poPhone" inputmode="numeric" placeholder="10-digit number" value="${esc(p.phone || '')}"></div>
-        ${photoField(p.photo)}
-      </div>
-      ${isAdmin ? `<h4 style="font-size:13px;color:var(--primary-dark);margin:18px 0 8px">LOGIN ACCOUNT</h4>
-      <div class="form-grid">
-        <div class="field"><label>User ID</label><input name="username" value="${esc(acct ? acct.username : '')}" placeholder="auto from employee id"></div>
-        <div class="field"><label>Password</label><input name="password" type="text" value="${esc(acct ? acct.password : DEFAULT_PASSWORD)}"></div>
-      </div>` : ''}
-      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Save</button></div></form>`, true);
-    $('#cx').onclick = closeModal;
-    bindPhoneInput($('#poPhone'));
-    bindCustomList($('select[name="designation"]'), 'designation');
-    bindCustomList($('select[name="department"]'), 'department');
-    bindPhotoField();
-    $('#f').onsubmit = (e) => {
-      e.preventDefault();
-      const d = formData(e.target);
-      if (!phoneValid(d.phone)) { toast('Phone must be exactly 10 digits.', 'err'); return; }
-      const idClash = staffClash(d, id);
-      if (idClash) { toast(idClash, 'err'); return; }
-      const rec = { empId: d.empId, name: d.name, designation: d.designation,
-                    department: d.department, email: d.email, phone: d.phone, photo: d.photo };
-      const saved = id ? Store.update('placementofficers', id, rec) : Store.add('placementofficers', rec);
-      // the login travels with the record, exactly like faculty and accountants
-      if (isAdmin && saved) {
-        const username = (d.username || '').trim() ||
-          freeUsername((d.empId || d.name || 'placement').replace(/\s+/g, '').toLowerCase(), acct && acct.id);
-        const password = d.password || DEFAULT_PASSWORD;
-        if (acct) Store.update('users', acct.id, { username, password, name: d.name });
-        else Store.add('users', { username, password, role: 'placement_officer', refId: saved.id, name: d.name });
-      }
-      closeModal(); toast('Placement officer saved.'); after ? after() : render();
-    };
   }
 
   /* ========================================================= */

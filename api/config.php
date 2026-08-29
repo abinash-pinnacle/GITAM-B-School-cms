@@ -74,6 +74,24 @@ function db_config(): array
    re-runs init_db() once and picks the new one up. */
 const SEED_REVISION = '2026-08-21-mba-only';
 
+/* Every staff table records the same things about a person, because one
+   Employees form fills all of them. Written once so the six cannot drift apart,
+   and so a column added for faculty is a column every employee gets.
+
+   The last six hold the form's tabs. They are JSON, one per tab, because a
+   single column would put the whole record past MySQL's 65,535-byte row limit —
+   and being LONGTEXT they are stored away from the row, so the tables carrying
+   them stay well inside it. */
+const STAFF_FIELDS = ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation',
+                      'photo', 'role', 'qualification', 'expertise', 'publications',
+                      'reportingTo', 'category', 'joiningDate', 'dob', 'gender', 'bloodGroup',
+                      'maritalStatus', 'bputRegdNo', 'attendanceCardId', 'aadhaar', 'status',
+                      'personal', 'guardians', 'addressInfo', 'otherInfo', 'health', 'documents'];
+/** the six tab columns, decoded on the way out and encoded on the way in */
+const STAFF_JSON = ['personal', 'guardians', 'addressInfo', 'otherInfo', 'health', 'documents'];
+/** staff columns that can run long — a base64 photo, a publication list */
+const STAFF_LONGTEXT = ['photo', 'expertise', 'publications'];
+
 /** collection => table columns (id is always first and is the primary key) */
 const COLLECTIONS = [
     /* access: 'full' (everything the role allows) or 'restricted' (only the
@@ -102,29 +120,22 @@ const COLLECTIONS = [
                         record, the family, both addresses, health, and documents */
                      'personal', 'academicInfo', 'guardians', 'addressInfo',
                      'health', 'documents'],
-    // reportingTo holds the id of another faculty row — the person this one
-    // reports to. Blank for the top of the tree.
-    'faculty'    => ['id', 'empId', 'name', 'email', 'phone', 'department', 'designation', 'photo',
-                     'qualification', 'expertise', 'publications', 'reportingTo',
-                     /* the columns the rest of the app reads directly — an ID
-                        card wants the blood group, payroll wants the joining
-                        date, the roll wants to know who is still on staff */
-                     'role', 'category', 'joiningDate', 'dob', 'gender', 'bloodGroup',
-                     'maritalStatus', 'bputRegdNo', 'attendanceCardId', 'aadhaar', 'status',
-                     /* and these six hold the tabs */
-                     'personal', 'guardians', 'addressInfo', 'otherInfo',
-                     'health', 'documents'],
+    /* The six staff tables, all the same shape (see STAFF_FIELDS). Which one a
+       person sits in says which module created them; `role` says what they may
+       do, and the login in `users` carries the same answer. reportingTo holds
+       the id of another staff row — blank for the top of the tree. */
+    'faculty'     => STAFF_FIELDS,
     // accounts-office staff record; the login lives in `users` with role = accountant
-    'accountants' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
+    'accountants' => STAFF_FIELDS,
     // centre-monitoring staff record; the login lives in `users` with role = center_head
-    'centerheads' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
+    'centerheads' => STAFF_FIELDS,
     // placement-cell staff record; the login lives in `users` with role = placement_officer
-    'placementofficers' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'department', 'photo'],
+    'placementofficers' => STAFF_FIELDS,
     /* course coordinators run attendance for a department. They may register a
        class and correct it; they may not touch the master data behind it. */
-    'coordinators' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'department', 'photo'],
+    'coordinators' => STAFF_FIELDS,
     // the admissions desk; the login lives in `users` with role = admission
-    'admissions' => ['id', 'empId', 'name', 'email', 'phone', 'designation', 'photo'],
+    'admissions'  => STAFF_FIELDS,
     // shortName drives the timetable label; facultyId is set from the Assignments page
     'courses'    => ['id', 'code', 'name', 'branch', 'semester', 'credits', 'facultyId', 'section', 'shortName', 'type'],
     /* The curriculum: what a branch studies in each semester. Deliberately not
@@ -210,17 +221,23 @@ const JSON_FIELDS = [
     'users'      => ['permissions'],
     'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
                      'health', 'documents'],
-    'faculty'    => ['personal', 'guardians', 'addressInfo', 'otherInfo',
-                     'health', 'documents'],
+    'faculty'    => STAFF_JSON,
+    'accountants' => STAFF_JSON,
+    'centerheads' => STAFF_JSON,
+    'placementofficers' => STAFF_JSON,
+    'coordinators' => STAFF_JSON,
+    'admissions' => STAFF_JSON,
 ];
 
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
 const LONGTEXT_FIELDS = [
     'students' => ['photo'],
-    'faculty' => ['photo', 'expertise', 'publications'],
-    'accountants' => ['photo'],
-    'centerheads' => ['photo'],
-    'placementofficers' => ['photo'],
+    'faculty' => STAFF_LONGTEXT,
+    'accountants' => STAFF_LONGTEXT,
+    'centerheads' => STAFF_LONGTEXT,
+    'placementofficers' => STAFF_LONGTEXT,
+    'coordinators' => STAFF_LONGTEXT,
+    'admissions' => STAFF_LONGTEXT,
     'payments' => ['remarks'],
     'requisitions' => ['purpose', 'reviewRemarks'],
     'companies' => ['logo', 'description'],
