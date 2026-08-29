@@ -336,7 +336,14 @@ const OPEN_ENDPOINTS = ['login', 'health'];
    guessing pointless, short enough that being wrongly caught is a coffee. */
 const LOGIN_WINDOW_SECONDS = 900;      // 15 minutes
 const LOGIN_LOCK_SECONDS   = 900;      // 15 minutes
-const LOGIN_MAX_PER_IP     = 10;
+/* Twenty from an address, because a college office is one address: ten staff
+   behind one connection reach ten failures between them on a Monday morning,
+   and locking the whole office out to slow an attacker down by nothing is the
+   wrong trade. Twenty in fifteen minutes is still eighty an hour — hopeless for
+   guessing, and out of reach of people simply mistyping.
+   The account limit is the lower of the two now, because it is the precise
+   signal: it names what is actually under attack. */
+const LOGIN_MAX_PER_IP     = 20;
 const LOGIN_MAX_PER_USER   = 15;
 
 /* The old scheme identified a caller by `X-User-Id`, and the ids are u1, u2,
