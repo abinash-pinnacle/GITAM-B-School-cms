@@ -6,6 +6,15 @@
     RewriteRule ^ index.php [QSA,L]
 </IfModule>
 
+# This install's database credentials. PHP executes the file so nothing is
+# served today — but that is a property of the handler being configured, and a
+# handler can be misconfigured. Denying it outright does not depend on that.
+<IfModule mod_authz_core.c>
+    <Files "env.local.php">
+        Require all denied
+    </Files>
+</IfModule>
+
 # API responses are always live data
 <IfModule mod_headers.c>
     Header set Cache-Control "no-store"
