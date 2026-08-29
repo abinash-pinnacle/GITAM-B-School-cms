@@ -3413,27 +3413,26 @@
         const rows = filtered();
         page = Math.min(page, pageCount(rows.length));
         const pageRows = pageSlice(rows, page);
-        /* The full profile, the ID card and the class list belong to the
-           register — the four smaller staff tables hold a name and a number and
-           nothing to print. Those rows still edit and delete, through the form
-           that owns them. */
+        /* Every row opens a profile and prints an ID card, whichever table it
+           came from. Classes is the one action that does not travel: a class is
+           taken by a teacher. Edit and Delete route to the form that owns the
+           row. */
         $('#facBody').innerHTML = pageRows.length ? pageRows.map(f => {
-          const own = f.col === 'faculty';
+          const own = f.col === 'faculty';   // only a teacher takes a class
           const key = f.col + ':' + f.id;
           return `<tr>
           <td>${avatarHtml(f.photo, f.name)}</td>
           <td>${esc(f.empId || '—')}</td>
-          <td>${own ? `<button class="linkish" data-profile="${f.id}">${esc(f.name)}</button>`
-                    : esc(f.name || '—')}</td>
+          <td><button class="linkish" data-profile="${f.id}">${esc(f.name || '—')}</button></td>
           <td><span class="pill ${ROLE_PILL[f.role] || 'blue'}">${esc(roleLabel(f.role))}</span></td>
           <td>${esc(f.department || '—')}</td>
           <td>${esc(f.designation || '—')}</td>
           <td>${esc((own && reportingToName(f)) || '—')}</td>
           <td>${esc(f.email || '—')}</td><td>${esc(f.phone || '—')}</td>
           <td><div class="row-actions">
-            ${own ? `<button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>` : ''}
+            <button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>
             ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>` : ''}
-            ${own ? `<button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>` : ''}
+            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}">Edit</button>
             <button class="btn-sm btn-del" data-del="${key}">Delete</button>` : ''}</div></td></tr>`;
         }).join('')
@@ -3485,20 +3484,37 @@
                   defaultDesignation: 'Admission Officer', phoneId: 'adPhone' },
   };
 
+  /* What role a row in this table implies. The register carries whatever it
+     was given; the others carry the role their own module exists to serve. */
+  function tableRole(col, rec) {
+    if (col === 'faculty') return employeeRole(rec);
+    if (col === 'placementofficers') return 'placement_officer';
+    return (STAFF_FORM_DEFS[col] || {}).role || 'faculty';
+  }
+  /** the same row shape the employees list uses, from any staff table */
+  function employeeRow(rec, col) {
+    const role = tableRole(col, rec);
+    return Object.assign({}, rec, { col, role, roleName: roleLabel(role) });
+  }
   /* One row per person the college employs. The register carries whatever role
      it was given; the other tables carry the role their own module implies. Both
      are listed, so nobody is invisible on the page that claims to list everyone. */
   function employeeRows() {
     const rows = [];
-    const push = (x, col, role) => rows.push(
-      Object.assign({}, x, { col, role, roleName: roleLabel(role) }));
-    Store.all('faculty').forEach(f => push(f, 'faculty', employeeRole(f)));
-    Object.entries(STAFF_FORM_DEFS).forEach(([col, def]) =>
-      Store.all(col).forEach(x => push(x, col, def.role)));
-    Store.all('placementofficers').forEach(x =>
-      push(x, 'placementofficers', 'placement_officer'));
+    STAFF_TABLES.forEach(col => Store.all(col).forEach(x => rows.push(employeeRow(x, col))));
     return rows.sort((a, b) => (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9)
       || String(a.name || '').localeCompare(String(b.name || '')));
+  }
+  /* An employee id is unique across the staff tables — each one stamps its own
+     prefix — so the record can be found without being told which holds it. The
+     profile, the ID card and the printed PDF all go through here, which is what
+     lets them work for a center head as readily as for a professor. */
+  function findEmployee(id) {
+    for (const col of STAFF_TABLES) {
+      const rec = Store.find(col, id);
+      if (rec) return employeeRow(rec, col);
+    }
+    return null;
   }
   /** the distinct values one field holds across every employee, for a filter */
   function employeeValues(field) {
@@ -3608,9 +3624,13 @@
   }
 
   function viewFacultyProfile() {
-    const f = Store.find('faculty', profileFacultyId);
+    const f = findEmployee(profileFacultyId);
     if (!f) return `<div class="panel"><p class="empty">That employee is no longer on the staff list.</p></div>`;
     const canEdit = !viewsMasterOnly();
+    /* Only the register carries the six tabs — the other staff tables hold a
+       name, a number and a designation, and saying so is more honest than six
+       tabs of dashes. */
+    const full = f.col === 'faculty';
 
     const side = `<div class="panel stu-side">
       <div class="stu-photo">${f.photo
@@ -3618,12 +3638,14 @@
         : `<span>${esc((f.name || '?').trim()[0] || '?')}</span>`}</div>
       <div class="tbl-wrap"><table class="info-tbl"><tbody>
         ${infoRow('Employee ID', `<span class="mono">${esc(f.empId || '—')}</span>`)}
-        ${infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—'))}
+        ${full ? infoRow('BPUT Regd No.', esc(f.bputRegdNo || '—')) : ''}
         ${infoRow('Name', esc(f.name || '—'))}
+        ${infoRow('Employee Role', `<span class="pill ${ROLE_PILL[f.role] || 'blue'}">${
+          esc(f.roleName)}</span>`)}
         ${infoRow('Department', esc(f.department || '—'))}
         ${infoRow('Designation', esc(f.designation || '—'))}
-        ${infoRow('Category', esc(f.category || '—'))}
-        ${infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—'))}
+        ${full ? infoRow('Category', esc(f.category || '—')) : ''}
+        ${full ? infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—')) : ''}
         ${infoRow('Mobile No', esc(f.phone || '—'))}
         ${infoRow('Email ID', esc(f.email || '—'))}
         ${infoRow('Status', `<span class="pill ${(f.status || 'Active') === 'Active' ? 'green' : 'red'}">${
@@ -3640,22 +3662,27 @@
       <div class="stu-profile">
         ${side}
         <div class="panel stu-main">
-          <div class="fin-tabs" id="fpTabs">${FAC_TABS.map(([k, label]) =>
+          ${full ? `<div class="fin-tabs" id="fpTabs">${FAC_TABS.map(([k, label]) =>
             `<button class="fin-tab ${k === facTab ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
-          <div id="fpBody">${facultyTabHtml(f, facTab)}</div>
+          <div id="fpBody">${facultyTabHtml(f, facTab)}</div>`
+          : `<p class="empty" style="padding:28px 18px;line-height:1.7">
+              A ${esc(f.roleName.toLowerCase())} record holds the details on the left and no more.<br>
+              Personal, family, address, document and health records are kept for employees
+              added on this page — use <b>Edit</b> to change what is held here.</p>`}
         </div>
       </div>`;
 
     viewFacultyProfile.after = () => {
       $('#fpBack').onclick = () => navigate('faculty');
       const edit = $('#fpEdit');
-      if (edit) edit.onclick = () => facultyForm(f.id);
+      if (edit) edit.onclick = () => openEmployeeForm(f.col + ':' + f.id);
       $('#fpCard').onclick = () => printFacultyIdCard(f.id);
       $('#fpPdf').onclick = () => printFacultyProfile(f.id);
-      $('#fpTabs').querySelectorAll('[data-tab]').forEach(b => {
+      const tabs = $('#fpTabs');
+      if (tabs) tabs.querySelectorAll('[data-tab]').forEach(b => {
         b.onclick = () => {
           facTab = b.dataset.tab;
-          $('#fpTabs').querySelectorAll('.fin-tab').forEach(x => x.classList.toggle('active', x === b));
+          tabs.querySelectorAll('.fin-tab').forEach(x => x.classList.toggle('active', x === b));
           $('#fpBody').innerHTML = facultyTabHtml(f, facTab);
         };
       });
@@ -3760,13 +3787,13 @@
   /* "Generate PDF" is the browser's own print dialog — every tab on one sheet,
      which is what an office actually files. */
   function printFacultyProfile(fid) {
-    const f = Store.find('faculty', fid);
+    const f = findEmployee(fid);
     if (!f) return;
     const section = (title, body) => `<h3 style="margin:18px 0 6px;color:#123f8c">${title}</h3>${body}`;
     const inner = `<h2 style="margin:0 0 4px">${esc(f.name || '')}</h2>
-      <p style="margin:0 0 14px;color:#555">${esc(f.designation || '')} · ${esc(f.department || '')}
-        · ${esc(f.empId || '')}</p>
-      ${FAC_TABS.map(([key, label]) =>
+      <p style="margin:0 0 14px;color:#555">${esc(f.roleName)} · ${esc(f.designation || '')}
+        · ${esc(f.department || '')} · ${esc(f.empId || '')}</p>
+      ${f.col !== 'faculty' ? '' : FAC_TABS.map(([key, label]) =>
         section(label.replace(/^[^ ]+ /, ''), facultyTabHtml(f, key))).join('')}`;
     printDoc('Employee Profile - ' + (f.empId || f.name), inner);
   }
@@ -6893,17 +6920,19 @@
     printDoc('ID Card - ' + s.roll, inner);
   }
   function printFacultyIdCard(fid) {
-    const f = Store.find('faculty', fid); if (!f) return;
+    const f = findEmployee(fid); if (!f) return;
     const inner = idCardHtml({
-      badgeText: 'FACULTY ID CARD',
+      // the card says what the holder is — an accountant's does not read FACULTY
+      badgeText: f.roleName.toUpperCase() + ' ID CARD',
       name: f.name,
       roleLine: f.designation,
       subLine: f.department,
       photo: f.photo,
       rows: [
         ['👤','Employee ID', f.empId],
-        ['🏫','Department', f.department],
-        ['🎓','Designation', f.designation],
+        ['🧑‍💼','Role', f.roleName],
+        ['🏫','Department', f.department || '—'],
+        ['🎓','Designation', f.designation || '—'],
         ['✉️','Email', f.email || '—'],
         ['📞','Phone', f.phone || '—'],
       ],
