@@ -12171,6 +12171,13 @@
   }
 
   const SUB_STATUS_PILL = { Pending: 'amber', Approved: 'green', Rejected: 'red' };
+  /* The nine qualification rows and the three family blocks, keyed the way the
+     public form names its fields. The same lists the form renders and the
+     server allows — one place to add a row to all three. */
+  const SUB_QUALS = [['q10', '10th'], ['q12', '12th'], ['qiti', 'ITI'], ['qdip', 'Diploma'],
+                     ['qp3', '+3'], ['qbca', 'BCA'], ['qbba', 'BBA'], ['qbtech', 'B.Tech'],
+                     ['qother', 'Other']];
+  const SUB_GUARDIANS = [['father', 'Father'], ['mother', 'Mother'], ['guardian', 'Local Guardian']];
 
   function subData(r) {
     const raw = r && r.data;
@@ -12305,25 +12312,40 @@
           catch (e) { return r.submittedAt || '—'; } })())}
         ${r.reviewedBy ? ` · reviewed by ${esc(r.reviewedBy)}` : ''}</p>
       ${r.reviewNote ? `<p style="font-size:13px;color:var(--red);margin:0 0 12px">${esc(r.reviewNote)}</p>` : ''}
-      ${block('Basic', [['Registration Number', d.roll], ['Title', d.title],
-        ['First Name', d.firstName], ['Middle Name', d.middleName], ['Last Name', d.lastName],
-        ['Mobile', d.phone], ['WhatsApp', d.whatsapp], ['Email', d.email]])}
+      ${block('Basic', [['Registration Number', d.roll || '(not given)'], ['Roll No.', d.serialNo],
+        ['Title', d.title], ['First Name', d.firstName], ['Middle Name', d.middleName],
+        ['Last Name', d.lastName], ['Mobile', d.phone], ['WhatsApp', d.whatsapp],
+        ['Email', d.email], ['College Email', d.domainEmail]])}
       ${block('Course', [['Course', d.course], ['Branch', d.branchName],
-        ['Specialisation', d.specialisation], ['Semester', d.semester], ['Section', d.section],
-        ['Batch', d.batch], ['Date of Admission', d.admissionDate]])}
+        ['Specialisation I', d.specialisation], ['Specialisation II', d.specialisation2],
+        ['Semester', d.semester], ['Section', d.section], ['Batch', d.batch], ['Club', d.house],
+        ['Date of Admission', d.admissionDate],
+        ['Entrance Examination', d.entranceExam], ['Entrance Rank', d.entranceRank]])}
       ${block('Personal', [['Date of Birth', d.dob], ['Gender', d.gender],
-        ['Blood Group', d.bloodGroup], ['Category', d.admissionCategory], ['Aadhaar', d.aadhaar],
-        ['Religion', d.religion], ['Nationality', d.nationality], ['Birth Place', d.birthplace]])}
-      ${block('Parents', [["Father's Name", d.fatherName], ["Father's Occupation", d.fatherOccupation],
-        ["Father's Mobile", d.fatherMobile], ["Mother's Name", d.motherName],
-        ["Mother's Occupation", d.motherOccupation], ["Mother's Mobile", d.motherMobile]])}
-      ${block('Address', [['Present Address', d.address], ['City', d.city], ['State', d.state],
-        ['Country', d.country], ['Pincode', d.pincode], ['Permanent Address', d.permAddress],
-        ['Permanent City', d.permCity], ['Permanent State', d.permState],
-        ['Permanent Pincode', d.permPincode]])}
-      ${block('Previous Education', [['10th School', d.q10Institute], ['10th Year', d.q10Year],
-        ['10th %', d.q10Marks], ['12th / Diploma Institute', d.q12Institute],
-        ['12th / Diploma Year', d.q12Year], ['12th / Diploma %', d.q12Marks]])}
+        ['Blood Group', d.bloodGroup], ['Admission Category', d.admissionCategory],
+        ['Religion', d.religion], ['Nationality', d.nationality], ['Birthplace', d.birthplace],
+        ['Identification Mark', d.identificationMark], ['Languages Known', d.languages],
+        ['Hobbies', d.hobbies]])}
+      ${block('Identity Documents', [['Aadhaar', d.aadhaar], ['PAN', d.pan], ['Voter ID', d.voterId],
+        ['Driving License', d.drivingLicense], ['Passport', d.passport]])}
+      ${block('Facilities Requested', [['Hostel', d.hostel], ['Transport', d.transport],
+        ['Lunch', d.lunch], ['NSS', d.nss]])}
+      ${block('Previous Qualifications', SUB_QUALS.reduce((rows, [k, label]) => rows.concat([
+        [label + ' — Institute', d[k + 'Institute']],
+        [label + ' — Year', d[k + 'Year']],
+        [label + ' — %', d[k + 'Marks']]]), []))}
+      ${SUB_GUARDIANS.map(([k, label]) => block(label, [
+        ['Name', d[k + 'Name']], ['Occupation', d[k + 'Occupation']],
+        ['Mobile', d[k + 'Mobile']], ['Phone', d[k + 'Phone']],
+        ['Annual Income', d[k + 'Income']], ['Email', d[k + 'Email']],
+        ['Qualification', d[k + 'Qualification']], ['Home Address', d[k + 'Address']]])).join('')}
+      ${block('Current Address', [['Address', d.address], ['City', d.city], ['State', d.state],
+        ['Country', d.country], ['Pincode', d.pincode]])}
+      ${block('Permanent Address', [['Address', d.permAddress], ['City', d.permCity],
+        ['State', d.permState], ['Country', d.permCountry], ['Pincode', d.permPincode]])}
+      ${block('Health', [['Height (cm)', d.height], ['Weight (kg)', d.weight],
+        ['Allergies', d.allergies], ['Medical Conditions', d.conditions],
+        ['Regular Medication', d.medication], ['Notes', d.healthNotes]])}
       ${block('Emergency Contact', [['Name', d.emergencyName], ['Mobile', d.emergencyPhone]])}
       <div class="form-actions">
         ${st === 'Pending' && !readOnly() ? `<button type="button" class="btn-del" id="smNo">Reject</button>
@@ -12339,18 +12361,20 @@
   /* Built field by field, in the shape the admission form writes — never by
      spreading the submission over the record. A form that one day grows a field
      nobody approved would otherwise be writing straight into the roll. */
-  function studentFromSubmission(d) {
+  function studentFromSubmission(d, roll) {
     const name = [d.firstName, d.middleName, d.lastName]
       .map(x => (x || '').trim()).filter(Boolean).join(' ');
     const semester = +(d.semester || 1) || 1;
-    const out = {
-      roll: d.roll, name,
+    return {
+      roll: String(roll || d.roll || '').trim(), name,
       firstName: d.firstName || '', middleName: d.middleName || '', lastName: d.lastName || '',
-      email: d.email || '', phone: d.phone || '', whatsapp: d.whatsapp || '',
+      serialNo: d.serialNo || '',
+      email: d.email || '', domainEmail: d.domainEmail || '',
+      phone: d.phone || '', whatsapp: d.whatsapp || '',
       course: d.course || '', branch: d.course || '', branchName: d.branchName || '',
       specialisation: d.specialisation || '', specialisation2: d.specialisation2 || '',
       semester, year: yearForSemester(semester),
-      section: d.section || 'A', batch: d.batch || '',
+      section: d.section || 'A', batch: d.batch || '', house: d.house || '',
       admissionDate: d.admissionDate || '',
       academicYear: academicYearOf(d.admissionDate),
       dob: d.dob || '', gender: d.gender || '', bloodGroup: d.bloodGroup || '',
@@ -12358,30 +12382,41 @@
       personal: {
         title: d.title || '', admissionCategory: d.admissionCategory || '',
         religion: d.religion || '', nationality: d.nationality || '',
-        birthplace: d.birthplace || '', languages: d.languages || '', hobbies: d.hobbies || '',
+        birthplace: d.birthplace || '', identificationMark: d.identificationMark || '',
+        languages: d.languages || '', hobbies: d.hobbies || '',
+        voterId: d.voterId || '', pan: d.pan || '', drivingLicense: d.drivingLicense || '',
+        passport: d.passport || '',
+        hostel: d.hostel || '', transport: d.transport || '', lunch: d.lunch || '',
+        nss: d.nss || '',
       },
-      guardians: [
-        { relation: 'Father', name: d.fatherName || '', occupation: d.fatherOccupation || '',
-          mobile: d.fatherMobile || '' },
-        { relation: 'Mother', name: d.motherName || '', occupation: d.motherOccupation || '',
-          mobile: d.motherMobile || '' },
-      ].filter(g => g.name || g.mobile),
+      guardians: SUB_GUARDIANS.map(([k, relation]) => ({
+        relation,
+        name: d[k + 'Name'] || '', occupation: d[k + 'Occupation'] || '',
+        mobile: d[k + 'Mobile'] || '', phone: d[k + 'Phone'] || '',
+        income: d[k + 'Income'] || '', email: d[k + 'Email'] || '',
+        qualification: d[k + 'Qualification'] || '', homeAddress: d[k + 'Address'] || '',
+      })).filter(g => g.name || g.mobile),
       addressInfo: {
         current: { address: d.address || '', city: d.city || '', state: d.state || '',
                    country: d.country || 'India', pincode: d.pincode || '' },
         permanent: { address: d.permAddress || '', city: d.permCity || '',
-                     state: d.permState || '', country: d.country || 'India',
+                     state: d.permState || '', country: d.permCountry || d.country || 'India',
                      pincode: d.permPincode || '' },
       },
       academicInfo: {
-        qualifications: [
-          { level: '10th', institute: d.q10Institute || '', year: d.q10Year || '', marks: d.q10Marks || '' },
-          { level: '12th', institute: d.q12Institute || '', year: d.q12Year || '', marks: d.q12Marks || '' },
-        ].filter(q => q.institute || q.year || q.marks),
+        entranceExam: d.entranceExam || '', entranceRank: d.entranceRank || '',
+        qualifications: SUB_QUALS.map(([k, level]) => ({
+          level, institute: d[k + 'Institute'] || '', year: d[k + 'Year'] || '',
+          marks: d[k + 'Marks'] || '',
+        })).filter(q => q.institute || q.year || q.marks),
       },
-      health: { emergencyName: d.emergencyName || '', emergencyPhone: d.emergencyPhone || '' },
+      health: {
+        height: d.height || '', weight: d.weight || '',
+        allergies: d.allergies || '', conditions: d.conditions || '',
+        medication: d.medication || '', notes: d.healthNotes || '',
+        emergencyName: d.emergencyName || '', emergencyPhone: d.emergencyPhone || '',
+      },
     };
-    return out;
   }
 
   /* An update fills in blanks and corrects what was sent; it does not blank out
@@ -12408,37 +12443,77 @@
     return out;
   }
 
+  /* Where a form becomes a student. Three cases, and the dialog says which:
+
+       the number is on the roll     -> that record is updated
+       the number is new             -> a student is admitted under it
+       there is no number            -> the office issues one here, because the
+                                        college gives out registration numbers
+                                        and the applicant does not. */
   function approveSubmission(id, after) {
     const r = Store.find('submissions', id); if (!r) return;
     const d = subData(r);
-    const roll = String(d.roll || r.roll || '').trim();
-    const existing = Store.all('students').find(s =>
-      String(s.roll || '').toLowerCase() === roll.toLowerCase());
-    const built = studentFromSubmission(d);
+    const given = String(d.roll || r.roll || '').trim();
+    const existing = given && Store.all('students').find(s =>
+      String(s.roll || '').toLowerCase() === given.toLowerCase());
+    const who = [d.firstName, d.middleName, d.lastName]
+      .map(x => (x || '').trim()).filter(Boolean).join(' ') || r.name || '—';
 
-    confirmAction(existing ? 'Update Student' : 'Admit Student',
-      existing
-        ? `<b>${esc(roll)}</b> is already on the roll as <b>${esc(existing.name || '—')}</b>.
-           Their record will be updated with what was submitted — anything left blank on the form
-           is left as it is.`
-        : `Admit <b>${esc(built.name || roll)}</b> (<b>${esc(roll)}</b>) as a student?
-           A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.`,
-      existing ? 'Update Student' : 'Admit Student', () => {
-        if (existing) {
-          Store.update('students', existing.id, mergeIntoStudent(existing, built));
-        } else {
-          const clash = regNoDuplicate(roll, null);
-          if (clash) { toast(clash, 'err'); return; }
-          const stu = Store.add('students', built);
-          if (stu) ensureStudentLogin(stu);
-        }
-        Store.update('submissions', id, {
-          status: 'Approved', reviewedAt: new Date().toISOString(),
-          reviewedBy: displayName(user), reviewNote: '',
-        });
-        toast(existing ? 'Student updated from the form.' : 'Student admitted.');
-        if (after) after(); else render();
+    const commit = (roll) => {
+      const built = studentFromSubmission(d, roll);
+      if (existing) {
+        Store.update('students', existing.id, mergeIntoStudent(existing, built));
+      } else {
+        const problem = regNoProblem(roll, null);
+        if (problem) { toast(problem, 'err'); return false; }
+        const stu = Store.add('students', built);
+        if (stu) ensureStudentLogin(stu);
+      }
+      Store.update('submissions', id, {
+        status: 'Approved', reviewedAt: new Date().toISOString(),
+        reviewedBy: displayName(user), reviewNote: '', roll,
       });
+      toast(existing ? 'Student updated from the form.' : 'Student admitted.');
+      if (after) after(); else render();
+      return true;
+    };
+
+    if (existing) {
+      confirmAction('Update Student',
+        `<b>${esc(given)}</b> is already on the roll as <b>${esc(existing.name || '—')}</b>.
+         Their record will be updated with what was submitted — anything left blank on the form
+         is left as it is.`, 'Update Student', () => commit(given));
+      return;
+    }
+    if (given) {
+      confirmAction('Admit Student',
+        `Admit <b>${esc(who)}</b> (<b>${esc(given)}</b>) as a student?
+         A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.`,
+        'Admit Student', () => commit(given));
+      return;
+    }
+
+    // no number on the form — the office issues one before anything is written
+    openModal('Admit Student', `<form id="f">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
+        <b>${esc(who)}</b> applied without a registration number, which is normal for a new
+        admission. Give them one to admit them — it becomes the id they sign in with.</p>
+      <div class="form-grid">
+        <div class="field"><label>Registration Number</label>
+          <input name="roll" required autofocus placeholder="${esc(String(regNoLength()).replace(/^/, ''))} digits">
+          <small style="color:var(--muted);font-size:11.5px">Must not already belong to another student.</small></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+        A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.</p>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Admit Student</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const roll = (formData(e.target).roll || '').trim();
+      if (!roll) { toast('A registration number is needed.', 'err'); return; }
+      if (commit(roll)) closeModal();
+    };
   }
 
   function rejectSubmission(id, after) {

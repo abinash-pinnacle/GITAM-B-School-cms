@@ -794,19 +794,59 @@ function segments(): array
 /* ---------------- the public admission form ----------------
    Everything the form may set. A field not on this list is dropped, so the
    shape of what lands in the queue is decided here and not by the caller. */
-const APPLY_FIELDS = [
-    'roll', 'title', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'whatsapp',
-    'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
-    'batch', 'admissionDate', 'dob', 'gender', 'bloodGroup', 'aadhaar',
-    'admissionCategory', 'religion', 'nationality', 'birthplace', 'languages', 'hobbies',
-    'fatherName', 'fatherOccupation', 'fatherMobile',
-    'motherName', 'motherOccupation', 'motherMobile',
-    'address', 'city', 'state', 'country', 'pincode',
-    'permAddress', 'permCity', 'permState', 'permPincode',
-    'q10Institute', 'q10Year', 'q10Marks',
-    'q12Institute', 'q12Year', 'q12Marks',
-    'emergencyName', 'emergencyPhone',
+/* The qualification rows, keyed the way the form names them. The same list
+   the app holds in QUAL_LEVELS — a level added there is added here, and the
+   slug is what keeps the field names readable. */
+const APPLY_QUALS = [
+    'q10' => '10th', 'q12' => '12th', 'qiti' => 'ITI', 'qdip' => 'Diploma',
+    'qp3' => '+3', 'qbca' => 'BCA', 'qbba' => 'BBA', 'qbtech' => 'B.Tech',
+    'qother' => 'Other',
 ];
+/** the three blocks the admission form keeps, and what each one is asked */
+const APPLY_GUARDIANS = ['father' => 'Father', 'mother' => 'Mother', 'guardian' => 'Local Guardian'];
+const APPLY_GUARDIAN_FIELDS = ['Name', 'Occupation', 'Mobile', 'Phone', 'Income',
+                               'Email', 'Qualification', 'Address'];
+
+/* Everything the form may set. Built from the same lists the form renders, so
+   a field on the page is a field that survives the trip and one that is not
+   cannot be smuggled in.
+
+   Deliberately absent: the mentor the office assigns, the CGPA and backlogs it
+   records, the biometric scan it takes, the originals it files, and the photo —
+   an image posted to an open endpoint is a way to fill a database with
+   something other than students. */
+function apply_fields(): array
+{
+    static $fields = null;
+    if ($fields !== null) {
+        return $fields;
+    }
+    $f = [
+        'roll', 'serialNo', 'title', 'firstName', 'middleName', 'lastName',
+        'email', 'domainEmail', 'phone', 'whatsapp',
+        'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
+        'batch', 'house', 'admissionDate',
+        'dob', 'gender', 'bloodGroup', 'aadhaar', 'admissionCategory', 'religion',
+        'nationality', 'birthplace', 'identificationMark', 'hostel', 'transport', 'lunch',
+        'nss', 'voterId', 'pan', 'drivingLicense', 'passport', 'languages', 'hobbies',
+        'entranceExam', 'entranceRank',
+        'address', 'city', 'state', 'country', 'pincode',
+        'permAddress', 'permCity', 'permState', 'permCountry', 'permPincode',
+        'height', 'weight', 'allergies', 'conditions', 'medication', 'healthNotes',
+        'emergencyName', 'emergencyPhone',
+    ];
+    foreach (array_keys(APPLY_QUALS) as $q) {
+        foreach (['Institute', 'Year', 'Marks'] as $part) {
+            $f[] = $q . $part;
+        }
+    }
+    foreach (array_keys(APPLY_GUARDIANS) as $g) {
+        foreach (APPLY_GUARDIAN_FIELDS as $part) {
+            $f[] = $g . $part;
+        }
+    }
+    return $fields = $f;
+}
 
 /** trimmed, length-capped, and never trusted to be a string in the first place */
 function apply_clean($v, int $max = 255): string
@@ -836,12 +876,13 @@ function api_apply(): void
         send_json(['ok' => true], 201);
     }
 
+    /* The registration number is optional: somebody applying for admission does
+       not have one yet, and the college issues it rather than the applicant. */
     $roll = apply_clean($d['roll'] ?? '', 40);
     $first = apply_clean($d['firstName'] ?? '', 80);
     $phone = preg_replace('/\D/', '', apply_clean($d['phone'] ?? '', 20));
-    if ($roll === '' || $first === '') {
-        send_json(['error' => 'incomplete',
-                   'message' => 'Registration number and first name are required.'], 422);
+    if ($first === '') {
+        send_json(['error' => 'incomplete', 'message' => 'Your first name is required.'], 422);
     }
     if (strlen($phone) !== 10) {
         send_json(['error' => 'bad-phone',
@@ -873,14 +914,18 @@ function api_apply(): void
                    'message' => 'The form is not accepting entries right now. Please contact the office.'], 503);
     }
 
+    $long = ['address', 'permAddress', 'allergies', 'conditions', 'medication', 'healthNotes',
+             'fatherAddress', 'motherAddress', 'guardianAddress'];
     $data = [];
-    foreach (APPLY_FIELDS as $f) {
-        $v = apply_clean($d[$f] ?? '', $f === 'address' || $f === 'permAddress' ? 500 : 255);
+    foreach (apply_fields() as $f) {
+        $v = apply_clean($d[$f] ?? '', in_array($f, $long, true) ? 500 : 255);
         if ($v !== '') {
             $data[$f] = $v;
         }
     }
-    $data['roll'] = $roll;
+    if ($roll !== '') {
+        $data['roll'] = $roll;
+    }
     $data['phone'] = $phone;
 
     $name = trim(implode(' ', array_filter([
@@ -889,16 +934,24 @@ function api_apply(): void
         apply_clean($d['lastName'] ?? '', 80),
     ])));
 
-    /* Whether this registration number is already on the roll. Recorded now so
-       the office sees at a glance which rows are new admissions and which are
-       existing students filling in what was missing. */
-    $existing = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
-        . ' WHERE LOWER(' . qi('roll') . ') = LOWER(?)', [$roll]);
+    /* Whether this is somebody already on the roll. Only a registration number
+       can say so — a phone number is not proof of identity and two students may
+       share a parent's. Recorded now so the office sees at a glance which rows
+       are new admissions and which are existing students filling in gaps. */
+    $existing = $roll === '' ? null
+        : fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
+            . ' WHERE LOWER(' . qi('roll') . ') = LOWER(?)', [$roll]);
 
     /* Filling it in twice replaces the first attempt rather than queuing two.
+       Matched on the registration number when there is one and on the phone
+       number when there is not — which is why the form insists on a phone.
        Only while it is still pending: a row already dealt with is history. */
-    $prior = fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE LOWER(' . qi('roll')
-        . ') = LOWER(?) AND ' . qi('status') . " = 'Pending'", [$roll]);
+    $prior = $roll !== ''
+        ? fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE LOWER(' . qi('roll')
+            . ') = LOWER(?) AND ' . qi('status') . " = 'Pending'", [$roll])
+        : fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE ' . qi('phone')
+            . ' = ? AND (' . qi('roll') . " = '' OR " . qi('roll') . ' IS NULL) AND '
+            . qi('status') . " = 'Pending'", [$phone]);
 
     $out = [
         'id'          => $prior ? $prior['id'] : next_id('submissions'),

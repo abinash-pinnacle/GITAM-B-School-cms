@@ -7,8 +7,12 @@
   The public form. A page of its own rather than a screen inside the app,
   because the app is eight hundred kilobytes of administration that nobody
   filling in their address needs to download, and because the smallest possible
-  thing facing the open internet is the safest one. It talks to exactly one
-  endpoint and holds no session.
+  thing facing the open internet is the safest one. It holds no session and
+  talks to exactly one endpoint.
+
+  It asks everything the admission form asks, minus what a student cannot answer
+  about themselves: the mentor the office assigns, the CGPA it records, the
+  biometric scan it takes, the originals it files.
 -->
 <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,31 +22,42 @@
   :root {
     --primary: #1a56c4; --primary-dark: #123f8c; --primary-light: #e8f0fe;
     --ink: #1f2733; --muted: #6b7684; --line: #dfe4ec; --bg: #f4f7fb;
-    --green: #1a9e5f; --red: #e0414f; --amber: #d98324;
+    --green: #1a9e5f; --red: #e0414f;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
          font-family: Poppins, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 18px 16px 60px; }
 
-  .wrap { max-width: 940px; margin: 0 auto; padding: 20px 16px 60px; }
-
-  header { background: var(--primary-dark); color: #fff; padding: 22px 16px; }
-  header .inner { max-width: 940px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
-  header img { width: 46px; height: 46px; object-fit: contain; background: #fff;
+  header { background: var(--primary-dark); color: #fff; padding: 20px 16px; }
+  header .inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; gap: 14px; }
+  header img { width: 44px; height: 44px; object-fit: contain; background: #fff;
                border-radius: 10px; padding: 4px; flex: none; }
-  header h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: .2px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; }
   header p { margin: 2px 0 0; font-size: 12.5px; opacity: .85; }
 
   .card { background: #fff; border: 1px solid var(--line); border-radius: 14px;
-          padding: 22px; margin-top: 18px; }
+          padding: 20px; margin-top: 16px; }
   .card > h2 { margin: 0 0 4px; font-size: 16px; color: var(--primary-dark); }
-  .card > .sub { margin: 0 0 18px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .card > .sub { margin: 0 0 6px; font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+  /* One section open at a time. Fifty fields in one column is a page people
+     abandon; a step they can see the end of is one they finish. */
+  .steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 16px 0 4px;
+           border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+  .steps button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 13px;
+                  border: 1px solid var(--line); border-radius: 20px; background: #fff;
+                  color: var(--muted); cursor: pointer; }
+  .steps button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .steps button.done { border-color: var(--green); color: var(--green); }
+  .pane { display: none; padding-top: 16px; }
+  .pane.on { display: block; }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
   .field { display: flex; flex-direction: column; gap: 5px; }
   .field.full { grid-column: 1 / -1; }
-  label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  label { font-size: 12.5px; font-weight: 600; }
   label .req { color: var(--red); }
   input, select, textarea {
     font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--line);
@@ -50,36 +65,47 @@
   }
   input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-light); }
-  textarea { resize: vertical; min-height: 68px; }
-  small.hint { font-size: 11.5px; color: var(--muted); }
+  textarea { resize: vertical; min-height: 64px; }
+  small.hint { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
 
-  h3.sec { margin: 26px 0 12px; font-size: 13px; font-weight: 700; color: var(--primary-dark);
+  h3.sec { margin: 22px 0 12px; font-size: 12.5px; font-weight: 700; color: var(--primary-dark);
            text-transform: uppercase; letter-spacing: .4px;
            border-bottom: 1px solid var(--line); padding-bottom: 7px; }
-  h3.sec:first-of-type { margin-top: 6px; }
+  h3.sec:first-child { margin-top: 0; }
 
-  .actions { margin-top: 26px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  button { font: inherit; font-size: 15px; font-weight: 600; padding: 12px 26px;
-           border: 0; border-radius: 10px; background: var(--primary); color: #fff; cursor: pointer; }
-  button:disabled { opacity: .6; cursor: not-allowed; }
+  .qual { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .qual th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px;
+             color: var(--primary-dark); background: var(--primary-light);
+             padding: 9px 8px; font-weight: 600; }
+  .qual td { padding: 6px 6px; border-top: 1px solid var(--line); }
+  .qual td:first-child { font-weight: 600; white-space: nowrap; }
+  .qual input { padding: 8px 10px; font-size: 13px; }
+  .qual-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+
+  .nav { margin-top: 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+         border-top: 1px solid var(--line); padding-top: 18px; }
+  button.go { font: inherit; font-size: 15px; font-weight: 600; padding: 11px 24px;
+              border: 0; border-radius: 10px; background: var(--primary); color: #fff; cursor: pointer; }
+  button.back { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+  button.go:disabled { opacity: .6; cursor: not-allowed; }
+  .nav .spacer { flex: 1; }
 
   .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px;
          line-height: 1.6; display: none; }
   .msg.err { display: block; background: #fde8ea; color: var(--red); }
-  .msg.ok  { display: block; background: #e4f6ec; color: var(--green); }
 
   /* Not display:none — a script that skips hidden inputs would skip it. It is
-     off the side of the screen, present in the form, and no person can reach it. */
+     off the side of the screen, in the form, and no person can reach it. */
   .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
   .done { text-align: center; padding: 40px 20px; }
-  .done .tick { font-size: 56px; line-height: 1; }
+  .done .tick { font-size: 54px; line-height: 1; }
   .done h2 { margin: 14px 0 8px; color: var(--green); font-size: 20px; }
   .done p { margin: 0 0 6px; color: var(--muted); font-size: 14px; line-height: 1.7; }
   .done .ref { display: inline-block; margin-top: 12px; font-family: ui-monospace, monospace;
                background: var(--primary-light); color: var(--primary-dark);
                padding: 8px 16px; border-radius: 8px; font-weight: 600; }
-  footer { text-align: center; font-size: 12px; color: var(--muted); padding: 22px 16px 40px; }
+  footer { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px 40px; }
 </style>
 
 <header>
@@ -96,9 +122,14 @@
   <div class="card" id="formCard">
     <h2>Student Registration</h2>
     <p class="sub">
-      Fill this in once and the office will review it. If you are already enrolled, use your own
-      registration number and your details will be updated rather than duplicated.
-      Fields marked <span class="req">*</span> are required.
+      Fill this in once and the office will review it. Only your <b>name</b> and
+      <b>mobile number</b> are required — everything else helps, but you can leave it blank
+      and the office will fill it in.
+    </p>
+    <p class="sub">
+      <b>Already enrolled?</b> Put your registration number in and your existing record is updated
+      instead of a new one being created. <b>Applying for admission?</b> Leave it blank — the
+      college will give you one.
     </p>
 
     <form id="f" autocomplete="on">
@@ -106,113 +137,190 @@
         <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
       </div>
 
-      <h3 class="sec">Basic Details</h3>
-      <div class="grid">
-        <div class="field"><label>Registration Number <span class="req">*</span></label>
-          <input name="roll" required maxlength="40" placeholder="e.g. 2025180010">
-          <small class="hint">The number the college gave you. Use the same one if you already have a record.</small></div>
-        <div class="field"><label>Title</label>
-          <select name="title"><option value=""></option><option>Mr.</option><option>Ms.</option><option>Mrs.</option></select></div>
-        <div class="field"><label>First Name <span class="req">*</span></label>
-          <input name="firstName" required maxlength="80"></div>
-        <div class="field"><label>Middle Name</label><input name="middleName" maxlength="80"></div>
-        <div class="field"><label>Last Name</label><input name="lastName" maxlength="80"></div>
-        <div class="field"><label>Mobile No <span class="req">*</span></label>
-          <input name="phone" required inputmode="numeric" maxlength="10" placeholder="10-digit number"></div>
-        <div class="field"><label>WhatsApp No</label>
-          <input name="whatsapp" inputmode="numeric" maxlength="10"></div>
-        <div class="field"><label>Email</label>
-          <input name="email" type="email" maxlength="120" placeholder="name@example.com"></div>
+      <div class="steps" id="steps"></div>
+
+      <!-- 1 ------------------------------------------------------------ -->
+      <div class="pane on" data-pane="Basic">
+        <h3 class="sec">Who you are</h3>
+        <div class="grid">
+          <div class="field"><label>Registration Number</label>
+            <input name="roll" maxlength="40" placeholder="leave blank if you do not have one yet">
+            <small class="hint">Only if the college has already given you one.</small></div>
+          <div class="field"><label>Roll No.</label><input name="serialNo" maxlength="20"></div>
+          <div class="field"><label>Title</label>
+            <select name="title"><option value=""></option>
+              <option>Mr.</option><option>Ms.</option><option>Mrs.</option><option>Dr.</option></select></div>
+          <div class="field"><label>First Name <span class="req">*</span></label>
+            <input name="firstName" maxlength="80"></div>
+          <div class="field"><label>Middle Name</label><input name="middleName" maxlength="80"></div>
+          <div class="field"><label>Last Name</label><input name="lastName" maxlength="80"></div>
+          <div class="field"><label>Mobile No <span class="req">*</span></label>
+            <input name="phone" inputmode="numeric" maxlength="10" placeholder="10-digit number"></div>
+          <div class="field"><label>WhatsApp No</label>
+            <input name="whatsapp" inputmode="numeric" maxlength="10"></div>
+          <div class="field"><label>Email ID</label>
+            <input name="email" type="email" maxlength="120" placeholder="name@example.com"></div>
+          <div class="field"><label>College Email ID</label>
+            <input name="domainEmail" type="email" maxlength="120"></div>
+        </div>
       </div>
 
-      <h3 class="sec">Course</h3>
-      <div class="grid">
-        <div class="field"><label>Course</label>
-          <select name="course"><option value=""></option><option>MBA</option><option>Retail &amp; Logistics Management</option></select></div>
-        <div class="field"><label>Branch</label>
-          <select name="branchName"><option value=""></option>
-            <option>General Management</option>
-            <option>Logistics and Supply Chain Management</option>
-            <option>Retail Management</option></select></div>
-        <div class="field"><label>Specialisation</label>
-          <select name="specialisation"><option value="">— None —</option>
-            <option>Marketing</option><option>Finance</option><option>HR</option>
-            <option>Retail</option><option>Logistics</option></select></div>
-        <div class="field"><label>Semester</label>
-          <select name="semester"><option value=""></option>
-            <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
-        <div class="field"><label>Section</label><input name="section" maxlength="8" placeholder="A"></div>
-        <div class="field"><label>Batch</label><input name="batch" maxlength="20" placeholder="e.g. 2025-2027"></div>
-        <div class="field"><label>Date of Admission</label><input name="admissionDate" type="date"></div>
+      <!-- 2 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Course">
+        <h3 class="sec">What you are studying</h3>
+        <div class="grid">
+          <div class="field"><label>Course</label>
+            <select name="course"><option value=""></option>
+              <option>MBA</option><option>Retail &amp; Logistics Management</option></select></div>
+          <div class="field"><label>Branch</label>
+            <select name="branchName"><option value=""></option>
+              <option>General Management</option>
+              <option>Logistics and Supply Chain Management</option>
+              <option>Retail Management</option></select></div>
+          <div class="field"><label>Specialisation I</label>
+            <select name="specialisation"><option value="">— None —</option>
+              <option>Marketing</option><option>Finance</option><option>HR</option>
+              <option>Retail</option><option>Logistics</option></select></div>
+          <div class="field"><label>Specialisation II</label>
+            <select name="specialisation2"><option value="">— None —</option>
+              <option>Marketing</option><option>Finance</option><option>HR</option>
+              <option>Retail</option><option>Logistics</option></select></div>
+          <div class="field"><label>Semester</label>
+            <select name="semester"><option value=""></option>
+              <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div class="field"><label>Section</label><input name="section" maxlength="8" placeholder="A"></div>
+          <div class="field"><label>Batch</label><input name="batch" maxlength="20" placeholder="e.g. 2025-2027"></div>
+          <div class="field"><label>Club</label><input name="house" maxlength="60"></div>
+          <div class="field"><label>Date of Admission</label><input name="admissionDate" type="date"></div>
+        </div>
+
+        <h3 class="sec">Entrance</h3>
+        <div class="grid">
+          <div class="field"><label>Entrance Examination</label>
+            <input name="entranceExam" maxlength="40" placeholder="e.g. CAT, OJEE"></div>
+          <div class="field"><label>Entrance Rank</label>
+            <input name="entranceRank" inputmode="numeric" maxlength="10"></div>
+        </div>
       </div>
 
-      <h3 class="sec">Personal</h3>
-      <div class="grid">
-        <div class="field"><label>Date of Birth</label><input name="dob" type="date"></div>
-        <div class="field"><label>Gender</label>
-          <select name="gender"><option value=""></option><option>Male</option><option>Female</option><option>Other</option></select></div>
-        <div class="field"><label>Blood Group</label>
-          <select name="bloodGroup"><option value=""></option>
-            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-            <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
-        <div class="field"><label>Category</label>
-          <select name="admissionCategory"><option value=""></option>
-            <option>General</option><option>OBC</option><option>SEBC</option><option>SC</option>
-            <option>ST</option><option>EWS</option><option>TFW</option>
-            <option>Physically Handicapped</option><option>Management</option><option>NRI</option></select></div>
-        <div class="field"><label>Aadhaar No.</label>
-          <input name="aadhaar" inputmode="numeric" maxlength="12"></div>
-        <div class="field"><label>Religion</label><input name="religion" maxlength="40"></div>
-        <div class="field"><label>Nationality</label><input name="nationality" maxlength="40" value="Indian"></div>
-        <div class="field"><label>Birth Place</label><input name="birthplace" maxlength="80"></div>
+      <!-- 3 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Personal">
+        <h3 class="sec">Personal details</h3>
+        <div class="grid">
+          <div class="field"><label>Date of Birth</label><input name="dob" type="date"></div>
+          <div class="field"><label>Gender</label>
+            <select name="gender"><option value=""></option>
+              <option>Male</option><option>Female</option><option>Other</option></select></div>
+          <div class="field"><label>Blood Group</label>
+            <select name="bloodGroup"><option value=""></option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div class="field"><label>Admission Category</label>
+            <select name="admissionCategory"><option value=""></option>
+              <option>General</option><option>OBC</option><option>SEBC</option><option>SC</option>
+              <option>ST</option><option>EWS</option><option>TFW</option>
+              <option>Physically Handicapped</option><option>Management</option><option>NRI</option></select></div>
+          <div class="field"><label>Religion</label><input name="religion" maxlength="40"></div>
+          <div class="field"><label>Nationality</label><input name="nationality" maxlength="40" value="Indian"></div>
+          <div class="field"><label>Birthplace</label><input name="birthplace" maxlength="80"></div>
+          <div class="field"><label>Identification Mark</label><input name="identificationMark" maxlength="120"></div>
+          <div class="field"><label>Languages Known</label>
+            <input name="languages" maxlength="120" placeholder="e.g. Odia, Hindi, English"></div>
+          <div class="field"><label>Hobbies</label><input name="hobbies" maxlength="120"></div>
+        </div>
+
+        <h3 class="sec">Identity documents</h3>
+        <div class="grid">
+          <div class="field"><label>Aadhaar No.</label>
+            <input name="aadhaar" inputmode="numeric" maxlength="12"></div>
+          <div class="field"><label>PAN No.</label><input name="pan" maxlength="10"></div>
+          <div class="field"><label>Voter ID</label><input name="voterId" maxlength="20"></div>
+          <div class="field"><label>Driving License No.</label><input name="drivingLicense" maxlength="20"></div>
+          <div class="field"><label>Passport No.</label><input name="passport" maxlength="20"></div>
+        </div>
+
+        <h3 class="sec">College facilities you need</h3>
+        <div class="grid">
+          <div class="field"><label>Hostel</label>
+            <select name="hostel"><option>No</option><option>Yes</option></select></div>
+          <div class="field"><label>Transport</label>
+            <select name="transport"><option>No</option><option>Yes</option></select></div>
+          <div class="field"><label>Lunch</label>
+            <select name="lunch"><option>No</option><option>Yes</option></select></div>
+          <div class="field"><label>NSS</label>
+            <select name="nss"><option>No</option><option>Yes</option></select></div>
+        </div>
       </div>
 
-      <h3 class="sec">Parents</h3>
-      <div class="grid">
-        <div class="field"><label>Father's Name</label><input name="fatherName" maxlength="90"></div>
-        <div class="field"><label>Father's Occupation</label><input name="fatherOccupation" maxlength="60"></div>
-        <div class="field"><label>Father's Mobile</label><input name="fatherMobile" inputmode="numeric" maxlength="10"></div>
-        <div class="field"><label>Mother's Name</label><input name="motherName" maxlength="90"></div>
-        <div class="field"><label>Mother's Occupation</label><input name="motherOccupation" maxlength="60"></div>
-        <div class="field"><label>Mother's Mobile</label><input name="motherMobile" inputmode="numeric" maxlength="10"></div>
+      <!-- 4 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Education">
+        <h3 class="sec">Previous qualifications</h3>
+        <p class="sub">Fill in only the rows that apply to you.</p>
+        <div class="qual-wrap">
+          <table class="qual">
+            <thead><tr><th>Qualification</th><th>Institute Name</th>
+              <th style="width:110px">Passout Year</th><th style="width:110px">% Marks</th></tr></thead>
+            <tbody id="qualRows"></tbody>
+          </table>
+        </div>
       </div>
 
-      <h3 class="sec">Address</h3>
-      <div class="grid">
-        <div class="field full"><label>Present Address</label><textarea name="address" maxlength="500"></textarea></div>
-        <div class="field"><label>City / Town</label><input name="city" maxlength="60"></div>
-        <div class="field"><label>State</label><input name="state" maxlength="60"></div>
-        <div class="field"><label>Country</label><input name="country" maxlength="60" value="India"></div>
-        <div class="field"><label>Pincode</label><input name="pincode" inputmode="numeric" maxlength="6"></div>
-        <div class="field full">
+      <!-- 5 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Family">
+        <div id="guardianBlocks"></div>
+      </div>
+
+      <!-- 6 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Address">
+        <h3 class="sec">Current address</h3>
+        <div class="grid">
+          <div class="field full"><label>Address</label><textarea name="address" maxlength="500"></textarea></div>
+          <div class="field"><label>City</label><input name="city" maxlength="60"></div>
+          <div class="field"><label>State</label><input name="state" maxlength="60"></div>
+          <div class="field"><label>Country</label><input name="country" maxlength="60" value="India"></div>
+          <div class="field"><label>Pincode</label><input name="pincode" inputmode="numeric" maxlength="6"></div>
+        </div>
+
+        <h3 class="sec">Permanent address</h3>
+        <div class="field full" style="margin-bottom:14px">
           <label style="font-weight:500;display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="sameAddr" style="width:auto"> Permanent address is the same
+            <input type="checkbox" id="sameAddr" style="width:auto"> Same as my current address
           </label></div>
-        <div class="field full"><label>Permanent Address</label><textarea name="permAddress" maxlength="500"></textarea></div>
-        <div class="field"><label>City / Town</label><input name="permCity" maxlength="60"></div>
-        <div class="field"><label>State</label><input name="permState" maxlength="60"></div>
-        <div class="field"><label>Pincode</label><input name="permPincode" inputmode="numeric" maxlength="6"></div>
+        <div class="grid">
+          <div class="field full"><label>Address</label><textarea name="permAddress" maxlength="500"></textarea></div>
+          <div class="field"><label>City</label><input name="permCity" maxlength="60"></div>
+          <div class="field"><label>State</label><input name="permState" maxlength="60"></div>
+          <div class="field"><label>Country</label><input name="permCountry" maxlength="60" value="India"></div>
+          <div class="field"><label>Pincode</label><input name="permPincode" inputmode="numeric" maxlength="6"></div>
+        </div>
       </div>
 
-      <h3 class="sec">Previous Education</h3>
-      <div class="grid">
-        <div class="field"><label>10th — School</label><input name="q10Institute" maxlength="120"></div>
-        <div class="field"><label>10th — Year</label><input name="q10Year" inputmode="numeric" maxlength="4"></div>
-        <div class="field"><label>10th — Percentage</label><input name="q10Marks" maxlength="10" placeholder="e.g. 82.4"></div>
-        <div class="field"><label>12th / Diploma — Institute</label><input name="q12Institute" maxlength="120"></div>
-        <div class="field"><label>12th / Diploma — Year</label><input name="q12Year" inputmode="numeric" maxlength="4"></div>
-        <div class="field"><label>12th / Diploma — Percentage</label><input name="q12Marks" maxlength="10"></div>
+      <!-- 7 ------------------------------------------------------------ -->
+      <div class="pane" data-pane="Health">
+        <h3 class="sec">Health</h3>
+        <div class="grid">
+          <div class="field"><label>Height (cm)</label><input name="height" inputmode="numeric" maxlength="5"></div>
+          <div class="field"><label>Weight (kg)</label><input name="weight" inputmode="numeric" maxlength="5"></div>
+          <div class="field full"><label>Allergies</label><textarea name="allergies" maxlength="500"></textarea></div>
+          <div class="field full"><label>Medical Conditions</label><textarea name="conditions" maxlength="500"></textarea></div>
+          <div class="field full"><label>Regular Medication</label><textarea name="medication" maxlength="500"></textarea></div>
+          <div class="field full"><label>Anything else the college should know</label>
+            <textarea name="healthNotes" maxlength="500"></textarea></div>
+        </div>
+
+        <h3 class="sec">Emergency contact</h3>
+        <div class="grid">
+          <div class="field"><label>Name</label><input name="emergencyName" maxlength="90"></div>
+          <div class="field"><label>Mobile</label>
+            <input name="emergencyPhone" inputmode="numeric" maxlength="10"></div>
+        </div>
       </div>
 
-      <h3 class="sec">Emergency Contact</h3>
-      <div class="grid">
-        <div class="field"><label>Name</label><input name="emergencyName" maxlength="90"></div>
-        <div class="field"><label>Mobile</label><input name="emergencyPhone" inputmode="numeric" maxlength="10"></div>
-      </div>
-
-      <div class="actions">
-        <button type="submit" id="go">Submit Form</button>
-        <small class="hint">You can fill this in again if you need to correct something.</small>
+      <div class="nav">
+        <button type="button" class="go back" id="prev" style="display:none">← Back</button>
+        <div class="spacer"></div>
+        <button type="button" class="go" id="next">Next →</button>
+        <button type="submit" class="go" id="submitBtn" style="display:none">Submit Form</button>
       </div>
       <div class="msg" id="msg"></div>
     </form>
@@ -222,7 +330,8 @@
     <div class="tick">✅</div>
     <h2>Thank you — your form has been received</h2>
     <p>The office will review your details. There is nothing else you need to do.</p>
-    <p>If something was wrong, open this link again and submit it with the same registration number.</p>
+    <p>If something was wrong, open this link again and fill it in with the same
+       mobile number — your earlier answer will be replaced.</p>
     <div class="ref" id="refNo"></div>
   </div>
 </div>
@@ -234,32 +343,99 @@
   var $ = function (s) { return document.querySelector(s); };
   document.getElementById('yr').textContent = new Date().getFullYear();
 
+  /* The same nine the app keeps in QUAL_LEVELS, with the slug the field names
+     are built from — so a row here is a row the server already allows. */
+  var QUALS = [['q10', '10th'], ['q12', '12th'], ['qiti', 'ITI'], ['qdip', 'Diploma'],
+               ['qp3', '+3'], ['qbca', 'BCA'], ['qbba', 'BBA'], ['qbtech', 'B.Tech'],
+               ['qother', 'Other']];
+  document.getElementById('qualRows').innerHTML = QUALS.map(function (q) {
+    return '<tr><td>' + q[1] + '</td>'
+      + '<td><input name="' + q[0] + 'Institute" maxlength="120"></td>'
+      + '<td><input name="' + q[0] + 'Year" inputmode="numeric" maxlength="4"></td>'
+      + '<td><input name="' + q[0] + 'Marks" maxlength="10" placeholder="e.g. 82.4"></td></tr>';
+  }).join('');
+
+  var GUARDIANS = [['father', "Father"], ['mother', "Mother"], ['guardian', "Local Guardian"]];
+  document.getElementById('guardianBlocks').innerHTML = GUARDIANS.map(function (g) {
+    var p = g[0];
+    return '<h3 class="sec">' + g[1] + '</h3><div class="grid">'
+      + '<div class="field"><label>Name</label><input name="' + p + 'Name" maxlength="90"></div>'
+      + '<div class="field"><label>Occupation</label><input name="' + p + 'Occupation" maxlength="60"></div>'
+      + '<div class="field"><label>Mobile No</label><input name="' + p + 'Mobile" inputmode="numeric" maxlength="10"></div>'
+      + '<div class="field"><label>Phone No</label><input name="' + p + 'Phone" maxlength="20"></div>'
+      + '<div class="field"><label>Annual Income (₹)</label><input name="' + p + 'Income" inputmode="numeric" maxlength="12"></div>'
+      + '<div class="field"><label>Email</label><input name="' + p + 'Email" type="email" maxlength="120"></div>'
+      + '<div class="field"><label>Qualification</label><input name="' + p + 'Qualification" maxlength="60"></div>'
+      + '<div class="field full"><label>Home Address</label><textarea name="' + p + 'Address" maxlength="500"></textarea></div>'
+      + '</div>';
+  }).join('');
+
   // digits only, where a number is what is being asked for
-  document.querySelectorAll('input[inputmode="numeric"]').forEach(function (el) {
-    el.addEventListener('input', function () { el.value = el.value.replace(/\D/g, ''); });
+  document.addEventListener('input', function (e) {
+    if (e.target.getAttribute && e.target.getAttribute('inputmode') === 'numeric') {
+      e.target.value = e.target.value.replace(/\D/g, '');
+    }
   });
+
+  var panes = [].slice.call(document.querySelectorAll('.pane'));
+  var stepBar = document.getElementById('steps');
+  var at = 0;
+
+  stepBar.innerHTML = panes.map(function (p, i) {
+    return '<button type="button" data-step="' + i + '">' + p.dataset.pane + '</button>';
+  }).join('');
+  var stepBtns = [].slice.call(stepBar.querySelectorAll('button'));
+
+  function showStep(i) {
+    at = Math.max(0, Math.min(panes.length - 1, i));
+    panes.forEach(function (p, n) { p.classList.toggle('on', n === at); });
+    stepBtns.forEach(function (b, n) {
+      b.classList.toggle('on', n === at);
+      b.classList.toggle('done', n < at);
+    });
+    $('#prev').style.display = at === 0 ? 'none' : '';
+    $('#next').style.display = at === panes.length - 1 ? 'none' : '';
+    $('#submitBtn').style.display = at === panes.length - 1 ? '' : 'none';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  stepBtns.forEach(function (b) {
+    b.addEventListener('click', function () { showStep(+b.dataset.step); });
+  });
+  $('#next').addEventListener('click', function () { showStep(at + 1); });
+  $('#prev').addEventListener('click', function () { showStep(at - 1); });
 
   $('#sameAddr').addEventListener('change', function () {
     if (!this.checked) return;
     [['address', 'permAddress'], ['city', 'permCity'], ['state', 'permState'],
-     ['pincode', 'permPincode']].forEach(function (pair) {
+     ['country', 'permCountry'], ['pincode', 'permPincode']].forEach(function (pair) {
       var from = document.querySelector('[name="' + pair[0] + '"]');
       var to = document.querySelector('[name="' + pair[1] + '"]');
       if (from && to) to.value = from.value;
     });
   });
 
-  var msg = $('#msg'), go = $('#go');
-  function show(kind, text) { msg.className = 'msg ' + kind; msg.textContent = text; }
+  var msg = $('#msg'), go = $('#submitBtn');
+  function show(kind, text) { msg.className = 'msg ' + (kind || ''); msg.textContent = text || ''; }
 
   $('#f').addEventListener('submit', function (e) {
     e.preventDefault();
     var d = {};
     new FormData(e.target).forEach(function (v, k) { d[k] = v; });
-    if ((d.phone || '').length !== 10) {
-      show('err', 'Mobile number must be exactly 10 digits.');
+
+    /* Checked here so somebody who skipped the first step is sent back to it
+       rather than told "first name is required" on a page that does not have
+       a first name on it. */
+    if (!(d.firstName || '').trim()) {
+      showStep(0); show('err', 'Please enter your first name.');
+      var fn = document.querySelector('[name="firstName"]'); if (fn) fn.focus();
       return;
     }
+    if ((d.phone || '').length !== 10) {
+      showStep(0); show('err', 'Mobile number must be exactly 10 digits.');
+      var ph = document.querySelector('[name="phone"]'); if (ph) ph.focus();
+      return;
+    }
+
     show('', '');
     go.disabled = true;
     go.textContent = 'Submitting...';
@@ -274,8 +450,7 @@
     }).then(function (res) {
       if (!res.ok) {
         show('err', (res.body && res.body.message) || 'That could not be submitted. Please try again.');
-        go.disabled = false;
-        go.textContent = 'Submit Form';
+        go.disabled = false; go.textContent = 'Submit Form';
         return;
       }
       $('#refNo').textContent = 'Reference: ' + ((res.body && res.body.reference) || '—');
@@ -284,9 +459,10 @@
       window.scrollTo(0, 0);
     }).catch(function () {
       show('err', 'Could not reach the college server. Please check your connection and try again.');
-      go.disabled = false;
-      go.textContent = 'Submit Form';
+      go.disabled = false; go.textContent = 'Submit Form';
     });
   });
+
+  showStep(0);
 })();
 </script>
