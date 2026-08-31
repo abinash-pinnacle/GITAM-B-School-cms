@@ -146,6 +146,11 @@ const COLLECTIONS = [
                      'email', 'phone', 'branch', 'specialisation', 'year', 'semester',
                      'section', 'photo', 'course', 'academicYear', 'cgpa', 'backlogs',
                      'batch', 'status', 'specialisation2',
+                     /* What the college calls the branch — General Management,
+                        Logistics, Retail. Deliberately not `branch`, which is
+                        the programme (MBA) and is what attendance, the
+                        timetable and every course listing match on. */
+                     'branchName',
                      /* the rest of the file. The columns below are the ones other
                         screens read — an ID card wants the date of birth and the
                         blood group, the admissions dashboard wants the date. */

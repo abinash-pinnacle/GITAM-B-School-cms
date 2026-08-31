@@ -2514,6 +2514,9 @@
           ${fText('whatsapp', 'WhatsApp No', s.whatsapp, 'inputmode="numeric" maxlength="10"')}
           <div class="field"><label>Course</label>
             <select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
+          <div class="field"><label>Branch</label>
+            <select name="branchName" id="stuFormBranch"><option value=""></option>${
+              listOptions('branchName', s.branchName || '', true)}</select></div>
           <div class="field"><label>Specialisation I</label>
             <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
           <div class="field"><label>Specialisation II</label>
@@ -2527,8 +2530,6 @@
             <option value="">— None —</option>
             ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
           </select></div>
-          <div class="field"><label>Academic Year</label>
-            <select name="academicYear">${academicYearOptions(s.academicYear)}</select></div>
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           ${fText('mentor', 'Mentor', s.mentor)}
           ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
@@ -2633,6 +2634,7 @@
     $('#cx').onclick = closeModal;
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
+    bindCustomList($('#stuFormBranch'), 'branchName');
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormSpec2'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
@@ -2784,6 +2786,12 @@
       d.year = yearForSemester(d.semester);
       // one programme, asked for once: the department is the course
       d.branch = d.course;
+      /* The form no longer asks for the session — the fee structure is looked
+         up per course and year, the Semester Update page filters by it and the
+         profile prints it, so a blank would surface later as a fee that does
+         not resolve. An existing student keeps whatever they were admitted
+         under; a new one gets the session running now. */
+      if (!id) d.academicYear = currentAcademicYear();
       d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
@@ -2894,6 +2902,7 @@
         { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
         { key:'whatsapp', header:'WhatsApp No', aliases:['whatsapp'] },
         { key:'course', header:'Course' },
+        { key:'branchName', header:'Branch', aliases:['branch name','mba branch'] },
         { key:'specialisation', header:'Specialisation I', aliases:['stream','spec','specialisation'] },
         { key:'specialisation2', header:'Specialisation II', aliases:['second specialisation','spec 2'] },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
@@ -2980,7 +2989,8 @@
         roll:'2025180010', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
         email:'rahul@nmiet.in', domainEmail:'rahul@nmiet.edu.in',
         phone:'9810000010', whatsapp:'9810000010',
-        course:'MBA', specialisation:'Marketing', specialisation2:'Finance',
+        course:'MBA', branchName:'General Management',
+        specialisation:'Marketing', specialisation2:'Finance',
         semester:2, section:'A', house:'Marketing Club', batch:'2025-2027', academicYear:'2026-27',
         admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta', cgpa:'8.2', backlogs:0, status:'Active',
         title:'Mr.', gender:'Male', dob:'2003-05-14', bloodGroup:'B+',
@@ -3240,6 +3250,9 @@
       if (spec.collection === 'students') {
         data.year = yearForSemester(data.semester);
         data.branch = data.course;
+        // the form fills this in and no longer asks; a sheet that leaves the
+        // column blank gets the same answer rather than a student with no session
+        if (!String(data.academicYear || '').trim()) data.academicYear = currentAcademicYear();
       }
       if (parts.personal) data.personal = parts.personal;
       if (parts.otherInfo) data.otherInfo = parts.otherInfo;
@@ -7212,6 +7225,11 @@
       Store.all(col).forEach(r => { if (r.academicYear) set.add(String(r.academicYear).trim()); }));
     return [...set].filter(Boolean).sort().reverse();
   }
+  /** the session running now, in the form the rest of the app writes it */
+  function currentAcademicYear() {
+    const y = new Date().getFullYear();
+    return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+  }
   function academicYearOptions(sel) {
     const list = academicYearList();
     const current = sel || list.find(v => v.startsWith(String(new Date().getFullYear()))) || list[0];
@@ -9678,6 +9696,15 @@
       prompt: 'New book category (e.g. Biotechnology):',
       used: () => Store.all('books').map(b => b.category)
         .concat(Store.all('requisitions').filter(r => r.type === 'Book').map(r => r.category)),
+    },
+    /* The branch a student is admitted into. Held apart from `branch`, which
+       is the programme, and from the specialisation, which is the stream taken
+       inside it. Editable for the same reason as the rest. */
+    branchName: {
+      setting: 'branchNameList',
+      defaults: ['General Management', 'Logistics and Supply Chain Management', 'Retail Management'],
+      prompt: 'New branch (e.g. Business Analytics):',
+      used: () => Store.all('students').map(s => s.branchName),
     },
     /* The stream a student takes inside the MBA — Marketing, Finance, HR and
        the rest. Editable, because no two institutes run the same set. */
