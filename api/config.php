@@ -129,6 +129,13 @@ const COLLECTIONS = [
        built-in role a custom one takes its menu shape and its ceiling from. */
     'roles'      => ['id', 'key', 'label', 'base', 'builtin', 'status', 'description',
                      'permissions'],
+    /* What the public form collects, waiting for somebody to look at it. A
+       separate table on purpose: nothing arriving from outside sits in
+       `students` until it has been approved. `data` holds the whole form as
+       submitted, so what the office reviews is what the student typed. */
+    'submissions' => ['id', 'roll', 'name', 'email', 'phone', 'course', 'branchName',
+                      'semester', 'status', 'submittedAt', 'reviewedAt', 'reviewedBy',
+                      'reviewNote', 'kind', 'data'],
     /* Who changed whose access, and what it was before. Append-only: nothing in
        the app updates or deletes a row, because a log that can be edited is not
        one. `changes` holds one entry per module that moved. */
@@ -260,6 +267,7 @@ const JSON_FIELDS = [
        objects and the database keeps one column per tab. */
     'users'      => ['permissions'],
     'roles'      => ['permissions'],
+    'submissions' => ['data'],
     'auditlog'   => ['changes'],
     'students'   => ['personal', 'academicInfo', 'guardians', 'addressInfo',
                      'health', 'documents'],
@@ -306,6 +314,7 @@ const ID_PREFIX = [
     'companies' => 'CO', 'drives' => 'DR', 'applications' => 'AP',
     'interviews' => 'IV', 'offers' => 'OF', 'placementevents' => 'PE',
     'syllabus' => 'SY',
+    'roles' => 'RL', 'auditlog' => 'LOG', 'submissions' => 'SUB',
 ];
 
 /**
@@ -331,7 +340,16 @@ const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
 
 /* Requests that may arrive without a token, because they are how one is
    obtained or are deliberately public. Everything else is refused. */
-const OPEN_ENDPOINTS = ['login', 'health'];
+/* `apply` is the public form's endpoint and the only write in the API that
+   answers without a token. It writes to `submissions` and nowhere else. */
+const OPEN_ENDPOINTS = ['login', 'health', 'apply'];
+
+/* The public form's ceiling. Two hundred students filling it in together are
+   two hundred people behind one college WiFi address, so a limit tight enough
+   to stop a script would stop them first. This is set far above any crowd and
+   only catches a machine; the honeypot and the review queue do the real work. */
+const APPLY_MAX_PER_HOUR = 400;
+const APPLY_MAX_PENDING  = 2000;
 
 /* ---------------- how many wrong passwords before waiting ----------------
    Counted over the window, forgotten once it passes. The address limit is the
@@ -392,8 +410,8 @@ const ROLE_CARVE_OUTS = [
    checked here, not only hidden in the menu. */
 const MODULES = [
     'students'    => ['label' => 'Students',
-                      'views' => ['students', 'stuprofile', 'batchsem'],
-                      'write' => ['students', 'users']],
+                      'views' => ['students', 'stuprofile', 'batchsem', 'submissions'],
+                      'write' => ['students', 'users', 'submissions']],
     'staff'       => ['label' => 'Faculty & Staff',
                       'views' => ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                       'write' => ['faculty', 'accountants', 'centerheads', 'placementofficers',

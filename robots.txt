@@ -3,6 +3,8 @@
 User-agent: *
 Allow: /$
 Disallow: /api/
+# the registration form is handed out by the office, not found by searching
+Disallow: /form.html
 Disallow: /apk/
 Disallow: /tools/
 

@@ -367,7 +367,8 @@
   const MENU = {
     admin: [
       ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['students','🎓','Students'],
-      ['batchsem','🎯','Semester Update'], ['faculty','🧑‍💼','Employees'],
+      ['batchsem','🎯','Semester Update'], ['submissions','📝','Admission Forms'],
+      ['faculty','🧑‍💼','Employees'],
       ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
       ['assignments','🗂️','Assignments'], ['attendance','✅','Attendance'],
       ['attrecords','🗂️','Attendance Records'],
@@ -443,6 +444,7 @@
        scheme are there because an admission has to be put on one. */
     admission: [
       ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
+      ['submissions','📝','Admission Forms'],
       ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
       ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
     ],
@@ -451,7 +453,8 @@
     course_coordinator: [
       ['dashboard','📊','Dashboard'], ['attendance','✅','Attendance'],
       ['attrecords','🗂️','Attendance Records'],
-      ['students','🎓','Students'], ['courses','📚','Courses'],
+      ['students','🎓','Students'], ['submissions','📝','Admission Forms'],
+      ['courses','📚','Courses'],
       ['syllabus','🧾','Subjects by Semester'], ['timetable','🗓️','Timetable'],
       ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
     ],
@@ -818,6 +821,7 @@
   const TITLES = {
     dashboard:'Dashboard', students:'All Students', stuprofile:'Student Profile',
     usersettings:'User Management', roles:'Roles & Permissions',
+    submissions:'Admission Forms',
     faculty:'Employees', facprofile:'Employee Profile', courses:'Courses',
     attendance:'Attendance', attrecords:'Attendance Records', marks:'Marks & Results', timetable:'Timetable', fees:'Fees Management',
     assignments:'Class Assignments', library:'Library Management', mybooks:'My Library',
@@ -917,7 +921,7 @@
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
       placementofficers: viewPlacementOfficers,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
-      usersettings: viewUserSettings, roles: viewRoles,
+      usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     const home = $('#adHome'); if (home) home.onclick = () => navigate('dashboard');
@@ -12150,6 +12154,308 @@
 
   /** the account is switched on unless somebody deliberately switched it off */
   function userActive(u) { return String((u && u.status) || 'Active') !== 'Inactive'; }
+
+  /* =========================================================
+     ADMISSION FORMS — what the public link collected, before it is admitted.
+
+     Nothing here writes to `students` until somebody presses Approve. A
+     registration number already on the roll is an update rather than a second
+     record, which is what lets one link serve both a new admission and an
+     existing student filling in what was missing.
+     ========================================================= */
+
+  /** where the public form lives, worked out from wherever the app is served */
+  function admissionFormUrl() {
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    return base + 'form.html';
+  }
+
+  const SUB_STATUS_PILL = { Pending: 'amber', Approved: 'green', Rejected: 'red' };
+
+  function subData(r) {
+    const raw = r && r.data;
+    if (typeof raw === 'string') { try { return JSON.parse(raw) || {}; } catch (e) { return {}; } }
+    return (raw && typeof raw === 'object') ? raw : {};
+  }
+
+  function viewSubmissions() {
+    const canEdit = !readOnly();
+    const html = `<div class="panel"><div class="panel-head"><h3>Admission Forms</h3>
+      <div class="panel-tools">
+        <input class="search-box" id="sbQ" placeholder="Search name / reg no / phone...">
+        <select class="filter-sel" id="sbStatus">
+          <option value="Pending">Pending</option>
+          <option value="">All</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+        <button class="btn-outline btn-sm" id="sbLink">🔗 Form Link</button>
+      </div></div>
+      <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
+        Students fill the public form themselves; nothing here touches the roll until you approve it.
+        A form sent with a registration number already on the roll updates that student instead of
+        creating a second one — the <b>Type</b> column says which.</p>
+      <div id="sbStats" class="stat-grid" style="margin:0 0 16px"></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Reg No</th><th>Name</th><th>Type</th><th>Course</th><th>Phone</th>
+        <th>Submitted</th><th>Status</th><th>Actions</th>
+      </tr></thead><tbody id="sbBody"></tbody></table></div><div id="sbPager"></div></div>`;
+
+    viewSubmissions.after = () => {
+      let page = 1;
+      const when = (iso) => { try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso || '—'; } };
+      const rowsFor = () => {
+        const q = ($('#sbQ').value || '').trim().toLowerCase();
+        const st = $('#sbStatus').value;
+        return Store.all('submissions').filter(r =>
+          (!st || String(r.status || 'Pending') === st) &&
+          (!q || [r.roll, r.name, r.phone, r.email].some(v => String(v || '').toLowerCase().includes(q))))
+          .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+      };
+      const draw = () => {
+        const all = Store.all('submissions');
+        $('#sbStats').innerHTML = `${statCard('📝', all.filter(r => (r.status || 'Pending') === 'Pending').length,
+            'Waiting for review', all.some(r => (r.status || 'Pending') === 'Pending') ? 'c4' : 'c3')}
+          ${statCard('✅', all.filter(r => r.status === 'Approved').length, 'Approved', 'c2')}
+          ${statCard('🚫', all.filter(r => r.status === 'Rejected').length, 'Rejected', 'c3')}
+          ${statCard('🔗', all.length, 'Received in total')}`;
+        const rows = rowsFor();
+        page = Math.min(page, pageCount(rows.length));
+        $('#sbBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => {
+          const st = r.status || 'Pending';
+          return `<tr>
+            <td class="mono">${esc(r.roll || '—')}</td>
+            <td>${esc(r.name || '—')}${r.email ? `<br><small style="color:var(--muted)">${esc(r.email)}</small>` : ''}</td>
+            <td><span class="pill ${r.kind === 'update' ? 'blue' : 'green'}">${
+              r.kind === 'update' ? 'Existing student' : 'New admission'}</span></td>
+            <td>${esc(r.course || '—')}${r.branchName ? `<br><small style="color:var(--muted)">${esc(r.branchName)}</small>` : ''}</td>
+            <td>${esc(r.phone || '—')}</td>
+            <td style="white-space:nowrap;font-size:12.5px">${esc(when(r.submittedAt))}</td>
+            <td><span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span></td>
+            <td><div class="row-actions">
+              <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
+              ${canEdit && st === 'Pending' ? `<button class="btn-sm btn-edit" data-ok="${r.id}">✓ Approve</button>
+              <button class="btn-sm btn-del" data-no="${r.id}">Reject</button>` : ''}
+            </div></td></tr>`;
+        }).join('') : `<tr><td colspan="8" class="empty">No forms ${
+          $('#sbStatus').value === 'Pending' ? 'waiting for review' : 'found'}.</td></tr>`;
+
+        $('#sbBody').querySelectorAll('[data-view]').forEach(b =>
+          b.onclick = () => submissionModal(b.dataset.view, draw));
+        $('#sbBody').querySelectorAll('[data-ok]').forEach(b =>
+          b.onclick = () => approveSubmission(b.dataset.ok, draw));
+        $('#sbBody').querySelectorAll('[data-no]').forEach(b =>
+          b.onclick = () => rejectSubmission(b.dataset.no, draw));
+        $('#sbPager').innerHTML = pagerHtml(rows.length, page);
+        bindPager($('#sbPager'), rows.length, page, (p) => page = p, draw);
+      };
+      $('#sbQ').oninput = () => { page = 1; draw(); };
+      $('#sbStatus').onchange = () => { page = 1; draw(); };
+      $('#sbLink').onclick = () => formLinkModal();
+      draw();
+    };
+    return html;
+  }
+
+  /* The link, ready to hand out. Shown rather than sent, because who it goes to
+     — a WhatsApp group, a notice board, an email — is the office's business. */
+  function formLinkModal() {
+    const url = admissionFormUrl();
+    openModal('Student Registration Form', `
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.7">
+        Share this with students. Anyone who opens it can fill it in — nothing they submit
+        reaches the roll until it is approved on this page.</p>
+      <div class="field"><label>Link</label>
+        <input id="flUrl" value="${esc(url)}" readonly onclick="this.select()"></div>
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="flOpen">Open it</button>
+        <button type="button" class="btn-primary" id="flCopy">Copy link</button>
+        <button type="button" class="btn-outline" id="cx">Close</button>
+      </div>`, true);
+    $('#cx').onclick = closeModal;
+    $('#flOpen').onclick = () => window.open(url, '_blank', 'noopener');
+    $('#flCopy').onclick = () => {
+      const box = $('#flUrl');
+      box.select();
+      const done = () => toast('Link copied.');
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => {
+        document.execCommand('copy'); done();
+      });
+      else { document.execCommand('copy'); done(); }
+    };
+  }
+
+  /** everything the student typed, laid out the way the profile lays it out */
+  function submissionModal(id, after) {
+    const r = Store.find('submissions', id); if (!r) return;
+    const d = subData(r);
+    const st = r.status || 'Pending';
+    const block = (title, pairs) => {
+      const rows = pairs.filter(([, v]) => String(v || '').trim())
+        .map(([k, v]) => infoRow(k, esc(v))).join('');
+      return rows ? `<h4 class="ro-sub">${esc(title)}</h4>
+        <div class="tbl-wrap"><table class="info-tbl"><tbody>${rows}</tbody></table></div>` : '';
+    };
+    openModal('Form — ' + (r.name || r.roll), `
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px">
+        <span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span>
+        <span class="pill ${r.kind === 'update' ? 'blue' : 'green'}">${
+          r.kind === 'update' ? 'Existing student' : 'New admission'}</span>
+        &nbsp;Submitted ${esc((() => { try { return new Date(r.submittedAt).toLocaleString('en-IN'); }
+          catch (e) { return r.submittedAt || '—'; } })())}
+        ${r.reviewedBy ? ` · reviewed by ${esc(r.reviewedBy)}` : ''}</p>
+      ${r.reviewNote ? `<p style="font-size:13px;color:var(--red);margin:0 0 12px">${esc(r.reviewNote)}</p>` : ''}
+      ${block('Basic', [['Registration Number', d.roll], ['Title', d.title],
+        ['First Name', d.firstName], ['Middle Name', d.middleName], ['Last Name', d.lastName],
+        ['Mobile', d.phone], ['WhatsApp', d.whatsapp], ['Email', d.email]])}
+      ${block('Course', [['Course', d.course], ['Branch', d.branchName],
+        ['Specialisation', d.specialisation], ['Semester', d.semester], ['Section', d.section],
+        ['Batch', d.batch], ['Date of Admission', d.admissionDate]])}
+      ${block('Personal', [['Date of Birth', d.dob], ['Gender', d.gender],
+        ['Blood Group', d.bloodGroup], ['Category', d.admissionCategory], ['Aadhaar', d.aadhaar],
+        ['Religion', d.religion], ['Nationality', d.nationality], ['Birth Place', d.birthplace]])}
+      ${block('Parents', [["Father's Name", d.fatherName], ["Father's Occupation", d.fatherOccupation],
+        ["Father's Mobile", d.fatherMobile], ["Mother's Name", d.motherName],
+        ["Mother's Occupation", d.motherOccupation], ["Mother's Mobile", d.motherMobile]])}
+      ${block('Address', [['Present Address', d.address], ['City', d.city], ['State', d.state],
+        ['Country', d.country], ['Pincode', d.pincode], ['Permanent Address', d.permAddress],
+        ['Permanent City', d.permCity], ['Permanent State', d.permState],
+        ['Permanent Pincode', d.permPincode]])}
+      ${block('Previous Education', [['10th School', d.q10Institute], ['10th Year', d.q10Year],
+        ['10th %', d.q10Marks], ['12th / Diploma Institute', d.q12Institute],
+        ['12th / Diploma Year', d.q12Year], ['12th / Diploma %', d.q12Marks]])}
+      ${block('Emergency Contact', [['Name', d.emergencyName], ['Mobile', d.emergencyPhone]])}
+      <div class="form-actions">
+        ${st === 'Pending' && !readOnly() ? `<button type="button" class="btn-del" id="smNo">Reject</button>
+        <button type="button" class="btn-primary" id="smOk">✓ Approve</button>` : ''}
+        <button type="button" class="btn-outline" id="cx">Close</button>
+      </div>`, true);
+    $('#cx').onclick = closeModal;
+    const ok = $('#smOk'), no = $('#smNo');
+    if (ok) ok.onclick = () => { closeModal(); approveSubmission(id, after); };
+    if (no) no.onclick = () => { closeModal(); rejectSubmission(id, after); };
+  }
+
+  /* Built field by field, in the shape the admission form writes — never by
+     spreading the submission over the record. A form that one day grows a field
+     nobody approved would otherwise be writing straight into the roll. */
+  function studentFromSubmission(d) {
+    const name = [d.firstName, d.middleName, d.lastName]
+      .map(x => (x || '').trim()).filter(Boolean).join(' ');
+    const semester = +(d.semester || 1) || 1;
+    const out = {
+      roll: d.roll, name,
+      firstName: d.firstName || '', middleName: d.middleName || '', lastName: d.lastName || '',
+      email: d.email || '', phone: d.phone || '', whatsapp: d.whatsapp || '',
+      course: d.course || '', branch: d.course || '', branchName: d.branchName || '',
+      specialisation: d.specialisation || '', specialisation2: d.specialisation2 || '',
+      semester, year: yearForSemester(semester),
+      section: d.section || 'A', batch: d.batch || '',
+      admissionDate: d.admissionDate || '',
+      academicYear: academicYearOf(d.admissionDate),
+      dob: d.dob || '', gender: d.gender || '', bloodGroup: d.bloodGroup || '',
+      aadhaar: d.aadhaar || '', status: 'Active',
+      personal: {
+        title: d.title || '', admissionCategory: d.admissionCategory || '',
+        religion: d.religion || '', nationality: d.nationality || '',
+        birthplace: d.birthplace || '', languages: d.languages || '', hobbies: d.hobbies || '',
+      },
+      guardians: [
+        { relation: 'Father', name: d.fatherName || '', occupation: d.fatherOccupation || '',
+          mobile: d.fatherMobile || '' },
+        { relation: 'Mother', name: d.motherName || '', occupation: d.motherOccupation || '',
+          mobile: d.motherMobile || '' },
+      ].filter(g => g.name || g.mobile),
+      addressInfo: {
+        current: { address: d.address || '', city: d.city || '', state: d.state || '',
+                   country: d.country || 'India', pincode: d.pincode || '' },
+        permanent: { address: d.permAddress || '', city: d.permCity || '',
+                     state: d.permState || '', country: d.country || 'India',
+                     pincode: d.permPincode || '' },
+      },
+      academicInfo: {
+        qualifications: [
+          { level: '10th', institute: d.q10Institute || '', year: d.q10Year || '', marks: d.q10Marks || '' },
+          { level: '12th', institute: d.q12Institute || '', year: d.q12Year || '', marks: d.q12Marks || '' },
+        ].filter(q => q.institute || q.year || q.marks),
+      },
+      health: { emergencyName: d.emergencyName || '', emergencyPhone: d.emergencyPhone || '' },
+    };
+    return out;
+  }
+
+  /* An update fills in blanks and corrects what was sent; it does not blank out
+     what the office has already recorded. A student who leaves a box empty on
+     the form should not wipe the value somebody typed in for them. */
+  function mergeIntoStudent(existing, incoming) {
+    const out = {};
+    Object.keys(incoming).forEach(k => {
+      const v = incoming[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const was = stuPart(existing, k) || {};
+        const merged = Object.assign({}, was);
+        Object.keys(v).forEach(kk => {
+          const vv = v[kk];
+          if (vv && typeof vv === 'object') { merged[kk] = Object.assign({}, was[kk] || {}, vv); }
+          else if (String(vv || '').trim()) merged[kk] = vv;
+        });
+        out[k] = merged;
+        return;
+      }
+      if (Array.isArray(v)) { if (v.length) out[k] = v; return; }
+      if (String(v ?? '').trim()) out[k] = v;
+    });
+    return out;
+  }
+
+  function approveSubmission(id, after) {
+    const r = Store.find('submissions', id); if (!r) return;
+    const d = subData(r);
+    const roll = String(d.roll || r.roll || '').trim();
+    const existing = Store.all('students').find(s =>
+      String(s.roll || '').toLowerCase() === roll.toLowerCase());
+    const built = studentFromSubmission(d);
+
+    confirmAction(existing ? 'Update Student' : 'Admit Student',
+      existing
+        ? `<b>${esc(roll)}</b> is already on the roll as <b>${esc(existing.name || '—')}</b>.
+           Their record will be updated with what was submitted — anything left blank on the form
+           is left as it is.`
+        : `Admit <b>${esc(built.name || roll)}</b> (<b>${esc(roll)}</b>) as a student?
+           A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.`,
+      existing ? 'Update Student' : 'Admit Student', () => {
+        if (existing) {
+          Store.update('students', existing.id, mergeIntoStudent(existing, built));
+        } else {
+          const clash = regNoDuplicate(roll, null);
+          if (clash) { toast(clash, 'err'); return; }
+          const stu = Store.add('students', built);
+          if (stu) ensureStudentLogin(stu);
+        }
+        Store.update('submissions', id, {
+          status: 'Approved', reviewedAt: new Date().toISOString(),
+          reviewedBy: displayName(user), reviewNote: '',
+        });
+        toast(existing ? 'Student updated from the form.' : 'Student admitted.');
+        if (after) after(); else render();
+      });
+  }
+
+  function rejectSubmission(id, after) {
+    const r = Store.find('submissions', id); if (!r) return;
+    confirmAction('Reject Form',
+      `Reject the form from <b>${esc(r.name || r.roll)}</b>? Nothing is written to the roll.
+       The row is kept so there is a record of what was sent.`,
+      'Reject', () => {
+        Store.update('submissions', id, {
+          status: 'Rejected', reviewedAt: new Date().toISOString(),
+          reviewedBy: displayName(user),
+          reviewNote: 'Rejected on review.',
+        });
+        toast('Form rejected.', 'err');
+        if (after) after(); else render();
+      });
+  }
 
   function viewUserSettings() {
     if (user.role !== 'admin') return accessDenied();

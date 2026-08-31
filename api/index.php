@@ -791,6 +791,149 @@ function segments(): array
 }
 
 // ---------------------------------------------------------------- handlers
+/* ---------------- the public admission form ----------------
+   Everything the form may set. A field not on this list is dropped, so the
+   shape of what lands in the queue is decided here and not by the caller. */
+const APPLY_FIELDS = [
+    'roll', 'title', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'whatsapp',
+    'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
+    'batch', 'admissionDate', 'dob', 'gender', 'bloodGroup', 'aadhaar',
+    'admissionCategory', 'religion', 'nationality', 'birthplace', 'languages', 'hobbies',
+    'fatherName', 'fatherOccupation', 'fatherMobile',
+    'motherName', 'motherOccupation', 'motherMobile',
+    'address', 'city', 'state', 'country', 'pincode',
+    'permAddress', 'permCity', 'permState', 'permPincode',
+    'q10Institute', 'q10Year', 'q10Marks',
+    'q12Institute', 'q12Year', 'q12Marks',
+    'emergencyName', 'emergencyPhone',
+];
+
+/** trimmed, length-capped, and never trusted to be a string in the first place */
+function apply_clean($v, int $max = 255): string
+{
+    if (is_array($v) || is_object($v)) {
+        return '';
+    }
+    $s = trim((string) $v);
+    // control characters have no business in a name or an address
+    $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $s);
+    return function_exists('mb_substr') ? mb_substr($s, 0, $max) : substr($s, 0, $max);
+}
+
+/**
+ * A student filling in the public form. No token, so everything about the row
+ * that matters — its status, its timestamps, which table it lands in — is
+ * decided here.
+ */
+function api_apply(): void
+{
+    $d = body();
+
+    /* A field no human sees and no human fills. A script that posts every input
+       it finds fills it, and says so. Answered with 201 rather than an error,
+       because telling a bot it was caught is telling it what to change. */
+    if (apply_clean($d['website'] ?? '') !== '') {
+        send_json(['ok' => true], 201);
+    }
+
+    $roll = apply_clean($d['roll'] ?? '', 40);
+    $first = apply_clean($d['firstName'] ?? '', 80);
+    $phone = preg_replace('/\D/', '', apply_clean($d['phone'] ?? '', 20));
+    if ($roll === '' || $first === '') {
+        send_json(['error' => 'incomplete',
+                   'message' => 'Registration number and first name are required.'], 422);
+    }
+    if (strlen($phone) !== 10) {
+        send_json(['error' => 'bad-phone',
+                   'message' => 'Mobile number must be exactly 10 digits.'], 422);
+    }
+    $email = apply_clean($d['email'] ?? '', 120);
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        send_json(['error' => 'bad-email', 'message' => 'That email address does not look right.'], 422);
+    }
+
+    attempts_table();
+    $now = time();
+
+    /* A machine, not a crowd. Set high enough that a hall full of students
+       filling this in at once never reaches it. */
+    $key = 'apply:' . client_ip();
+    $row = fetch_one('SELECT * FROM ' . qi('_login_attempts') . ' WHERE ' . qi('k') . ' = ?', [$key]);
+    $count = ($row && $now - (int) ($row['first_at'] ?? 0) < 3600) ? (int) ($row['fails'] ?? 0) : 0;
+    if ($count >= APPLY_MAX_PER_HOUR) {
+        send_json(['error' => 'too-many',
+                   'message' => 'Too many submissions from this connection. Please try again later.'], 429);
+    }
+
+    // and a ceiling on the queue itself, so it cannot be filled up indefinitely
+    $pending = (int) (fetch_one('SELECT COUNT(*) AS c FROM ' . qi('submissions')
+        . ' WHERE ' . qi('status') . " = 'Pending'")['c'] ?? 0);
+    if ($pending >= APPLY_MAX_PENDING) {
+        send_json(['error' => 'queue-full',
+                   'message' => 'The form is not accepting entries right now. Please contact the office.'], 503);
+    }
+
+    $data = [];
+    foreach (APPLY_FIELDS as $f) {
+        $v = apply_clean($d[$f] ?? '', $f === 'address' || $f === 'permAddress' ? 500 : 255);
+        if ($v !== '') {
+            $data[$f] = $v;
+        }
+    }
+    $data['roll'] = $roll;
+    $data['phone'] = $phone;
+
+    $name = trim(implode(' ', array_filter([
+        apply_clean($d['firstName'] ?? '', 80),
+        apply_clean($d['middleName'] ?? '', 80),
+        apply_clean($d['lastName'] ?? '', 80),
+    ])));
+
+    /* Whether this registration number is already on the roll. Recorded now so
+       the office sees at a glance which rows are new admissions and which are
+       existing students filling in what was missing. */
+    $existing = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
+        . ' WHERE LOWER(' . qi('roll') . ') = LOWER(?)', [$roll]);
+
+    /* Filling it in twice replaces the first attempt rather than queuing two.
+       Only while it is still pending: a row already dealt with is history. */
+    $prior = fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE LOWER(' . qi('roll')
+        . ') = LOWER(?) AND ' . qi('status') . " = 'Pending'", [$roll]);
+
+    $out = [
+        'id'          => $prior ? $prior['id'] : next_id('submissions'),
+        'roll'        => $roll,
+        'name'        => $name !== '' ? $name : $roll,
+        'email'       => $email,
+        'phone'       => $phone,
+        'course'      => $data['course'] ?? '',
+        'branchName'  => $data['branchName'] ?? '',
+        'semester'    => $data['semester'] ?? '',
+        'status'      => 'Pending',
+        'submittedAt' => date('c'),
+        'reviewedAt'  => '',
+        'reviewedBy'  => '',
+        'reviewNote'  => '',
+        'kind'        => $existing ? 'update' : 'new',
+        'data'        => $data,
+    ];
+    upsert('submissions', $out);
+
+    // counted after the write, so a rejected submission does not count against them
+    if ($row) {
+        run_sql('UPDATE ' . qi('_login_attempts') . ' SET ' . qi('fails') . ' = ?, '
+            . qi('first_at') . ' = ? WHERE ' . qi('k') . ' = ?',
+            [$count + 1, $count === 0 ? $now : (int) ($row['first_at'] ?? $now), $key]);
+    } else {
+        run_sql('INSERT INTO ' . qi('_login_attempts') . ' (' . qi('k') . ', ' . qi('fails')
+            . ', ' . qi('first_at') . ', ' . qi('locked_until') . ') VALUES (?, ?, ?, 0)',
+            [$key, 1, $now]);
+    }
+
+    // deliberately says nothing about what is on the roll already
+    send_json(['ok' => true, 'reference' => $out['id']], 201);
+}
+
 function api_bootstrap(): void
 {
     $finance = may_read_finance();
@@ -1224,6 +1367,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'login') {
         api_login();
+    }
+    if ($method === 'POST' && $resource === 'apply') {
+        api_apply();
     }
     if ($method === 'POST' && $resource === 'logout') {
         api_logout();
