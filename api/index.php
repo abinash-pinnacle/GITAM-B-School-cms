@@ -791,6 +791,182 @@ function segments(): array
 }
 
 // ---------------------------------------------------------------- handlers
+/* ---------------- student ids ----------------
+   Issued here rather than in the browser, because two people pressing Save at
+   the same moment is exactly the case a browser cannot get right. */
+
+/** the counter table, created on demand — not a COLLECTIONS entry, so not a route */
+function seq_table(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    db()->exec('CREATE TABLE IF NOT EXISTS ' . qi('_id_seq') . ' (' . qi('k') . " $kType PRIMARY KEY, "
+        . qi('n') . " $iType)");
+}
+
+/** the branch code map: the setting if there is one, the built-in list otherwise */
+function branch_code_map(): array
+{
+    static $map = null;
+    if ($map !== null) {
+        return $map;
+    }
+    $map = BRANCH_CODES;
+    /* Stored as "Branch Name=01,Other Branch=02" — one line the office can edit
+       rather than a table nobody would find. */
+    $raw = trim(setting_value('branchCodes', ''));
+    if ($raw !== '') {
+        $parsed = [];
+        foreach (explode(',', $raw) as $pair) {
+            $bits = explode('=', $pair, 2);
+            if (count($bits) === 2 && trim($bits[0]) !== '') {
+                $parsed[trim($bits[0])] = trim($bits[1]);
+            }
+        }
+        if ($parsed) {
+            $map = $parsed;
+        }
+    }
+    return $map;
+}
+
+/** the two digits that stand for this branch, matched without regard to case */
+function branch_code(string $branch): string
+{
+    $want = strtolower(trim($branch));
+    if ($want === '') {
+        return BRANCH_CODE_FALLBACK;
+    }
+    foreach (branch_code_map() as $name => $code) {
+        if (strtolower(trim((string) $name)) === $want) {
+            return (string) $code;
+        }
+    }
+    return BRANCH_CODE_FALLBACK;
+}
+
+/** the last two digits of an admission year, from a year or a date */
+function admission_yy(string $value): string
+{
+    if (preg_match('/(\d{4})/', $value, $m)) {
+        return substr($m[1], -2);
+    }
+    if (preg_match('/^\d{2}$/', trim($value))) {
+        return trim($value);
+    }
+    return date('y');
+}
+
+/**
+ * Where the counter starts when there is no row for a year yet.
+ *
+ * Not zero, but the highest number already issued for that year. A database
+ * restored from a backup, or one where the counter table was lost while the
+ * students were not, would otherwise start again at 01 and hand out numbers
+ * somebody already has. The counter is the mechanism; this is what makes it
+ * safe to lose.
+ *
+ * Only ids of this scheme are read: four digits of year and branch, then the
+ * number. A ten-digit id from the old scheme is a different shape and is left
+ * alone, and anything absurd is ignored rather than trusted.
+ */
+function seed_student_seq(string $yy): int
+{
+    $rows = fetch_all('SELECT ' . qi('roll') . ' AS roll FROM ' . qi('students')
+        . ' WHERE ' . qi('roll') . ' LIKE ?', [$yy . '%']);
+    $max = 0;
+    foreach ($rows as $r) {
+        $roll = trim((string) ($r['roll'] ?? ''));
+        $len = strlen($roll);
+        if (!ctype_digit($roll) || $len < 4 + STUDENT_SEQ_WIDTH || $len > 8) {
+            continue;
+        }
+        $n = (int) substr($roll, 4);
+        if ($n > $max && $n <= 99999) {
+            $max = $n;
+        }
+    }
+    return $max;
+}
+
+/**
+ * The next number for this year, without taking it. For the preview on the
+ * form — it says what would be issued, and the real one is taken on save.
+ */
+function peek_student_seq(string $yy): int
+{
+    seq_table();
+    $row = fetch_one('SELECT ' . qi('n') . ' AS n FROM ' . qi('_id_seq') . ' WHERE ' . qi('k') . ' = ?',
+        ['student:' . $yy]);
+    return ($row === null ? seed_student_seq($yy) : (int) ($row['n'] ?? 0)) + 1;
+}
+
+/**
+ * Take the next number. The UPDATE holds the row for the length of the
+ * transaction, so a second request arriving at the same moment waits for this
+ * one to commit and then reads the number after it — rather than both reading
+ * the same value and both believing it is theirs.
+ */
+function take_student_seq(string $yy): int
+{
+    seq_table();
+    $key = 'student:' . $yy;
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        $bump = db()->prepare('UPDATE ' . qi('_id_seq') . ' SET ' . qi('n') . ' = ' . qi('n')
+            . ' + 1 WHERE ' . qi('k') . ' = ?');
+        $bump->execute([$key]);
+        if ($bump->rowCount() === 0) {
+            // first of the year; a racing insert loses and is retried as an update
+            try {
+                // starts above whatever this year already holds, not at one
+                run_sql('INSERT INTO ' . qi('_id_seq') . ' (' . qi('k') . ', ' . qi('n')
+                    . ') VALUES (?, ?)', [$key, seed_student_seq($yy) + 1]);
+            } catch (PDOException $e) {
+                run_sql('UPDATE ' . qi('_id_seq') . ' SET ' . qi('n') . ' = ' . qi('n')
+                    . ' + 1 WHERE ' . qi('k') . ' = ?', [$key]);
+            }
+        }
+        $row = fetch_one('SELECT ' . qi('n') . ' AS n FROM ' . qi('_id_seq') . ' WHERE ' . qi('k') . ' = ?',
+            [$key]);
+        $n = (int) ($row['n'] ?? 1);
+        if ($own) {
+            db()->commit();
+        }
+        return $n;
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/** YY + branch code + running number, e.g. 250101 */
+function format_student_id(string $yy, string $branch, int $seq): string
+{
+    return $yy . branch_code($branch) . str_pad((string) $seq, STUDENT_SEQ_WIDTH, '0', STR_PAD_LEFT);
+}
+
+/**
+ * The id this student gets. `admissionDate` is the year the number belongs to;
+ * `academicYear` stands in when the date was left blank, and the clock when
+ * neither was given.
+ */
+function issue_student_id(array $row): string
+{
+    $yy = admission_yy((string) ($row['admissionDate'] ?? ($row['academicYear'] ?? '')));
+    return format_student_id($yy, (string) ($row['branchName'] ?? ''), take_student_seq($yy));
+}
+
 /* ---------------- the public admission form ----------------
    Everything the form may set. A field not on this list is dropped, so the
    shape of what lands in the queue is decided here and not by the caller. */
@@ -1335,6 +1511,11 @@ function api_create(string $col): void
                 if (empty($row['id'])) {
                     $row['id'] = next_id($col);
                 }
+                // a sheet that leaves the number blank gets one issued, in the
+                // order the rows arrive
+                if ($col === 'students' && trim((string) ($row['roll'] ?? '')) === '') {
+                    $row['roll'] = issue_student_id($row);
+                }
                 $row = hash_row_password($col, $row);
                 upsert($col, $row);
                 $rows[] = $row;
@@ -1353,6 +1534,12 @@ function api_create(string $col): void
     }
     if (empty($d['id'])) {
         $d['id'] = next_id($col);
+    }
+    /* The browser sends a preview and the server decides. Two people saving at
+       the same moment would otherwise be handed the same preview and both
+       believe it. */
+    if ($col === 'students' && trim((string) ($d['roll'] ?? '')) === '') {
+        $d['roll'] = issue_student_id($d);
     }
     $d = hash_row_password($col, $d);
     upsert($col, $d);
@@ -1423,6 +1610,15 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'apply') {
         api_apply();
+    }
+    /* What the next id would be, without taking it. Signed in only — it says
+       how many students the college has admitted this year. */
+    if ($method === 'GET' && $resource === 'next-student-id') {
+        $yy = admission_yy((string) ($_GET['year'] ?? ''));
+        send_json([
+            'id'   => format_student_id($yy, (string) ($_GET['branch'] ?? ''), peek_student_seq($yy)),
+            'next' => peek_student_seq($yy),
+        ]);
     }
     if ($method === 'POST' && $resource === 'logout') {
         api_logout();

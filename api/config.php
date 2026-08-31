@@ -304,6 +304,22 @@ const INT_FIELDS = ['year', 'semester', 'credits', 'internal', 'external', 'tota
                     'amount', 'quantity', 'purchaseCost', 'currentValue', 'estimatedCost',
                     'backlogs', 'openings', 'maxBacklogs', 'round'];
 
+/* ---------------- student ids ----------------
+   YY + branch code + running number, e.g. 250101. What an install starts with;
+   the live map is a `branchCodes` setting, so a branch added next year needs a
+   line in that setting and not a deploy. */
+const BRANCH_CODES = [
+    'General Management'                     => '01',
+    'Logistics and Supply Chain Management'  => '02',
+    'Retail Management'                      => '03',
+];
+/** a branch nobody has given a code to, so the id is still well-formed */
+const BRANCH_CODE_FALLBACK = '00';
+/* Two digits, as specified — 01 through 99. Past that the number widens rather
+   than wrapping, because a hundredth admission has to be given something and
+   an id that collides is worse than one that is a digit longer. */
+const STUDENT_SEQ_WIDTH = 2;
+
 const ID_PREFIX = [
     'students' => 'S', 'faculty' => 'F', 'courses' => 'C', 'attendance' => 'A',
     'marks' => 'M', 'fees' => 'FE', 'timetable' => 'T', 'users' => 'u',

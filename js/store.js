@@ -145,6 +145,43 @@ const Store = {
     return obj;
   },
 
+  /* What the next student id would be, without taking it — for the preview on
+     the admission form. Resolves to null if the server cannot say, and the
+     caller shows a locally-formed guess instead. */
+  async nextStudentId(year, branch) {
+    try {
+      const res = await fetch(
+        `${API}/next-student-id?year=${encodeURIComponent(year)}&branch=${encodeURIComponent(branch || '')}`,
+        { headers: this._headers() });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  },
+
+  /* Like add(), but waits for the row the server actually wrote and keeps that
+     one in the cache. Needed wherever the server fills something in that the
+     browser could not know — a student id issued from a counter, for instance,
+     which cannot be worked out here without two people getting the same one.
+     Resolves to the stored row, or null if the server refused. */
+  async create(col, obj) {
+    if (this._blocked(col, 'add')) return null;
+    try {
+      const res = await fetch(`${API}/${col}`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify(obj),
+      });
+      if (!res.ok) { this._check(res); return null; }
+      const saved = await res.json().catch(() => null);
+      const row = (saved && saved.id) ? saved : Object.assign({ id: this._uid(col) }, obj);
+      this.data[col].push(row);
+      return row;
+    } catch (e) {
+      this._fail();
+      return null;
+    }
+  },
+
   // Bulk insert for spreadsheet imports. Ids are worked out here rather than
   // on the server: the server has to probe for a free id one query at a time,
   // which is fine for a single row and painfully slow for three hundred.
@@ -171,6 +208,13 @@ const Store = {
         if (res.status === 403) this._fail('Not permitted — your role cannot change this record.');
         return { error: (said && said.message)
           || (res.status === 403 ? 'Not permitted.' : 'Server refused the upload.') };
+      }
+      /* The server may have filled something in — a student id issued from a
+         counter — so the rows it wrote are copied back over the ones sent. It
+         answers in the order it was given, which is what makes the index safe. */
+      const written = await res.json().catch(() => null);
+      if (Array.isArray(written) && written.length === rows.length) {
+        written.forEach((w, i) => { if (w && typeof w === 'object') Object.assign(rows[i], w); });
       }
     } catch (e) {
       const ids = new Set(rows.map((r) => r.id));

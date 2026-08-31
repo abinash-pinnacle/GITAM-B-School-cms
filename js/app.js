@@ -2385,6 +2385,46 @@
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SEBC', 'SC', 'ST', 'EWS', 'TFW',
                                'Physically Handicapped', 'Management', 'NRI'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
+
+  /* ---------- student ids ----------
+     YY + branch code + a running number, issued by the server. These are only
+     for the preview on the form; the number that is kept is the one the server
+     hands back, because two people saving at once cannot both be right about
+     what comes next.
+
+     The map is a `branchCodes` setting so a branch added next year needs a line
+     there and not a deploy — the same list the API reads. */
+  const BRANCH_CODES = {
+    'General Management': '01',
+    'Logistics and Supply Chain Management': '02',
+    'Retail Management': '03',
+  };
+  const BRANCH_CODE_FALLBACK = '00';
+  function branchCodeMap() {
+    const row = settingRow('branchCodes');
+    const raw = String((row && row.value) || '').trim();
+    if (!raw) return BRANCH_CODES;
+    const out = {};
+    raw.split(',').forEach(pair => {
+      const at = pair.indexOf('=');
+      if (at === -1) return;
+      const k = pair.slice(0, at).trim(), v = pair.slice(at + 1).trim();
+      if (k) out[k] = v;
+    });
+    return Object.keys(out).length ? out : BRANCH_CODES;
+  }
+  function branchCode(branch) {
+    const want = String(branch || '').trim().toLowerCase();
+    if (!want) return BRANCH_CODE_FALLBACK;
+    const map = branchCodeMap();
+    const hit = Object.keys(map).find(k => k.trim().toLowerCase() === want);
+    return hit ? String(map[hit]) : BRANCH_CODE_FALLBACK;
+  }
+  /** the two digits of the admission year, from a date or a session */
+  function admissionYY(value) {
+    const m = String(value || '').match(/(\d{4})/);
+    return m ? m[1].slice(-2) : String(new Date().getFullYear()).slice(-2);
+  }
   /* A club is the specialisation's own society — Marketing has the Marketing
      Club — so the list is built from the specialisations rather than typed
      again and left to drift. */
@@ -2502,9 +2542,17 @@
 
       <div class="sf-pane" data-pane="basic">
         <div class="form-grid">
-          <div class="field"><label>Registration Number</label>
-            <input name="roll" id="rollInput" inputmode="numeric" maxlength="${regNoLength()}"
-                   placeholder="${regNoLength()} digits" value="${esc(s.roll || '')}" required></div>
+          <div class="field"><label>Student ID</label>
+            ${id
+              ? `<input name="roll" id="rollInput" value="${esc(s.roll || '')}" readonly>
+                 <small style="color:var(--muted);font-size:11.5px">Issued when this student was
+                   admitted and never changed.</small>`
+              /* No name, so nothing is submitted: the server issues the real one.
+                 Sending the previewed number back would let two people who
+                 opened the form together be given the same id. */
+              : `<input id="rollInput" value="—" readonly>
+                 <small style="color:var(--muted);font-size:11.5px">Generated from the admission
+                   year and branch when you save.</small>`}</div>
           ${fText('serialNo', 'Roll No.', s.serialNo)}
           ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
           <div class="field"><label>First Name</label>
@@ -2662,6 +2710,33 @@
         yearBox.value = want;
       });
     }
+    /* The preview follows the admission date and the branch. It asks the
+       server, because the running number is the server's to know — and falls
+       back to a locally-formed guess if the request fails, so the box is never
+       left saying nothing. */
+    if (!id) {
+      const rollBox = $('#rollInput');
+      const dateBox = document.querySelector('[name="admissionDate"]');
+      const branchBox = $('#stuFormBranch');
+      let seq = 0;
+      /* Changing the date and then the branch fires two requests, and the first
+         can answer second — which would paint the older question's answer over
+         the newer one. Only the latest ask is allowed to write the box. */
+      let asked = 0;
+      const refreshRoll = async () => {
+        const mine = ++asked;
+        const yy = admissionYY((dateBox && dateBox.value) || '');
+        const branch = (branchBox && branchBox.value) || '';
+        const j = await Store.nextStudentId(yy, branch);
+        if (mine !== asked) return;            // a later change has overtaken this
+        if (j && j.id) { rollBox.value = j.id; seq = j.next || 0; return; }
+        // the server could not say — show what the rule would produce
+        rollBox.value = yy + branchCode(branch) + String(seq || 1).padStart(2, '0');
+      };
+      if (dateBox) dateBox.addEventListener('change', refreshRoll);
+      if (branchBox) branchBox.addEventListener('change', refreshRoll);
+      refreshRoll();
+    }
     bindCustomList($('#stuFormBranch'), 'branchName');
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormSpec2'), 'specialisation');
@@ -2729,12 +2804,13 @@
       const f = e.target;
       const d = formData(f);
 
-      // A record enrolled under an older scheme keeps its number: the digits
-      // rule applies to what is being written now, not retrospectively, or
-      // correcting a phone number on a 2019 student would be impossible.
-      const regChanged = !id || String(d.roll || '') !== String(s.roll || '');
-      const regBad = regChanged ? regNoProblem(d.roll, id) : regNoDuplicate(d.roll, id);
-      if (regBad) { toast(regBad, 'err'); return; }
+      /* A new student has no number to check — the server issues it on save.
+         An existing one keeps theirs, and the digits rule is not re-applied to
+         somebody enrolled under an older scheme. */
+      if (id) {
+        const regBad = regNoDuplicate(d.roll, id);
+        if (regBad) { toast(regBad, 'err'); return; }
+      }
       if (!phoneValid(d.phone)) { toast('Mobile number must be exactly 10 digits.', 'err'); return; }
       if (d.whatsapp && !/^\d{10}$/.test(d.whatsapp)) {
         toast('WhatsApp number must be exactly 10 digits.', 'err'); return;
@@ -2819,9 +2895,21 @@
       if (d.backlogs === undefined) delete d.backlogs;        // not on this form: leave it alone
       else d.backlogs = d.backlogs === '' ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
-      if (id) Store.update('students', id, d);
-      else { Store.add('students', d); ensureStudentLogin(d); }
-      closeModal(); toast('Student saved.'); render();
+      if (id) {
+        Store.update('students', id, d);
+        closeModal(); toast('Student saved.'); render();
+        return;
+      }
+      /* Waited on rather than fired off, because the id is the server's answer
+         and the login is created from it — a login made from the preview would
+         be the wrong username the moment two people saved together. */
+      Store.create('students', d).then(saved => {
+        if (!saved) return;
+        ensureStudentLogin(saved);
+        closeModal();
+        toast(`Student saved — ID ${saved.roll || '—'}.`);
+        render();
+      });
     };
   }
 
@@ -2915,7 +3003,10 @@
       keyField: 'roll',
       fileBase: 'NMIET-BSCHOOL-Students-Template',
       columns: [
-        { key:'roll', header:'Registration No', required:true,
+        /* Optional: a blank cell means the server issues one. The column
+           stays because a sheet of students who already have numbers is a real
+           thing — a transfer, a re-import, last year's intake typed up. */
+        { key:'roll', header:'Student ID',
           aliases:['reg no','regno','reg. no','registration',
                    'registration no','registration number','student id'] },
         { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
@@ -3011,7 +3102,7 @@
         { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
       ],
       sample: {
-        roll:'2025180010', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
+        roll:'', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
         email:'rahul@nmiet.in', domainEmail:'rahul@nmiet.edu.in',
         phone:'9810000010', whatsapp:'9810000010',
         course:'MBA', branchName:'General Management',
@@ -3193,10 +3284,15 @@
           .map((x) => (x || '').trim()).filter(Boolean).join(' ');
       }
 
-      const key = raw[spec.keyField].toLowerCase();
-      if (existingKeys.has(key)) return { raw, error: 'Already exists' };
-      if (seen.has(key)) return { raw, error: 'Duplicate in this file' };
-      if (spec.collection === 'students') {
+      /* A blank key is a row asking for an id to be issued. Every blank looks
+         like every other blank, so they are exempt from the two duplicate
+         checks — there is nothing yet to be a duplicate of. */
+      const key = (raw[spec.keyField] || '').toLowerCase();
+      if (key) {
+        if (existingKeys.has(key)) return { raw, error: 'Already exists' };
+        if (seen.has(key)) return { raw, error: 'Duplicate in this file' };
+      }
+      if (spec.collection === 'students' && raw.roll) {
         const regBad = regNoProblem(raw.roll, null);
         // "already belongs to" is covered by the two checks above
         if (regBad && !/already belongs/.test(regBad)) return { raw, error: regBad };
@@ -3431,8 +3527,14 @@
         });
       }
 
-      // logins carry the id the rows were actually written with
-      const logins = created.map((row, i) => Object.assign(ok[i].login, { refId: row.id }));
+      /* Logins carry the id the rows were actually written with — which for a
+         student whose sheet left the column blank is the number the server just
+         issued, and the first time the browser sees it. */
+      const logins = created.map((row, i) => {
+        const login = Object.assign(ok[i].login, { refId: row.id });
+        if (spec.collection === 'students' && row.roll) login.username = row.roll;
+        return login;
+      });
       const users = await Store.addMany('users', logins);
 
       closeModal();
@@ -12461,23 +12563,29 @@
     const who = [d.firstName, d.middleName, d.lastName]
       .map(x => (x || '').trim()).filter(Boolean).join(' ') || r.name || '—';
 
-    const commit = (roll) => {
-      const built = studentFromSubmission(d, roll);
-      if (existing) {
-        Store.update('students', existing.id, mergeIntoStudent(existing, built));
-      } else {
-        const problem = regNoProblem(roll, null);
-        if (problem) { toast(problem, 'err'); return false; }
-        const stu = Store.add('students', built);
-        if (stu) ensureStudentLogin(stu);
-      }
+    const finish = (roll) => {
       Store.update('submissions', id, {
         status: 'Approved', reviewedAt: new Date().toISOString(),
         reviewedBy: displayName(user), reviewNote: '', roll,
       });
-      toast(existing ? 'Student updated from the form.' : 'Student admitted.');
+      toast(existing ? 'Student updated from the form.' : `Student admitted — ID ${roll}.`);
       if (after) after(); else render();
-      return true;
+    };
+    const commit = (roll) => {
+      const built = studentFromSubmission(d, roll);
+      if (existing) {
+        Store.update('students', existing.id, mergeIntoStudent(existing, built));
+        finish(given);
+        return;
+      }
+      /* Blank when the applicant had no number: the server issues one, and the
+         row it writes back is what the login and the queue are told. */
+      built.roll = roll || '';
+      Store.create('students', built).then(stu => {
+        if (!stu) return;
+        ensureStudentLogin(stu);
+        finish(stu.roll);
+      });
     };
 
     if (existing) {
@@ -12489,33 +12597,26 @@
     }
     if (given) {
       confirmAction('Admit Student',
-        `Admit <b>${esc(who)}</b> (<b>${esc(given)}</b>) as a student?
+        `Admit <b>${esc(who)}</b> under the number they gave, <b>${esc(given)}</b>?
          A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.`,
         'Admit Student', () => commit(given));
       return;
     }
 
-    // no number on the form — the office issues one before anything is written
-    openModal('Admit Student', `<form id="f">
-      <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
-        <b>${esc(who)}</b> applied without a registration number, which is normal for a new
-        admission. Give them one to admit them — it becomes the id they sign in with.</p>
-      <div class="form-grid">
-        <div class="field"><label>Registration Number</label>
-          <input name="roll" required autofocus placeholder="${esc(String(regNoLength()).replace(/^/, ''))} digits">
-          <small style="color:var(--muted);font-size:11.5px">Must not already belong to another student.</small></div>
-      </div>
-      <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
-        A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.</p>
-      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Admit Student</button></div></form>`, true);
-    $('#cx').onclick = closeModal;
-    $('#f').onsubmit = (e) => {
-      e.preventDefault();
-      const roll = (formData(e.target).roll || '').trim();
-      if (!roll) { toast('A registration number is needed.', 'err'); return; }
-      if (commit(roll)) closeModal();
-    };
+    /* No number on the form, which is normal for a new admission — one is
+       issued on save. The dialog says what it will be rather than asking, since
+       the college gives out these numbers by a rule and not by hand. */
+    const yy = admissionYY(d.admissionDate || '');
+    Store.nextStudentId(yy, d.branchName || '').then(peek => {
+      const willBe = (peek && peek.id) || (yy + branchCode(d.branchName) + '01');
+      confirmAction('Admit Student',
+        `Admit <b>${esc(who)}</b> as a student?<br>
+         Their Student ID will be <b class="mono">${esc(willBe)}</b> — from the admission year
+         and <b>${esc(d.branchName || 'no branch')}</b>.<br>
+         <small style="color:var(--muted)">A login is created with the password
+           ${esc(DEFAULT_IMPORT_PASSWORD)}.</small>`,
+        'Admit Student', () => commit(''));
+    });
   }
 
   function rejectSubmission(id, after) {
