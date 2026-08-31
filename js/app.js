@@ -2420,6 +2420,25 @@
     const hit = Object.keys(map).find(k => k.trim().toLowerCase() === want);
     return hit ? String(map[hit]) : BRANCH_CODE_FALLBACK;
   }
+  /* Whether an id was issued by the current scheme: four digits of year and
+     branch, then the number. A ten-digit number from the old scheme is not
+     derived from anything, so there is nothing for it to disagree with. */
+  function isIssuedId(roll) {
+    const v = String(roll || '').trim();
+    return /^\d+$/.test(v) && v.length >= 6 && v.length <= 8;
+  }
+  /* What the id says about the admission, against what the record now says.
+     Returns null when they agree or when the question does not apply. */
+  function idMismatch(student) {
+    const roll = String(student.roll || '').trim();
+    if (!isIssuedId(roll)) return null;
+    const wantYY = admissionYY(student.admissionDate || student.academicYear || '');
+    const wantCode = branchCode(student.branchName);
+    const hasYY = roll.slice(0, 2), hasCode = roll.slice(2, 4);
+    if (hasYY === wantYY && hasCode === wantCode) return null;
+    return { hasYY, hasCode, wantYY, wantCode };
+  }
+
   /** the two digits of the admission year, from a date or a session */
   function admissionYY(value) {
     const m = String(value || '').match(/(\d{4})/);
@@ -2897,7 +2916,18 @@
       if (d.cgpa == null) delete d.cgpa;
       if (id) {
         Store.update('students', id, d);
-        closeModal(); toast('Student saved.'); render();
+        closeModal();
+        /* The id does not follow the record — it is on an ID card and it is the
+           username. But a year typed wrong has to be fixable, so this is where
+           the offer is made rather than left for somebody to discover. */
+        const after = Store.find('students', id);
+        const off = after && idMismatch(after);
+        if (off) {
+          offerReissue(after, off);
+        } else {
+          toast('Student saved.');
+        }
+        render();
         return;
       }
       /* Waited on rather than fired off, because the id is the server's answer
@@ -2979,6 +3009,32 @@
     if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
     if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
     return regNoDuplicate(v, excludeId);
+  }
+
+  /* Asked, never assumed. The number is printed on things the student already
+     has and is the username they sign in with, so the dialog says both. */
+  function offerReissue(student, off) {
+    const yy = admissionYY(student.admissionDate || student.academicYear || '');
+    Store.nextStudentId(yy, student.branchName || '').then(peek => {
+      const willBe = (peek && peek.id) || '—';
+      confirmAction('Student ID no longer matches',
+        `<b>${esc(student.name || '—')}</b> has the ID <b class="mono">${esc(student.roll)}</b>,
+         which says <b>20${esc(off.hasYY)}</b>${off.hasCode !== off.wantCode
+           ? ` and branch code <b>${esc(off.hasCode)}</b>` : ''}.
+         The record now says <b>20${esc(off.wantYY)}</b>${off.hasCode !== off.wantCode
+           ? ` and <b>${esc(student.branchName || 'no branch')}</b>` : ''}.<br><br>
+         Re-issue it as <b class="mono">${esc(willBe)}</b>?<br>
+         <small style="color:var(--muted)">The old number is not reused, and the student's login
+           username changes from ${esc(student.roll)} to ${esc(willBe)} — tell them.
+           Anything already printed with the old number stays wrong.</small>`,
+        'Re-issue ID', () => {
+          Store.reissueStudentId(student.id).then(res => {
+            if (!res || res.error) { toast((res && res.error) || 'Could not re-issue.', 'err'); return; }
+            toast(`Student ID changed from ${res.was} to ${res.roll}.`);
+            render();
+          });
+        });
+    });
   }
 
   function ensureStudentLogin(s) {

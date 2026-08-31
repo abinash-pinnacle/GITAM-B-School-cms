@@ -996,6 +996,62 @@ function issue_student_id(array $row): string
     return format_student_id($yy, (string) ($row['branchName'] ?? ''), take_student_seq($yy));
 }
 
+/**
+ * Give a student a new id, because the year or the branch they were admitted
+ * under was recorded wrongly.
+ *
+ * The new number is the next one, not the one the mistake consumed: an id that
+ * has been issued is spent either way, and reusing it is exactly what the
+ * counter exists to prevent. The login moves with it, because the username is
+ * the id — leaving it behind would lock the student out of an account whose
+ * name no longer matches anything.
+ */
+function api_reissue_student_id(): void
+{
+    if (!may('students', 'edit')) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Your account cannot change student records.'], 403);
+    }
+    $id = trim((string) (body()['id'] ?? ''));
+    if ($id === '') {
+        send_json(['error' => 'invalid', 'message' => 'Which student?'], 422);
+    }
+
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        lock_collection('students');
+        $row = fetch_one('SELECT * FROM ' . qi('students') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+        if (!$row) {
+            if ($own) {
+                db()->rollBack();
+            }
+            send_json(['error' => 'not found', 'message' => 'That student is no longer on the roll.'], 404);
+        }
+        $was = (string) ($row['roll'] ?? '');
+        $now = issue_student_id($row);
+        run_sql('UPDATE ' . qi('students') . ' SET ' . qi('roll') . ' = ? WHERE ' . qi('id') . ' = ?',
+            [$now, $id]);
+        /* The username is the id. Only the student's own login is touched, and
+           only if it still carried the old number — an office that had already
+           renamed it by hand is left alone. */
+        run_sql('UPDATE ' . qi('users') . ' SET ' . qi('username') . ' = ? WHERE ' . qi('refId')
+            . ' = ? AND ' . qi('role') . " = 'student' AND " . qi('username') . ' = ?',
+            [$now, $id, $was]);
+        if ($own) {
+            db()->commit();
+        }
+        send_json(['ok' => true, 'was' => $was, 'roll' => $now]);
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+}
+
 /* ---------------- the public admission form ----------------
    Everything the form may set. A field not on this list is dropped, so the
    shape of what lands in the queue is decided here and not by the caller. */
@@ -1679,6 +1735,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'apply') {
         api_apply();
+    }
+    if ($method === 'POST' && $resource === 'reissue-student-id') {
+        api_reissue_student_id();
     }
     /* What the next id would be, without taking it. Signed in only — it says
        how many students the college has admitted this year. */

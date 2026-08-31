@@ -158,6 +158,28 @@ const Store = {
     } catch (e) { return null; }
   },
 
+  /* Give a student a new id, because the year or branch they were admitted
+     under was recorded wrongly. The server takes the next number and moves the
+     login with it. Resolves to { was, roll } or { error }. */
+  async reissueStudentId(id) {
+    try {
+      const res = await fetch(`${API}/reissue-student-id`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: (data && data.message) || 'That could not be changed.' };
+      const row = this.find('students', id);
+      if (row) row.roll = data.roll;
+      const login = this.all('users').find(u => u.refId === id && u.role === 'student');
+      if (login && login.username === data.was) login.username = data.roll;
+      return data;
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
+
   /* Like add(), but waits for the row the server actually wrote and keeps that
      one in the cache. Needed wherever the server fills something in that the
      browser could not know — a student id issued from a counter, for instance,
