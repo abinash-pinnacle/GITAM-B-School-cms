@@ -2518,7 +2518,8 @@
             <select name="branchName" id="stuFormBranch"><option value=""></option>${
               listOptions('branchName', s.branchName || '', true)}</select></div>
           <div class="field"><label>Specialisation I</label>
-            <select name="specialisation" id="stuFormSpec">${specialisationOptions(s.specialisation, true)}</select></div>
+            <select name="specialisation" id="stuFormSpec">
+              <option value="">— None —</option>${specialisationOptions(s.specialisation, true)}</select></div>
           <div class="field"><label>Specialisation II</label>
             <select name="specialisation2" id="stuFormSpec2">
               <option value="">— None —</option>${specialisationOptions(s.specialisation2, true)}</select></div>
