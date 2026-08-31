@@ -950,6 +950,35 @@ function take_student_seq(string $yy): int
     }
 }
 
+/**
+ * Hold the allocation lock for one collection until this transaction commits.
+ *
+ * next_id() looks for a free id and the row is written afterwards; without this
+ * a second request slips into that gap, is told the same id, and — because
+ * upsert() is INSERT OR REPLACE — overwrites the first row rather than failing.
+ * Both callers get a 201 and one record is gone.
+ *
+ * The row in the counter table is not a counter here, only something to hold.
+ * Must be called inside a transaction, or it locks nothing.
+ */
+function lock_collection(string $col): void
+{
+    seq_table();
+    $key = 'lock:' . $col;
+    $take = db()->prepare('UPDATE ' . qi('_id_seq') . ' SET ' . qi('n') . ' = ' . qi('n')
+        . ' + 1 WHERE ' . qi('k') . ' = ?');
+    $take->execute([$key]);
+    if ($take->rowCount() === 0) {
+        try {
+            run_sql('INSERT INTO ' . qi('_id_seq') . ' (' . qi('k') . ', ' . qi('n')
+                . ') VALUES (?, 0)', [$key]);
+        } catch (PDOException $e) {
+            // somebody else created it in the meantime, which is fine
+        }
+        $take->execute([$key]);
+    }
+}
+
 /** YY + branch code + running number, e.g. 250101 */
 function format_student_id(string $yy, string $branch, int $seq): string
 {
@@ -1284,7 +1313,15 @@ const PHONE_FIELDS = [
  * The complaint about this row, or null when it is fine. `$id` is the row
  * being updated, so a record does not clash with itself.
  */
-function row_problem(string $col, array $d, ?string $id = null): ?string
+/**
+ * What is wrong with this row, or null.
+ *
+ * `$issued` says the student id came from issue_student_id() rather than from
+ * a person. The digits-and-length rule describes what somebody typing a number
+ * should type, and nobody types one now — an issued id is correct by the rule
+ * that made it, and only has to be unique.
+ */
+function row_problem(string $col, array $d, ?string $id = null, bool $issued = false): ?string
 {
     foreach (PHONE_FIELDS[$col] ?? [] as $field) {
         if (!array_key_exists($field, $d)) {
@@ -1307,7 +1344,7 @@ function row_problem(string $col, array $d, ?string $id = null): ?string
         // for what is being written now, and is checked on the way in.
         $existing = $id ? fetch_one('SELECT * FROM ' . qi('students') . ' WHERE ' . qi('id') . ' = ?', [$id]) : null;
         $changed = $existing === null || (string) ($existing['roll'] ?? '') !== $roll;
-        if ($changed) {
+        if ($changed && !$issued) {
             if (!preg_match('/^\d+$/', $roll)) {
                 return 'Registration number must be digits only.';
             }
@@ -1498,8 +1535,18 @@ function api_create(string $col): void
     if (is_array($d) && array_is_list($d) && $d !== [] && is_array($d[0])) {
         // the whole sheet is checked before any of it is written, so a bad row
         // half way down does not leave the first half imported
+        /* The id is issued first, so the row being judged is the row that will
+           be written. A sheet that leaves the column blank is asking for one;
+           checking before issuing would refuse the request for being blank. */
         foreach ($d as $i => $row) {
-            $problem = row_problem($col, is_array($row) ? $row : [], null);
+            $row = is_array($row) ? $row : [];
+            $issued = false;
+            if ($col === 'students' && trim((string) ($row['roll'] ?? '')) === '') {
+                $row['roll'] = issue_student_id($row);
+                $issued = true;
+                $d[$i] = $row;
+            }
+            $problem = row_problem($col, $row, null, $issued);
             if ($problem !== null) {
                 reject_row($problem, $i);
             }
@@ -1507,14 +1554,10 @@ function api_create(string $col): void
         $rows = [];
         db()->beginTransaction();
         try {
+            lock_collection($col);
             foreach ($d as $row) {
                 if (empty($row['id'])) {
                     $row['id'] = next_id($col);
-                }
-                // a sheet that leaves the number blank gets one issued, in the
-                // order the rows arrive
-                if ($col === 'students' && trim((string) ($row['roll'] ?? '')) === '') {
-                    $row['roll'] = issue_student_id($row);
                 }
                 $row = hash_row_password($col, $row);
                 upsert($col, $row);
@@ -1528,21 +1571,42 @@ function api_create(string $col): void
         send_json($rows, 201);
     }
 
-    $problem = row_problem($col, $d, null);
-    if ($problem !== null) {
-        reject_row($problem);
+    /* Everything from here to the write happens with this collection's
+       allocation lock held, so the id chosen below is still free when it is
+       used. Issuance comes before validation: a create asking for an id sends a
+       blank one, and a blank one is what the rule would otherwise reject. */
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
     }
-    if (empty($d['id'])) {
-        $d['id'] = next_id($col);
+    try {
+        lock_collection($col);
+        $issued = false;
+        if ($col === 'students' && trim((string) ($d['roll'] ?? '')) === '') {
+            $d['roll'] = issue_student_id($d);
+            $issued = true;
+        }
+        $problem = row_problem($col, $d, null, $issued);
+        if ($problem !== null) {
+            if ($own) {
+                db()->rollBack();
+            }
+            reject_row($problem);
+        }
+        if (empty($d['id'])) {
+            $d['id'] = next_id($col);
+        }
+        $d = hash_row_password($col, $d);
+        upsert($col, $d);
+        if ($own) {
+            db()->commit();
+        }
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
     }
-    /* The browser sends a preview and the server decides. Two people saving at
-       the same moment would otherwise be handed the same preview and both
-       believe it. */
-    if ($col === 'students' && trim((string) ($d['roll'] ?? '')) === '') {
-        $d['roll'] = issue_student_id($d);
-    }
-    $d = hash_row_password($col, $d);
-    upsert($col, $d);
     send_json(row_out($col, $d), 201);
 }
 
@@ -1597,6 +1661,11 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
 {
     ensure_schema();
     migrate_plaintext_passwords();
+    /* Before anything opens a transaction. MySQL commits implicitly on DDL, so
+       a CREATE TABLE reached from inside one silently ends it — and the commit
+       that follows fails with "there is no active transaction". Once per
+       process; the function guards itself after that. */
+    seq_table();
     guard_request($resource, $method);
 
     if ($method === 'GET' && $resource === 'bootstrap') {
