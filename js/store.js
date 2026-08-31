@@ -158,15 +158,16 @@ const Store = {
     } catch (e) { return null; }
   },
 
-  /* Give a student a new id, because the year or branch they were admitted
-     under was recorded wrongly. The server takes the next number and moves the
-     login with it. Resolves to { was, roll } or { error }. */
-  async reissueStudentId(id) {
+  /* Give a student a different id. With no `roll` the server issues the next
+     one — for a year that was typed wrong. With a `roll` it uses that one, which
+     only the administrator may do. Either way the login moves with the id.
+     Resolves to { was, roll } or { error }. */
+  async reissueStudentId(id, roll) {
     try {
       const res = await fetch(`${API}/reissue-student-id`, {
         method: 'POST',
         headers: this._headers(true),
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(roll ? { id, roll } : { id }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) return { error: (data && data.message) || 'That could not be changed.' };

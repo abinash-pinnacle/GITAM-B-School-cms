@@ -713,7 +713,9 @@ function guard_request(string $resource, string $method): void
        remove one, and outside students and their logins it may not write at
        all. Reads are narrowed to what enrolling needs. */
     if (current_role() === 'admission') {
-        if ($isWrite && !in_array($resource, ADMISSION_WRITABLE, true)) {
+        // correcting a student id is a student edit, which is what this desk does
+        if ($isWrite && $resource !== 'reissue-student-id'
+            && !in_array($resource, ADMISSION_WRITABLE, true)) {
             send_json([
                 'error'   => 'forbidden',
                 'message' => 'The admissions desk can add and edit students, nothing else.',
@@ -997,24 +999,50 @@ function issue_student_id(array $row): string
 }
 
 /**
- * Give a student a new id, because the year or the branch they were admitted
- * under was recorded wrongly.
+ * Give a student a different id.
  *
- * The new number is the next one, not the one the mistake consumed: an id that
- * has been issued is spent either way, and reusing it is exactly what the
- * counter exists to prevent. The login moves with it, because the username is
- * the id — leaving it behind would lock the student out of an account whose
- * name no longer matches anything.
+ * Two ways in. With no number, the next one is issued — the answer when a year
+ * was typed wrong, and deliberately not the number the mistake consumed, since
+ * an id that has been handed out is spent either way. With a number, that one
+ * is used: the office sometimes knows which id a student should have and the
+ * counter has no way of knowing it.
+ *
+ * Setting one by hand is the administrator's alone, because it is the only way
+ * to put an id somewhere the counter would not have, and the counter is what
+ * keeps two students from sharing one.
+ *
+ * Either way the login moves with the id, because the username is the id.
  */
 function api_reissue_student_id(): void
 {
-    if (!may('students', 'edit')) {
+    /* Two answers have to agree, exactly as the students page requires: the
+       role list says who this is written for, the permission says whether this
+       account still may. `may()` alone is too weak — a faculty member's ceiling
+       covers the students module because their menu reaches the roll, and a
+       teacher has no business renaming a student's login. */
+    if (!in_array(base_role(current_role()), ['admin', 'admission'], true)
+        || !may('students', 'edit')) {
         send_json(['error' => 'forbidden',
                    'message' => 'Your account cannot change student records.'], 403);
     }
-    $id = trim((string) (body()['id'] ?? ''));
+    $body = body();
+    $id = trim((string) ($body['id'] ?? ''));
+    $wanted = trim((string) ($body['roll'] ?? ''));
     if ($id === '') {
         send_json(['error' => 'invalid', 'message' => 'Which student?'], 422);
+    }
+    if ($wanted !== '') {
+        if (current_role() !== 'admin') {
+            send_json(['error' => 'forbidden',
+                       'message' => 'Only the administrator can set a Student ID by hand.'], 403);
+        }
+        if (!ctype_digit($wanted)) {
+            send_json(['error' => 'invalid', 'message' => 'A Student ID is digits only.'], 422);
+        }
+        if (strlen($wanted) < 4 || strlen($wanted) > 12) {
+            send_json(['error' => 'invalid',
+                       'message' => 'A Student ID is between 4 and 12 digits.'], 422);
+        }
     }
 
     $own = !db()->inTransaction();
@@ -1031,7 +1059,20 @@ function api_reissue_student_id(): void
             send_json(['error' => 'not found', 'message' => 'That student is no longer on the roll.'], 404);
         }
         $was = (string) ($row['roll'] ?? '');
-        $now = issue_student_id($row);
+        if ($wanted !== '') {
+            // checked inside the lock, so nobody can take it between here and the write
+            $clash = fetch_one('SELECT ' . qi('name') . ' AS name FROM ' . qi('students')
+                . ' WHERE ' . qi('roll') . ' = ? AND ' . qi('id') . ' <> ?', [$wanted, $id]);
+            if ($clash) {
+                if ($own) {
+                    db()->rollBack();
+                }
+                send_json(['error' => 'taken',
+                           'message' => 'Student ID ' . $wanted . ' already belongs to '
+                               . ($clash['name'] ?: 'another student') . '.'], 409);
+            }
+        }
+        $now = $wanted !== '' ? $wanted : issue_student_id($row);
         run_sql('UPDATE ' . qi('students') . ' SET ' . qi('roll') . ' = ? WHERE ' . qi('id') . ' = ?',
             [$now, $id]);
         /* The username is the id. Only the student's own login is touched, and
@@ -1404,7 +1445,12 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
             if (!preg_match('/^\d+$/', $roll)) {
                 return 'Registration number must be digits only.';
             }
-            if ($len > 0 && strlen($roll) !== $len) {
+            /* Two shapes are legitimate now: the configured length, which is
+               what an id from the old scheme is, and the issued shape of four
+               digits plus a running number. A student moved from one scheme to
+               the other must not be refused for being the wrong length. */
+            $issuedShape = strlen($roll) >= 4 + STUDENT_SEQ_WIDTH && strlen($roll) <= 8;
+            if ($len > 0 && strlen($roll) !== $len && !$issuedShape) {
                 return "Registration number must be exactly $len digits.";
             }
         }

@@ -2563,9 +2563,15 @@
         <div class="form-grid">
           <div class="field"><label>Student ID</label>
             ${id
-              ? `<input name="roll" id="rollInput" value="${esc(s.roll || '')}" readonly>
+              ? `<div style="display:flex;gap:8px;align-items:center">
+                   <input name="roll" id="rollInput" value="${esc(s.roll || '')}" readonly>
+                   ${baseRoleOf(user.role) === 'admin'
+                     ? `<button type="button" class="btn-outline btn-sm" id="rollFix"
+                          style="white-space:nowrap">✎ Correct</button>` : ''}
+                 </div>
                  <small style="color:var(--muted);font-size:11.5px">Issued when this student was
-                   admitted and never changed.</small>`
+                   admitted.${baseRoleOf(user.role) === 'admin'
+                     ? ' Use Correct if it was recorded wrongly.' : ' Never changed.'}</small>`
               /* No name, so nothing is submitted: the server issues the real one.
                  Sending the previewed number back would let two people who
                  opened the form together be given the same id. */
@@ -2733,6 +2739,11 @@
        server, because the running number is the server's to know — and falls
        back to a locally-formed guess if the request fails, so the box is never
        left saying nothing. */
+    const fixBtn = $('#rollFix');
+    if (fixBtn) fixBtn.onclick = () => correctStudentIdModal(id, () => {
+      const again = Store.find('students', id);
+      if (again) $('#rollInput').value = again.roll || '';
+    });
     if (!id) {
       const rollBox = $('#rollInput');
       const dateBox = document.querySelector('[name="admissionDate"]');
@@ -3009,6 +3020,59 @@
     if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
     if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
     return regNoDuplicate(v, excludeId);
+  }
+
+  /* Setting an id by hand. Read-only everywhere else, because nobody types one
+     in the ordinary course of things — this is the deliberate exception, and it
+     says what it is about to change before it changes it. */
+  function correctStudentIdModal(sid, after) {
+    const s = Store.find('students', sid); if (!s) return;
+    const yy = admissionYY(s.admissionDate || s.academicYear || '');
+    Store.nextStudentId(yy, s.branchName || '').then(peek => {
+      const suggested = (peek && peek.id) || '';
+      openModal2('Correct Student ID', `<form id="f">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
+          <b>${esc(s.name || '—')}</b> currently has
+          <b class="mono">${esc(s.roll || '—')}</b>.</p>
+        <div class="form-grid">
+          <div class="field"><label>New Student ID</label>
+            <input name="roll" inputmode="numeric" maxlength="12" autofocus
+                   value="${esc(s.roll || '')}" required>
+            <small style="color:var(--muted);font-size:11.5px">Digits only. Must not already
+              belong to another student.</small></div>
+        </div>
+        ${suggested ? `<p style="font-size:12.5px;margin:12px 0 0">
+          The next number for <b>20${esc(yy)}</b> / <b>${esc(s.branchName || 'no branch')}</b> is
+          <button type="button" class="btn-outline btn-sm" id="useNext"
+                  style="font-family:ui-monospace,monospace">${esc(suggested)}</button></p>` : ''}
+        <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.7">
+          The student's login username changes with the ID — tell them. Anything already printed
+          with the old number stays wrong, and the old number is not given to anybody else.</p>
+        <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+          <button type="submit" class="btn-primary">Save ID</button></div></form>`, true);
+      const layer = $('#modal2Body');
+      layer.querySelector('#cx').onclick = closeModal2;
+      const useNext = layer.querySelector('#useNext');
+      const box = layer.querySelector('[name="roll"]');
+      if (useNext) useNext.onclick = () => { box.value = suggested; };
+      box.oninput = () => { box.value = box.value.replace(/\D/g, ''); };
+      layer.querySelector('#f').onsubmit = (e) => {
+        e.preventDefault();
+        const want = (formData(e.target).roll || '').trim();
+        if (!want) { toast('A Student ID is needed.', 'err'); return; }
+        if (want === s.roll) { closeModal2(); return; }
+        if (want.length < 4 || want.length > 12) {
+          toast('A Student ID is between 4 and 12 digits.', 'err'); return;
+        }
+        Store.reissueStudentId(sid, want).then(res => {
+          if (!res || res.error) { toast((res && res.error) || 'Could not change it.', 'err'); return; }
+          closeModal2();
+          toast(`Student ID changed from ${res.was} to ${res.roll}.`);
+          // the form underneath is still open; put the new number in its box
+          if (after) after();
+        });
+      };
+    });
   }
 
   /* Asked, never assumed. The number is printed on things the student already
