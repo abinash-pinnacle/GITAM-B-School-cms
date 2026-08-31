@@ -2532,6 +2532,10 @@
             ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
           </select></div>
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
+          <div class="field"><label>Academic Year</label>
+            <select name="academicYear" id="stuFormYear">${
+              academicYearOptions(s.academicYear || academicYearOf(s.admissionDate))}</select>
+            <small style="color:var(--muted);font-size:11.5px">Follows the admission date until you set it yourself.</small></div>
           ${fText('mentor', 'Mentor', s.mentor)}
           ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
           <div class="field"><label>Status</label><select name="status">${
@@ -2635,6 +2639,24 @@
     $('#cx').onclick = closeModal;
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
+    /* The year follows the date, and stops the moment somebody sets it by
+       hand — an answer typed on purpose is not overwritten by a later keystroke
+       in another box. */
+    const yearBox = $('#stuFormYear'), dateBox = document.querySelector('[name="admissionDate"]');
+    if (yearBox && dateBox) {
+      let touched = false;
+      yearBox.addEventListener('change', () => { touched = true; });
+      dateBox.addEventListener('change', () => {
+        if (touched || !dateBox.value) return;
+        const want = academicYearOf(dateBox.value);
+        // a date older than the list reaches brings its own session with it,
+        // rather than being quietly ignored
+        if (![...yearBox.options].some(o => o.value === want || o.textContent === want)) {
+          yearBox.insertAdjacentHTML('beforeend', `<option>${esc(want)}</option>`);
+        }
+        yearBox.value = want;
+      });
+    }
     bindCustomList($('#stuFormBranch'), 'branchName');
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormSpec2'), 'specialisation');
@@ -2787,12 +2809,8 @@
       d.year = yearForSemester(d.semester);
       // one programme, asked for once: the department is the course
       d.branch = d.course;
-      /* The form no longer asks for the session — the fee structure is looked
-         up per course and year, the Semester Update page filters by it and the
-         profile prints it, so a blank would surface later as a fee that does
-         not resolve. An existing student keeps whatever they were admitted
-         under; a new one gets the session running now. */
-      if (!id) d.academicYear = currentAcademicYear();
+      // the form carries the answer; this is only for a row that somehow has none
+      if (!String(d.academicYear || '').trim()) d.academicYear = academicYearOf(d.admissionDate);
       d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
@@ -3251,9 +3269,12 @@
       if (spec.collection === 'students') {
         data.year = yearForSemester(data.semester);
         data.branch = data.course;
-        // the form fills this in and no longer asks; a sheet that leaves the
-        // column blank gets the same answer rather than a student with no session
-        if (!String(data.academicYear || '').trim()) data.academicYear = currentAcademicYear();
+        /* A sheet that leaves the column blank gets the session its admission
+           date falls in — so a file of last year's admissions lands in last
+           year, not in whatever session happens to be running today. */
+        if (!String(data.academicYear || '').trim()) {
+          data.academicYear = academicYearOf(data.admissionDate);
+        }
       }
       if (parts.personal) data.personal = parts.personal;
       if (parts.otherInfo) data.otherInfo = parts.otherInfo;
@@ -7219,17 +7240,37 @@
   function specOf(x) { return String((x && (x.specialisation || x.branch)) || '').trim(); }
   function courseOptions(sel, withExtras) { return listOptions('course', sel, withExtras); }
   // rolling window around the current session, plus anything already on record
+  /* Eight sessions back and one ahead. Two back was enough while the CMS only
+     held this year's intake; entering the batches a college already has needs
+     to reach further, and a session already on a record is always included so
+     nothing can be filed under a year the list refuses to offer. */
   function academicYearList() {
     const y = new Date().getFullYear();
-    const set = new Set([-2, -1, 0, 1].map(d => `${y + d}-${String((y + d + 1) % 100).padStart(2, '0')}`));
+    const span = [1, 0, -1, -2, -3, -4, -5, -6, -7, -8];
+    const set = new Set(span.map(d => sessionLabel(y + d)));
     ['students', 'fees', 'fixedfees'].forEach(col =>
       Store.all(col).forEach(r => { if (r.academicYear) set.add(String(r.academicYear).trim()); }));
     return [...set].filter(Boolean).sort().reverse();
   }
-  /** the session running now, in the form the rest of the app writes it */
-  function currentAcademicYear() {
-    const y = new Date().getFullYear();
+  /** a calendar year as the session that starts in it: 2024 -> "2024-25" */
+  function sessionLabel(y) {
     return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
+  }
+  /* The session a date falls in. The academic year begins in July, so anything
+     from January to June still belongs to the session that started the previous
+     year — which is why a student admitted in March 2025 is 2024-25 and not
+     2025-26. */
+  const SESSION_START_MONTH = 6;          // July, zero-indexed
+  function academicYearOf(dateStr) {
+    const d = dateStr ? new Date(dateStr + 'T00:00:00') : null;
+    if (!d || isNaN(d.getTime())) return currentAcademicYear();
+    const y = d.getFullYear();
+    return sessionLabel(d.getMonth() >= SESSION_START_MONTH ? y : y - 1);
+  }
+  /** the session running now */
+  function currentAcademicYear() {
+    const n = new Date();
+    return sessionLabel(n.getMonth() >= SESSION_START_MONTH ? n.getFullYear() : n.getFullYear() - 1);
   }
   function academicYearOptions(sel) {
     const list = academicYearList();
