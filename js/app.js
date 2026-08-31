@@ -1615,8 +1615,9 @@
 
   function viewStudents() {
     // the admissions desk enrols and corrects; only the admin removes a record
-    const canEdit = ['admin', 'admission'].includes(user.role);
-    const canDelete = user.role === 'admin';
+    const base = baseRoleOf(user.role);
+    const canEdit = ['admin', 'admission'].includes(base) && can('students', 'edit');
+    const canDelete = base === 'admin' && can('students', 'delete');
     // librarians and the center head can't edit students, but they do need each
     // student's book history
     const canSeeBooks = ['admin', 'librarian', 'center_head'].includes(user.role);
@@ -2550,7 +2551,7 @@
           ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
           ${photoField(s.photo)}
         </div>
-        ${id ? `<h4 class="ro-sub">Placement Eligibility</h4>
+        ${id && can('placement', 'edit') ? `<h4 class="ro-sub">Placement Eligibility</h4>
         <p style="font-size:12px;color:var(--muted);margin:-4px 0 10px">
           Used by the placement cell to work out which drives this student qualifies for.
           Leave the CGPA blank to fall back to the average of their internal marks.</p>
@@ -2815,7 +2816,8 @@
       d.branch = d.course;
       // the form carries the answer; this is only for a row that somehow has none
       if (!String(d.academicYear || '').trim()) d.academicYear = academicYearOf(d.admissionDate);
-      d.backlogs = (d.backlogs == null || d.backlogs === '') ? 0 : +d.backlogs;
+      if (d.backlogs === undefined) delete d.backlogs;        // not on this form: leave it alone
+      else d.backlogs = d.backlogs === '' ? 0 : +d.backlogs;
       if (d.cgpa == null) delete d.cgpa;
       if (id) Store.update('students', id, d);
       else { Store.add('students', d); ensureStudentLogin(d); }
