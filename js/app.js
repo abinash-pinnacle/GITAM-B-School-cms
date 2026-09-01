@@ -1704,7 +1704,8 @@
         const f = filters();
         return rosterStudents().filter(s => {
           if (q && !(String(s.name || '').toLowerCase().includes(q)
-                  || String(s.roll || '').toLowerCase().includes(q))) return false;
+                  || String(s.roll || '').toLowerCase().includes(q)
+                  || String(s.univRegNo || '').toLowerCase().includes(q))) return false;
           // the search box, the column row and the panel all have to agree
           if (!passes(s, f) || !passes(s, adv.fields)) return false;
           return ADV_RANGES.every(([k, , level]) => inRange(advValue(s, k, level), adv.ranges[k]));
@@ -1998,6 +1999,7 @@
         ${infoRow('Email ID', esc(s.email || '—'))}
         ${infoRow('Mobile No', esc(s.phone || '—'))}
         ${infoRow('WhatsApp No', esc(s.whatsapp || '—'))}
+        ${infoRow('University Regd. No.', esc(s.univRegNo || '—'))}
         ${infoRow('Aadhaar No.', esc(s.aadhaar || '—'))}
         ${infoRow('Voter ID', esc(per.voterId || '—'))}
         ${infoRow('PAN No.', esc(per.pan || '—'))}
@@ -2358,6 +2360,7 @@
         { header: 'GPA', key: 'gpa', width: 8 },
         // ---- and the rest of the record ----
         only('Roll No.', 'serialNo', 10),
+        only('University Regd. No.', 'univRegNo', 18),
         only('Title', 'title', 8),
         only('Middle Name', 'middleName', 13),
         only('Specialisation II', 'specialisation2', 15),
@@ -2722,6 +2725,11 @@
                  <small style="color:var(--muted);font-size:11.5px">Generated from the admission
                    year and branch when you save.</small>`}</div>
           ${fText('serialNo', 'Roll No.', s.serialNo)}
+          <div class="field"><label>University Regd. No.</label>
+            <input name="univRegNo" inputmode="numeric" maxlength="10"
+                   value="${esc(s.univRegNo || '')}">
+            <small style="color:var(--muted);font-size:11.5px">The university's 10-digit number,
+              not the Student ID. Leave blank until it arrives.</small></div>
           ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
           <div class="field"><label>First Name</label>
             <input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
@@ -2859,6 +2867,8 @@
     /* ---- wiring ---- */
     $('#cx').onclick = closeModal;
     $('#rollInput').oninput = (e) => { e.target.value = e.target.value.replace(/\D/g, ''); };
+    const uregBox = document.querySelector('#modalBody [name="univRegNo"]');
+    if (uregBox) uregBox.oninput = () => { uregBox.value = uregBox.value.replace(/\D/g, ''); };
     bindPhoneInput($('#phoneInput'));
     /* The year follows the date, and stops the moment somebody sets it by
        hand — an answer typed on purpose is not overwritten by a later keystroke
@@ -2994,12 +3004,19 @@
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
       }
+      /* Blank or ten digits, nothing in between. It arrives weeks after
+         admission, so it cannot be required — but a nine-digit one is a typo
+         that will be found the day it is needed and not before. */
+      if (d.univRegNo && !/^\d{10}$/.test(d.univRegNo)) {
+        toast('University registration number must be exactly 10 digits.', 'err'); return;
+      }
       /* A number nobody else holds. Two students sharing a mobile is the same
          mistake as two sharing a registration number — the office rings one and
          reaches the other. */
       const clash = takenBy('students', 'phone', d.phone, id)
         || takenBy('students', 'whatsapp', d.whatsapp, id)
-        || takenBy('students', 'aadhaar', d.aadhaar, id);
+        || takenBy('students', 'aadhaar', d.aadhaar, id)
+        || takenBy('students', 'univRegNo', d.univRegNo, id);
       if (clash) { toast(clash, 'err'); return; }
       // the placement fields are only on the form when editing — a student
       // being admitted today has neither a CGPA nor a backlog yet
@@ -3104,7 +3121,8 @@
   /* Whoever else already holds this value in this column, as a message, or
      null. Blank is not a clash — plenty of records have no WhatsApp number. */
   const FIELD_LABEL = { phone: 'Mobile number', whatsapp: 'WhatsApp number',
-                        aadhaar: 'Aadhaar number', email: 'Email' };
+                        aadhaar: 'Aadhaar number', email: 'Email',
+                        univRegNo: 'University registration number' };
   function takenBy(col, field, value, excludeId) {
     const v = String(value || '').trim();
     if (!v) return null;
@@ -3375,6 +3393,12 @@
         { key:'middleName', header:'Middle Name' },
         { key:'lastName', header:'Last Name', aliases:['surname'] },
         { key:'serialNo', header:'Roll No', aliases:['serial no','serial'] },
+        { key:'univRegNo', header:'University Regd. No',
+          /* Not 'registration number' — the Student ID column has answered to
+             that since before this one existed, and a sheet that says it means
+             the number the college issued. */
+          aliases:['university registration number','university regd no','univ regd no',
+                   'university reg no','univ reg no'] },
         { key:'email', header:'Email', aliases:['e-mail','email id'] },
         { key:'domainEmail', header:'Domain Email', aliases:['college email','institute email'] },
         { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
@@ -3463,7 +3487,8 @@
         admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta', cgpa:'8.2', backlogs:0, status:'Active',
         title:'Mr.', gender:'Male', dob:'2003-05-14', bloodGroup:'B+',
         admissionCategory:'General', religion:'Hindu', nationality:'Indian', birthplace:'Cuttack',
-        aadhaar:'123456789012', identificationMark:'Mole on left cheek', thumbId:'BIO-10',
+        aadhaar:'123456789012', univRegNo:'2126010045',
+        identificationMark:'Mole on left cheek', thumbId:'BIO-10',
         voterId:'', pan:'', drivingLicense:'', passport:'',
         hostel:'No', transport:'Yes', lunch:'Yes', nss:'No',
         languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
@@ -3654,6 +3679,18 @@
         }
       }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
+      if (raw.univRegNo) {
+        if (!/^\d{10}$/.test(raw.univRegNo)) {
+          return { raw, error: 'University Regd. No. must be exactly 10 digits' };
+        }
+        // against the roster, and against the rows above it in this same file
+        const clash = takenBy('students', 'univRegNo', raw.univRegNo, null);
+        if (clash) return { raw, error: clash };
+        if (seenIds.has('ureg:' + raw.univRegNo)) {
+          return { raw, error: 'Duplicate University Regd. No. in this file' };
+        }
+        seenIds.add('ureg:' + raw.univRegNo);
+      }
       /* An id unique within this sheet can still belong to somebody already on
          another staff table, so the check spans all of them — and the sheet
          itself must not repeat a registration or Aadhaar number either. */
@@ -12804,7 +12841,8 @@
         ['Religion', d.religion], ['Nationality', d.nationality], ['Birthplace', d.birthplace],
         ['Identification Mark', d.identificationMark], ['Languages Known', d.languages],
         ['Hobbies', d.hobbies]])}
-      ${block('Identity Documents', [['Aadhaar', d.aadhaar], ['PAN', d.pan], ['Voter ID', d.voterId],
+      ${block('Identity Documents', [['University Regd. No.', d.univRegNo],
+        ['Aadhaar', d.aadhaar], ['PAN', d.pan], ['Voter ID', d.voterId],
         ['Driving License', d.drivingLicense], ['Passport', d.passport]])}
       ${block('Facilities Requested', [['Hostel', d.hostel], ['Transport', d.transport],
         ['Lunch', d.lunch], ['NSS', d.nss]])}
@@ -12856,7 +12894,7 @@
       admissionDate: d.admissionDate || '',
       academicYear: academicYearOf(d.admissionDate),
       dob: d.dob || '', gender: d.gender || '', bloodGroup: d.bloodGroup || '',
-      aadhaar: d.aadhaar || '', status: 'Active',
+      aadhaar: d.aadhaar || '', univRegNo: d.univRegNo || '', status: 'Active',
       personal: {
         title: d.title || '', admissionCategory: d.admissionCategory || '',
         religion: d.religion || '', nationality: d.nationality || '',

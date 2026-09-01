@@ -163,6 +163,12 @@ const COLLECTIONS = [
                         blood group, the admissions dashboard wants the date. */
                      'serialNo', 'mentor', 'domainEmail', 'whatsapp', 'dob', 'gender',
                      'bloodGroup', 'admissionDate', 'house', 'aadhaar',
+                     /* The university's number, not ours. `roll` is the Student
+                        ID the college issues and the student logs in with;
+                        this is the ten digits the university registers them
+                        under and prints on the marksheet. Blank until it
+                        arrives, which is usually weeks after admission. */
+                     'univRegNo',
                      /* and these six hold the tabs: personal details, the academic
                         record, the family, both addresses, health, and documents */
                      'personal', 'academicInfo', 'guardians', 'addressInfo',

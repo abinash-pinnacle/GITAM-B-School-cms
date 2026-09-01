@@ -1215,7 +1215,7 @@ function apply_fields(): array
         'email', 'domainEmail', 'phone', 'whatsapp',
         'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
         'batch', 'house', 'admissionDate',
-        'dob', 'gender', 'bloodGroup', 'aadhaar', 'admissionCategory', 'religion',
+        'dob', 'gender', 'bloodGroup', 'aadhaar', 'univRegNo', 'admissionCategory', 'religion',
         'nationality', 'birthplace', 'identificationMark', 'hostel', 'transport', 'lunch',
         'nss', 'voterId', 'pan', 'drivingLicense', 'passport', 'languages', 'hobbies',
         'entranceExam', 'entranceRank',
@@ -1548,6 +1548,28 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
         );
         if ($clash) {
             return "Student ID $roll already belongs to " . ($clash['name'] ?? 'another student') . '.';
+        }
+    }
+
+    /* The university's registration number. Ten digits or nothing — it arrives
+       weeks after admission, so blank has to be allowed, but a half-typed one
+       is worse than none. Checked here and not only in the browser: the public
+       admission form posts straight past the browser's copy of this rule. */
+    if ($col === 'students' && array_key_exists('univRegNo', $d)) {
+        $reg = trim((string) ($d['univRegNo'] ?? ''));
+        if ($reg !== '') {
+            if (!preg_match('/^\d{10}$/', $reg)) {
+                return 'A university registration number is exactly 10 digits.';
+            }
+            $clash = fetch_one(
+                'SELECT * FROM ' . qi('students') . ' WHERE ' . qi('univRegNo') . ' = ?' .
+                ($id ? ' AND ' . qi('id') . ' <> ?' : ''),
+                $id ? [$reg, $id] : [$reg]
+            );
+            if ($clash) {
+                return "University registration number $reg already belongs to "
+                    . ($clash['name'] ?? 'another student') . '.';
+            }
         }
     }
     return null;

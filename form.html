@@ -147,6 +147,10 @@
             <input name="roll" maxlength="40" placeholder="leave blank if you do not have one yet">
             <small class="hint">Only if the college has already given you one.</small></div>
           <div class="field"><label>Roll No.</label><input name="serialNo" maxlength="20"></div>
+          <div class="field"><label>University Regd. No.</label>
+            <input name="univRegNo" inputmode="numeric" maxlength="10">
+            <small class="hint">The university's 10-digit number, if you have it. Not the same as
+              the college Registration Number above.</small></div>
           <div class="field"><label>Title</label>
             <select name="title"><option value=""></option>
               <option>Mr.</option><option>Ms.</option><option>Mrs.</option><option>Dr.</option></select></div>
@@ -433,6 +437,13 @@
     if ((d.phone || '').length !== 10) {
       showStep(0); show('err', 'Mobile number must be exactly 10 digits.');
       var ph = document.querySelector('[name="phone"]'); if (ph) ph.focus();
+      return;
+    }
+    /* Blank is fine — most people applying do not have one yet. Nine digits is
+       not: it is a typo, and it is easier to fix now than after approval. */
+    if ((d.univRegNo || '') !== '' && !/^\d{10}$/.test(d.univRegNo)) {
+      showStep(0); show('err', 'University Regd. No. must be exactly 10 digits, or left blank.');
+      var ur = document.querySelector('[name="univRegNo"]'); if (ur) ur.focus();
       return;
     }
 
