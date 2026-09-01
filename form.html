@@ -275,7 +275,7 @@
         <h3 class="sec">Current address</h3>
         <div class="grid" data-address>
           <div class="field full"><label>Address</label><textarea name="address" maxlength="500"></textarea></div>
-          <div class="field"><label>State</label><select name="state" data-state></select></div>
+          <div class="field"><label>State / Union Territory</label><select name="state" data-state></select></div>
           <div class="field"><label>District</label><select name="district" data-district disabled></select></div>
           <div class="field"><label>City</label><input name="city" maxlength="60" data-city></div>
           <div class="field"><label>Country</label><input name="country" maxlength="60" value="India"></div>
@@ -289,7 +289,7 @@
           </label></div>
         <div class="grid" data-address>
           <div class="field full"><label>Address</label><textarea name="permAddress" maxlength="500"></textarea></div>
-          <div class="field"><label>State</label><select name="permState" data-state></select></div>
+          <div class="field"><label>State / Union Territory</label><select name="permState" data-state></select></div>
           <div class="field"><label>District</label><select name="permDistrict" data-district disabled></select></div>
           <div class="field"><label>City</label><input name="permCity" maxlength="60" data-city></div>
           <div class="field"><label>Country</label><input name="permCountry" maxlength="60" value="India"></div>
@@ -388,7 +388,15 @@
   /* State -> District -> City. City is typed, not picked: a district has more
      towns than anybody would keep a list of. The lists live here rather than in
      the app because this page loads nothing but itself. */
-  var STATES = ["ANDHRA PRADESH", "BIHAR", "CHHATTISGARH", "JHARKHAND", "ODISHA", "WEST BENGAL"];
+  var STATES = ["ANDHRA PRADESH","ARUNACHAL PRADESH","ASSAM","BIHAR","CHHATTISGARH","GOA","GUJARAT",
+    "HARYANA","HIMACHAL PRADESH","JHARKHAND","KARNATAKA","KERALA","MADHYA PRADESH",
+    "MAHARASHTRA","MANIPUR","MEGHALAYA","MIZORAM","NAGALAND","ODISHA","PUNJAB","RAJASTHAN",
+    "SIKKIM","TAMIL NADU","TELANGANA","TRIPURA","UTTAR PRADESH","UTTARAKHAND","WEST BENGAL"];
+  /* A union territory has no districts to speak of — several are one island
+     group or one city — so choosing one takes the District box off the form. */
+  var UNION_TERRITORIES = ["ANDAMAN AND NICOBAR ISLANDS","CHANDIGARH","DADRA AND NAGAR HAVELI AND DAMAN AND DIU",
+    "DELHI (NATIONAL CAPITAL TERRITORY)","JAMMU AND KASHMIR","LADAKH","LAKSHADWEEP",
+    "PUDUCHERRY"];
   var DISTRICTS = {
     "ANDHRA PRADESH": ["Alluri Sitharama Raju","Anakapalli","Ananthapuramu","Annamayya","Bapatla","Chittoor",
       "Dr. B.R. Ambedkar Konaseema","East Godavari","Eluru","Guntur","Kakinada","Krishna",
@@ -420,27 +428,34 @@
   };
 
   function fillDistricts(sel, state, blankFirst) {
-    var list = DISTRICTS[String(state || '').toUpperCase()] || [];
-    sel.innerHTML = '<option value="">'
-      + (list.length ? '— Select District —' : '— Select State first —') + '</option>'
+    var chosen = String(state || '').trim().toUpperCase();
+    var list = DISTRICTS[chosen] || [];
+    var blank = !chosen ? '— Select State / UT first —'
+      : list.length ? '— Select District —' : '— No district list for this state —';
+    sel.innerHTML = '<option value="">' + blank + '</option>'
       + list.map(function (d) { return '<option>' + d + '</option>'; }).join('');
     sel.disabled = !list.length;
     if (blankFirst) sel.value = '';
   }
 
   [].slice.call(document.querySelectorAll('select[data-state]')).forEach(function (sel) {
-    sel.innerHTML = '<option value="">— Select State —</option>'
-      + STATES.map(function (s) { return '<option>' + s + '</option>'; }).join('');
+    sel.innerHTML = '<option value="">— Select State / UT —</option>'
+      // states first, then the eight territories together at the end
+      + STATES.concat(UNION_TERRITORIES)
+          .map(function (s) { return '<option>' + s + '</option>'; }).join('');
   });
   [].slice.call(document.querySelectorAll('[data-address]')).forEach(function (group) {
     var st = group.querySelector('select[data-state]');
     var di = group.querySelector('select[data-district]');
     var ci = group.querySelector('input[data-city]');
     if (!st || !di) return;
+    var box = di.closest ? di.closest('.field') : null;
     fillDistricts(di, '', true);
     // a state change makes the district and the town below it wrong, so both go
     st.addEventListener('change', function () {
-      fillDistricts(di, st.value, true);
+      var isUT = UNION_TERRITORIES.indexOf(String(st.value || '').trim().toUpperCase()) >= 0;
+      fillDistricts(di, isUT ? '' : st.value, true);
+      if (box) box.style.display = isUT ? 'none' : '';
       if (ci) ci.value = '';
     });
   });
