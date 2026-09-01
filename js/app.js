@@ -2304,72 +2304,168 @@
 
   /* The Students page as an exportable report.
 
-     Columns without `print: false` are the printed roll — a list somebody can
-     read on paper. Everything is in the spreadsheet, because that is what an
-     office exports one for: the parents' numbers, the address, the date of
-     birth, the things that are on the record and not on the screen. */
+     The spreadsheet is the record: every field the admission form asks for,
+     because that is what an office exports one for. The repeating groups —
+     nine qualification rows, three guardians with eight questions each — are
+     built from the same lists the form renders, so adding a level or a question
+     there adds it here without anybody remembering to.
+
+     `print: false` keeps a column out of the PDF. What is left is the fourteen
+     that fit across a page: a hundred and twenty on A4 is not a document. */
+
+  /** the eight questions the form asks about each parent or guardian */
+  const GUARDIAN_FIELDS = [
+    ['name', 'Name'], ['occupation', 'Occupation'], ['mobile', 'Mobile'],
+    ['phone', 'Phone'], ['income', 'Annual Income'], ['email', 'Email'],
+    ['qualification', 'Qualification'], ['homeAddress', 'Home Address'],
+  ];
+
   function studentReport(rows) {
-    const guardian = (s, relation) => {
-      const list = stuPart(s, 'guardians');
-      return (Array.isArray(list) ? list : []).find(g => g && g.relation === relation) || {};
-    };
+    /* Everything past the first fourteen is spreadsheet-only. Written once here
+       rather than repeated on every line below it. */
+    const only = (header, key, width) => ({ header, key, width, print: false });
+
+    const qualColumns = [];
+    QUAL_LEVELS.forEach(level => {
+      qualColumns.push(only(`${level} — Institute`, `q_${level}_institute`, 24));
+      qualColumns.push(only(`${level} — Year`, `q_${level}_year`, 10));
+      qualColumns.push(only(`${level} — %`, `q_${level}_marks`, 10));
+    });
+    const guardianColumns = [];
+    GUARDIAN_ROLES.forEach(role => {
+      GUARDIAN_FIELDS.forEach(([f, label]) =>
+        guardianColumns.push(only(`${role} — ${label}`, `g_${role}_${f}`,
+          f === 'homeAddress' ? 30 : f === 'name' ? 20 : 14)));
+    });
+
     return {
       title: 'Student Report', sheetName: 'Students', subtitle: reportStamp(),
       columns: [
+        // ---- the printed roll ----
         { header: 'Student ID', key: 'roll', width: 12 },
-        { header: 'Roll No.', key: 'serialNo', width: 10, print: false },
         { header: 'First Name', key: 'firstName', width: 15 },
-        { header: 'Middle Name', key: 'middleName', width: 13, print: false },
         { header: 'Last Name', key: 'lastName', width: 15 },
         { header: 'Course', key: 'course', width: 11 },
         { header: 'Branch', key: 'branchName', width: 26 },
         { header: 'Specialisation', key: 'specialisation', width: 15 },
-        { header: 'Specialisation II', key: 'specialisation2', width: 15, print: false },
         { header: 'Semester', key: 'semester', width: 9, type: 'number' },
-        { header: 'Year', key: 'year', width: 7, type: 'number', print: false },
         { header: 'Section', key: 'section', width: 8 },
         { header: 'Batch', key: 'batch', width: 12 },
         { header: 'Academic Year', key: 'academicYear', width: 13 },
-        { header: 'Admission Date', key: 'admissionDate', width: 14, print: false },
         { header: 'Phone', key: 'phone', width: 13 },
-        { header: 'WhatsApp', key: 'whatsapp', width: 13, print: false },
-        { header: 'Email', key: 'email', width: 24, print: false },
-        { header: 'College Email', key: 'domainEmail', width: 24, print: false },
-        { header: 'Date of Birth', key: 'dob', width: 12, print: false },
-        { header: 'Gender', key: 'gender', width: 9, print: false },
-        { header: 'Blood Group', key: 'bloodGroup', width: 11, print: false },
-        { header: 'Admission Category', key: 'admissionCategory', width: 16, print: false },
-        { header: 'Aadhaar', key: 'aadhaar', width: 15, print: false },
-        { header: "Father's Name", key: 'fatherName', width: 20, print: false },
-        { header: "Father's Mobile", key: 'fatherMobile', width: 13, print: false },
-        { header: "Mother's Name", key: 'motherName', width: 20, print: false },
-        { header: "Mother's Mobile", key: 'motherMobile', width: 13, print: false },
-        { header: 'Address', key: 'address', width: 32, print: false },
-        { header: 'City', key: 'city', width: 14, print: false },
-        { header: 'State', key: 'state', width: 14, print: false },
-        { header: 'Pincode', key: 'pincode', width: 10, print: false },
-        { header: 'Mentor', key: 'mentor', width: 18, print: false },
-        { header: 'Department', key: 'branch', width: 12, print: false },
         { header: 'Status', key: 'status', width: 9 },
         { header: 'Attendance %', key: 'attendance', width: 12 },
         { header: 'GPA', key: 'gpa', width: 8 },
-        { header: 'CGPA', key: 'cgpa', width: 8, print: false },
-        { header: 'Backlogs', key: 'backlogs', width: 9, type: 'number', print: false },
+        // ---- and the rest of the record ----
+        only('Roll No.', 'serialNo', 10),
+        only('Title', 'title', 8),
+        only('Middle Name', 'middleName', 13),
+        only('Specialisation II', 'specialisation2', 15),
+        only('Year', 'year', 7),
+        only('Club', 'house', 16),
+        only('Admission Date', 'admissionDate', 14),
+        only('Mentor', 'mentor', 18),
+        only('Department', 'branch', 12),
+        only('WhatsApp', 'whatsapp', 13),
+        only('Email', 'email', 24),
+        only('College Email', 'domainEmail', 24),
+        only('Date of Birth', 'dob', 12),
+        only('Gender', 'gender', 9),
+        only('Blood Group', 'bloodGroup', 11),
+        only('Admission Category', 'admissionCategory', 16),
+        only('Religion', 'religion', 12),
+        only('Nationality', 'nationality', 12),
+        only('Birthplace', 'birthplace', 16),
+        only('Identification Mark', 'identificationMark', 22),
+        only('Languages Known', 'languages', 20),
+        only('Hobbies', 'hobbies', 20),
+        only('Aadhaar No.', 'aadhaar', 15),
+        only('PAN No.', 'pan', 12),
+        only('Voter ID', 'voterId', 14),
+        only('Driving License No.', 'drivingLicense', 16),
+        only('Passport No.', 'passport', 14),
+        only('Biometric Scan', 'thumbId', 14),
+        only('Hostel', 'hostel', 9),
+        only('Transport', 'transport', 10),
+        only('Lunch', 'lunch', 9),
+        only('NSS', 'nss', 8),
+        only('Entrance Examination', 'entranceExam', 18),
+        only('Entrance Rank', 'entranceRank', 13),
+        ...qualColumns,
+        ...guardianColumns,
+        only('Present Address', 'curAddress', 32),
+        only('Present City', 'curCity', 14),
+        only('Present State', 'curState', 14),
+        only('Present Country', 'curCountry', 12),
+        only('Present Pincode', 'curPincode', 11),
+        only('Permanent Address', 'permAddress', 32),
+        only('Permanent City', 'permCity', 14),
+        only('Permanent State', 'permState', 14),
+        only('Permanent Country', 'permCountry', 12),
+        only('Permanent Pincode', 'permPincode', 11),
+        only('Height (cm)', 'height', 11),
+        only('Weight (kg)', 'weight', 11),
+        only('Last Check-up', 'lastCheckup', 13),
+        only('Allergies', 'allergies', 24),
+        only('Medical Conditions', 'conditions', 24),
+        only('Regular Medication', 'medication', 24),
+        only('Health Notes', 'healthNotes', 24),
+        only('Emergency Contact Name', 'emergencyName', 22),
+        only('Emergency Contact No', 'emergencyPhone', 18),
+        only('CGPA', 'cgpa', 8),
+        only('Backlogs', 'backlogs', 9),
+        only('Documents Submitted', 'documents', 34),
       ],
       rows: rows.map(s => {
         const per = stuPart(s, 'personal');
-        const cur = (stuPart(s, 'addressInfo') || {}).current || {};
-        const father = guardian(s, 'Father');
-        const mother = guardian(s, 'Mother');
-        return Object.assign({}, s, {
+        const aca = stuPart(s, 'academicInfo');
+        const health = stuPart(s, 'health');
+        const addr = stuPart(s, 'addressInfo');
+        const cur = addr.current || {}, perm = addr.permanent || {};
+        const quals = Array.isArray(aca.qualifications) ? aca.qualifications : [];
+        const guards = stuPart(s, 'guardians');
+        const guardList = Array.isArray(guards) ? guards : [];
+        const docs = stuPart(s, 'documents');
+
+        const flat = Object.assign({}, s, {
+          title: per.title || '',
           admissionCategory: per.admissionCategory || '',
-          fatherName: father.name || '', fatherMobile: father.mobile || '',
-          motherName: mother.name || '', motherMobile: mother.mobile || '',
-          address: cur.address || '', city: cur.city || '',
-          state: cur.state || '', pincode: cur.pincode || '',
+          religion: per.religion || '', nationality: per.nationality || '',
+          birthplace: per.birthplace || '', identificationMark: per.identificationMark || '',
+          languages: per.languages || '', hobbies: per.hobbies || '',
+          pan: per.pan || '', voterId: per.voterId || '',
+          drivingLicense: per.drivingLicense || '', passport: per.passport || '',
+          thumbId: per.thumbId || '',
+          hostel: per.hostel || '', transport: per.transport || '',
+          lunch: per.lunch || '', nss: per.nss || '',
+          entranceExam: aca.entranceExam || '', entranceRank: aca.entranceRank || '',
+          curAddress: cur.address || '', curCity: cur.city || '', curState: cur.state || '',
+          curCountry: cur.country || '', curPincode: cur.pincode || '',
+          permAddress: perm.address || '', permCity: perm.city || '', permState: perm.state || '',
+          permCountry: perm.country || '', permPincode: perm.pincode || '',
+          height: health.height || '', weight: health.weight || '',
+          lastCheckup: health.lastCheckup || '', allergies: health.allergies || '',
+          conditions: health.conditions || '', medication: health.medication || '',
+          healthNotes: health.notes || '',
+          emergencyName: health.emergencyName || '', emergencyPhone: health.emergencyPhone || '',
+          // one cell, because a document is a line on a list and not a column each
+          documents: (Array.isArray(docs) ? docs : [])
+            .filter(d => d && (d.name || d.type))
+            .map(d => [d.type, d.name, d.copy].filter(Boolean).join(' — ')).join('; '),
           attendance: studentAttendancePct(s.id) ?? '—',
           gpa: studentGPA(s.id) ?? '—',
         });
+        QUAL_LEVELS.forEach(level => {
+          const q = quals.find(x => x && x.level === level) || {};
+          flat[`q_${level}_institute`] = q.institute || '';
+          flat[`q_${level}_year`] = q.year || '';
+          flat[`q_${level}_marks`] = q.marks || '';
+        });
+        GUARDIAN_ROLES.forEach(role => {
+          const g = guardList.find(x => x && x.relation === role) || {};
+          GUARDIAN_FIELDS.forEach(([f]) => { flat[`g_${role}_${f}`] = g[f] || ''; });
+        });
+        return flat;
       }),
       // under a column wide enough to hold it — `name` was not one of the columns
       totals: { roll: 'TOTAL', firstName: plural(rows.length, 'student') },
