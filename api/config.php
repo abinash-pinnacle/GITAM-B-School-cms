@@ -167,6 +167,9 @@ const COLLECTIONS = [
                         untouched — it is simply no longer read, written or asked for. */
                      'mentor', 'domainEmail', 'whatsapp', 'dob', 'gender',
                      'bloodGroup', 'admissionDate', 'house', 'aadhaar',
+                     /* When the seat was booked, and who brought the student in.
+                        The booking is usually weeks before the admission. */
+                     'bookingDate', 'referredBy',
                      /* The university's number, not ours. `roll` is the Student
                         ID the college issues and the student logs in with;
                         this is the ten digits the university registers them

@@ -2085,7 +2085,8 @@
         ${infoRow2('Section', esc(s.section || '—'), 'Academic Year', esc(s.academicYear || '—'))}
         ${infoRow2('House', esc(s.house || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
-        ${infoRow2('Admission Date', esc(s.admissionDate || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
+        ${infoRow2('Date of Booking', esc(s.bookingDate || '—'), 'Admission Date', esc(s.admissionDate || '—'))}
+        ${infoRow2('Referred By', esc(s.referredBy || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
         ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
         + `<h4 class="ro-sub">Previous Qualifications</h4>
@@ -2371,9 +2372,11 @@
         { header: 'Semester', key: 'semester', width: 9, type: 'number' },
         { header: 'Section', key: 'section', width: 8 },
         { header: 'Batch', key: 'batch', width: 12 },
+        only('Date of Booking', 'bookingDate', 14),
         only('Admission Date', 'admissionDate', 14),
         { header: 'Academic Year', key: 'academicYear', width: 13 },
         only('Mentor', 'mentor', 18),
+        only('Referred By', 'referredBy', 18),
         only('Club', 'house', 16),
         only('Year', 'year', 7),
         only('Department', 'branch', 12),
@@ -2936,12 +2939,14 @@
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
           ${fText('batch', 'Batch', s.batch, 'placeholder="e.g. 2025-2027"')}
+          ${fDate('bookingDate', 'Date of Booking', s.bookingDate)}
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           <div class="field"><label>Academic Year</label>
             <select name="academicYear" id="stuFormYear">${
               academicYearOptions(s.academicYear || academicYearOf(s.admissionDate))}</select>
             <small style="color:var(--muted);font-size:11.5px">Follows the admission date until you set it yourself.</small></div>
           ${fText('mentor', 'Mentor', s.mentor)}
+          ${fText('referredBy', 'Referred By', s.referredBy)}
           <div class="field"><label>Club</label><select name="house">
             <option value="">— None —</option>
             ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -3623,9 +3628,11 @@
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
         { key:'batch', header:'Batch' },
+        { key:'bookingDate', header:'Date of Booking', aliases:['booking date','dob booking'] },
         { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
         { key:'academicYear', header:'Academic Year', aliases:['session'] },
         { key:'mentor', header:'Mentor' },
+        { key:'referredBy', header:'Referred By', aliases:['referred','reference','referrer'] },
         { key:'house', header:'Clubs', aliases:['house','club'] },
 
         // ---- the rest ----
@@ -3696,7 +3703,8 @@
         course:'MBA', branchName:'General Management',
         specialisation:'Marketing', specialisation2:'Finance',
         semester:2, section:'A', house:'Marketing Club', batch:'2025-2027', academicYear:'2026-27',
-        admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta', cgpa:'8.2', backlogs:0, status:'Active',
+        bookingDate:'2025-07-02', admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta',
+        referredBy:'Suresh Panda', cgpa:'8.2', backlogs:0, status:'Active',
         title:'Mr.', gender:'Male', dob:'2003-05-14', bloodGroup:'B+',
         admissionCategory:'General', religion:'Hindu', nationality:'Indian', birthplace:'Cuttack',
         aadhaar:'123456789012', univRegNo:'2126010045',
