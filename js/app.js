@@ -943,9 +943,87 @@
   /* ========================================================= */
   /*  VIEWS                                                     */
   /* ========================================================= */
-  function statCard(ico, val, lbl, cls = '') {
-    return `<div class="stat-card ${cls}"><div class="s-ico">${ico}</div>
+  function statCard(ico, val, lbl, cls = '', id = '') {
+    // an id makes the card clickable; without one it is a figure and nothing more
+    return `<div class="stat-card ${cls}"${id ? ` id="${id}" role="button" tabindex="0"
+      style="cursor:pointer"` : ''}><div class="s-ico">${ico}</div>
       <div><div class="s-val">${val}</div><div class="s-lbl">${lbl}</div></div></div>`;
+  }
+
+  /* What has to be on a record before the office can work with it: somebody to
+     ring, a course to place them in, a date to date them from, and enough
+     identity to print a card. Everything else on the form is welcome and none
+     of it is chased.
+
+     Written as one list because it is the answer to "what counts as complete",
+     and that question gets asked again — by the card, by the list, and by
+     whoever changes their mind about it later. */
+  const REQUIRED_STUDENT_FIELDS = [
+    ['First Name', s => s.firstName || s.name],
+    ['Mobile No', s => s.phone],
+    ['Course', s => s.course],
+    ['Branch', s => s.branchName],
+    ['Admission Date', s => s.admissionDate],
+    ['Date of Birth', s => s.dob],
+    ['Gender', s => s.gender],
+    ["Father's Name", s => (guardianOf(s, 'Father') || {}).name],
+    ['State / Union Territory', s => (currentAddressOf(s) || {}).state],
+    ['City', s => (currentAddressOf(s) || {}).city],
+    ['Pincode', s => (currentAddressOf(s) || {}).pincode],
+    ['Emergency Contact No', s => (stuPart(s, 'health') || {}).emergencyPhone],
+  ];
+  function guardianOf(s, relation) {
+    const list = stuPart(s, 'guardians');
+    return (Array.isArray(list) ? list : []).find(g => g && g.relation === relation) || null;
+  }
+  function currentAddressOf(s) { return (stuPart(s, 'addressInfo') || {}).current || {}; }
+
+  /** what this record is still short of, in the order the form asks for it */
+  function missingFor(student) {
+    return REQUIRED_STUDENT_FIELDS
+      .filter(([, read]) => String(read(student) ?? '').trim() === '')
+      .map(([label]) => label);
+  }
+  /* Recounted from the roll every time it is asked, so the figure follows the
+     data rather than a cache somebody has to remember to clear. */
+  function incompleteStudents() {
+    return Store.all('students')
+      .map(s => ({ student: s, missing: missingFor(s) }))
+      .filter(x => x.missing.length)
+      .sort((a, b) => b.missing.length - a.missing.length
+        || String(a.student.roll || '').localeCompare(String(b.student.roll || '')));
+  }
+
+  /* The list behind the card. It names what each record is short of, because
+     "incomplete" on its own sends somebody opening records to find out. */
+  function incompleteStudentsModal() {
+    const rows = incompleteStudents();
+    const canOpen = can('students', 'edit');
+    openModal('Incomplete Students', `
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
+        ${rows.length
+          ? `${plural(rows.length, 'student record')} still missing something the office needs.
+             A record counts as complete when it has:
+             <b>${REQUIRED_STUDENT_FIELDS.map(([l]) => esc(l)).join('</b>, <b>')}</b>.`
+          : 'Every student on the roll has the details the office needs.'}</p>
+      ${rows.length ? `<div class="tbl-wrap"><table><thead><tr>
+          <th>Student ID</th><th>Name</th><th>Course / Branch</th><th>Batch</th>
+          <th>Still missing</th>${canOpen ? '<th></th>' : ''}
+        </tr></thead><tbody>${rows.map(({ student: s, missing }) => `<tr>
+          <td class="mono">${esc(s.roll || '—')}</td>
+          <td>${esc(s.name || [s.firstName, s.lastName].filter(Boolean).join(' ') || '—')}</td>
+          <td>${esc(s.course || '—')}${s.branchName ? ' · ' + esc(s.branchName) : ''}</td>
+          <td>${esc(s.batch || '—')}</td>
+          <td><span style="color:var(--red);font-size:12.5px">${
+            missing.map(esc).join(' · ')}</span></td>
+          ${canOpen ? `<td><button class="btn-outline btn-sm" data-fix="${esc(s.id)}">Open</button></td>` : ''}
+        </tr>`).join('')}</tbody></table></div>` : ''}
+      <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`,
+      true);
+    $('#cx').onclick = closeModal;
+    document.querySelectorAll('#modalBody [data-fix]').forEach(b => {
+      b.onclick = () => { closeModal(); studentForm(b.dataset.fix); };
+    });
   }
   // CSS conic-gradient string for a multi-segment donut chart
   function donutGradient(segments) {
@@ -1004,6 +1082,7 @@
     if (user.role === 'admission') return admissionDashboard();
     const students = Store.all('students');
     const nStu = students.length;
+    const nIncomplete = incompleteStudents().length;
     const nFac = Store.all('faculty').length;
     const nCou = Store.all('courses').length;
     const nBooks = Store.all('books').reduce((s, b) => s + (b.total || 0), 0);
@@ -1051,6 +1130,7 @@
       ${statCard('👨‍🏫', nFac, 'Faculty Members', 'c2')}
       ${statCard('📚', nCou, 'Courses Offered', 'c3')}
       ${statCard('📖', nBooks, 'Library Books', 'c2')}
+      ${statCard('📋', nIncomplete, 'Incomplete Students', nIncomplete ? 'c4' : 'c3', 'dashIncomplete')}
     </div>`;
 
     // ---- charts row: branch distribution + fee donut ----
@@ -1117,7 +1197,20 @@
         <td>${s.semester}</td><td>${attBar(att)}</td><td>${gpa ?? '—'}</td></tr>`;
     });
     html += `</tbody></table></div></div>`;
+
+    viewDashboard.after = () => { bindIncompleteCard(); };
     return html;
+  }
+
+  /* Both dashboards show the same card and open the same list, so the wiring is
+     written once — two copies would be two places to forget. */
+  function bindIncompleteCard() {
+    const card = $('#dashIncomplete');
+    if (!card) return;
+    card.onclick = incompleteStudentsModal;
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); incompleteStudentsModal(); }
+    };
   }
 
   // greeting + date helpers for the dashboard banner
@@ -1263,6 +1356,8 @@
       ${statCard('🆕', admittedThisYear.length, `Admitted in ${esc(thisYear)}`, 'c3')}
       ${statCard('✅', active.length, 'Active', 'c3')}
       ${statCard('⏸️', students.length - active.length, 'Inactive', 'c4')}
+      ${statCard('📋', incompleteStudents().length, 'Incomplete Students',
+        incompleteStudents().length ? 'c4' : 'c3', 'dashIncomplete')}
     </div>`;
 
     html += `<div class="dash-2col">
@@ -1310,6 +1405,7 @@
     viewDashboard.after = () => {
       $('#dashAdd').onclick = () => studentForm();
       $('#dashImport').onclick = () => bulkImportModal('students');
+      bindIncompleteCard();
     };
     return html;
   }
@@ -2068,7 +2164,7 @@
         ${infoRow2('Blood Group', esc(s.bloodGroup || '—'), 'Birthplace', esc(per.birthplace || '—'))}
         ${infoRow2('Identification Mark', esc(per.identificationMark || '—'), 'Biometric Scan', esc(per.thumbId || '—'))}
         ${infoRow2('Hostel', esc(per.hostel || '—'), 'Transport', esc(per.transport || '—'))}
-        ${infoRow2('Lunch', esc(per.lunch || '—'), 'NSS', esc(per.nss || '—'))}
+        ${infoRow('NSS', esc(per.nss || '—'))}
         ${infoRow2('Languages Known', esc(per.languages || '—'), 'Hobbies', esc(per.hobbies || '—'))}`);
     }
 
@@ -2086,7 +2182,8 @@
         ${infoRow2('House', esc(s.house || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
         ${infoRow2('Date of Booking', esc(s.bookingDate || '—'), 'Admission Date', esc(s.admissionDate || '—'))}
-        ${infoRow2('Referred By', esc(s.referredBy || '—'), 'Entrance Examination', esc(aca.entranceExam || '—'))}
+        ${infoRow2('Source', esc(s.source || '—'), 'Referred By', esc(s.referredBy || '—'))}
+        ${infoRow('Entrance Examination', esc(aca.entranceExam || '—'))}
         ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
         + `<h4 class="ro-sub">Previous Qualifications</h4>
@@ -2105,7 +2202,8 @@
           ${infoRow2('Mobile No', esc(g.mobile || '—'), 'Phone No', esc(g.phone || '—'))}
           ${infoRow2('Annual Income', g.income ? '₹' + esc(g.income) : '—', 'Email', esc(g.email || '—'))}
           ${infoRow('Qualification', esc(g.qualification || '—'))}
-          ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
+          ${g.relation === 'Local Guardian'
+            ? infoRow('Home Address', esc(g.homeAddress || '—')) : ''}`)}`).join('');
     }
 
     if (tab === 'address') {
@@ -2323,6 +2421,11 @@
     ['phone', 'Phone'], ['income', 'Annual Income'], ['email', 'Email'],
     ['qualification', 'Qualification'], ['homeAddress', 'Home Address'],
   ];
+  /* A parent's home address is the student's own address written twice, and two
+     copies of one fact go out of step. Only the local guardian is asked — that
+     is somebody at a different address, which is the whole point of naming one. */
+  const guardianFieldsFor = (role) => role === 'Local Guardian'
+    ? GUARDIAN_FIELDS : GUARDIAN_FIELDS.filter(([f]) => f !== 'homeAddress');
 
   function studentReport(rows) {
     /* Everything past the first fourteen is spreadsheet-only. Written once here
@@ -2337,7 +2440,7 @@
     });
     const guardianColumns = [];
     GUARDIAN_ROLES.forEach(role => {
-      GUARDIAN_FIELDS.forEach(([f, label]) =>
+      guardianFieldsFor(role).forEach(([f, label]) =>
         guardianColumns.push(only(`${role} — ${label}`, `g_${role}_${f}`,
           f === 'homeAddress' ? 30 : f === 'name' ? 20 : 14)));
     });
@@ -2376,6 +2479,7 @@
         only('Admission Date', 'admissionDate', 14),
         { header: 'Academic Year', key: 'academicYear', width: 13 },
         only('Mentor', 'mentor', 18),
+        only('Source', 'source', 12),
         only('Referred By', 'referredBy', 18),
         only('Club', 'house', 16),
         only('Year', 'year', 7),
@@ -2402,7 +2506,6 @@
         only('Biometric Scan', 'thumbId', 14),
         only('Hostel', 'hostel', 9),
         only('Transport', 'transport', 10),
-        only('Lunch', 'lunch', 9),
         only('NSS', 'nss', 8),
         only('Entrance Examination', 'entranceExam', 18),
         only('Entrance Rank', 'entranceRank', 13),
@@ -2452,7 +2555,7 @@
           drivingLicense: per.drivingLicense || '', passport: per.passport || '',
           thumbId: per.thumbId || '',
           hostel: per.hostel || '', transport: per.transport || '',
-          lunch: per.lunch || '', nss: per.nss || '',
+          nss: per.nss || '',
           entranceExam: aca.entranceExam || '', entranceRank: aca.entranceRank || '',
           curAddress: cur.address || '', curState: cur.state || '',
           curDistrict: cur.district || '', curCity: cur.city || '',
@@ -2480,7 +2583,7 @@
         });
         GUARDIAN_ROLES.forEach(role => {
           const g = guardList.find(x => x && x.relation === role) || {};
-          GUARDIAN_FIELDS.forEach(([f]) => { flat[`g_${role}_${f}`] = g[f] || ''; });
+          guardianFieldsFor(role).forEach(([f]) => { flat[`g_${role}_${f}`] = g[f] || ''; });
         });
         return flat;
       }),
@@ -2600,6 +2703,9 @@
   const GENDERS = ['Male', 'Female', 'Other'];
   const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   const YES_NO = ['No', 'Yes'];
+  /* Where the enquiry came from, which is not the same question as who referred
+     them: the source is the channel, the referrer is the person. */
+  const SOURCES = ['College', 'Office', 'Others'];
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SEBC', 'SC', 'ST', 'EWS', 'TFW',
                                'Physically Handicapped', 'Management', 'NRI'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
@@ -2683,7 +2789,27 @@
      City is deliberately not a list. A state has districts and a district has
      more towns than anybody would maintain, so the first two are picked and the
      third is typed. */
-  const STATES = ['ANDHRA PRADESH', 'BIHAR', 'CHHATTISGARH', 'JHARKHAND', 'ODISHA', 'WEST BENGAL'];
+  /* Every state, then every union territory — one list, in that order, so the
+     eight sit together at the end rather than scattered through the states.
+     Upper case throughout because the six the college admits from were entered
+     that way and are already on records. */
+  const INDIAN_STATES = [
+    'ANDHRA PRADESH', 'ARUNACHAL PRADESH', 'ASSAM', 'BIHAR', 'CHHATTISGARH', 'GOA',
+    'GUJARAT', 'HARYANA', 'HIMACHAL PRADESH', 'JHARKHAND', 'KARNATAKA', 'KERALA',
+    'MADHYA PRADESH', 'MAHARASHTRA', 'MANIPUR', 'MEGHALAYA', 'MIZORAM', 'NAGALAND',
+    'ODISHA', 'PUNJAB', 'RAJASTHAN', 'SIKKIM', 'TAMIL NADU', 'TELANGANA', 'TRIPURA',
+    'UTTAR PRADESH', 'UTTARAKHAND', 'WEST BENGAL',
+  ];
+  /* A union territory is not divided into districts the way a state is: several
+     are one island group or one city. Choosing one takes the District box off
+     the form rather than leaving it empty and asking to be filled. */
+  const UNION_TERRITORIES = [
+    'ANDAMAN AND NICOBAR ISLANDS', 'CHANDIGARH',
+    'DADRA AND NAGAR HAVELI AND DAMAN AND DIU', 'DELHI (NATIONAL CAPITAL TERRITORY)',
+    'JAMMU AND KASHMIR', 'LADAKH', 'LAKSHADWEEP', 'PUDUCHERRY',
+  ];
+  const STATES = INDIAN_STATES.concat(UNION_TERRITORIES);
+  const isUnionTerritory = (v) => UNION_TERRITORIES.includes(String(v || '').trim().toUpperCase());
 
   const DISTRICTS = {
     'ANDHRA PRADESH': [
@@ -2743,15 +2869,27 @@
       .map(x => `<option${x.toLowerCase() === v.toLowerCase() ? ' selected' : ''}>${esc(x)}</option>`)
       .join('');
   }
-  const stateField = (name, val) => `<div class="field"><label>State</label>
+  const stateField = (name, val) => `<div class="field"><label>State / Union Territory</label>
     <select name="${name}" data-state>${
-      optionsWith(STATES, canonState(val) || val, '— Select State —')}</select></div>`;
+      optionsWith(STATES, canonState(val) || val, '— Select State / UT —')}</select></div>`;
+
+  /** what the district box should say and whether it belongs on the form at all */
+  function districtState(state) {
+    const chosen = String(state || '').trim();
+    if (!chosen) return { show: true, list: [], blank: '— Select State / UT first —' };
+    if (isUnionTerritory(chosen)) return { show: false, list: [], blank: '' };
+    const list = districtsOf(chosen);
+    return list.length
+      ? { show: true, list, blank: '— Select District —' }
+      : { show: true, list: [], blank: '— No district list for this state —' };
+  }
+
   const districtField = (name, val, state) => {
-    const list = districtsOf(state);
-    return `<div class="field"><label>District</label>
-      <select name="${name}" data-district${list.length ? '' : ' disabled'}>${
-        optionsWith(list, val, list.length ? '— Select District —' : '— Select State first —')
-      }</select></div>`;
+    const d = districtState(state);
+    return `<div class="field" data-district-field${d.show ? '' : ' style="display:none"'}>
+      <label>District</label>
+      <select name="${name}" data-district${d.list.length ? '' : ' disabled'}>${
+        optionsWith(d.list, d.show ? val : '', d.blank)}</select></div>`;
   };
 
   /* State drives District, and changing it clears both District and City.
@@ -2763,11 +2901,16 @@
     const group = el.closest('[data-address]');
     if (!group) return;
     const dist = group.querySelector('select[data-district]');
+    const box = group.querySelector('[data-district-field]');
     if (dist) {
-      const list = districtsOf(el.value);
-      dist.innerHTML = optionsWith(list, '',
-        list.length ? '— Select District —' : '— Select State first —');
-      dist.disabled = !list.length;
+      const d = districtState(el.value);
+      dist.innerHTML = optionsWith(d.list, '', d.blank);
+      dist.disabled = !d.list.length;
+      /* Hidden, not merely disabled — and emptied, because a union territory
+         has no district and a leftover one from the last choice would be
+         written to the record unseen. */
+      if (box) box.style.display = d.show ? '' : 'none';
+      if (!d.show) dist.value = '';
     }
     const city = group.querySelector('input[data-city]');
     if (city) city.value = '';
@@ -2811,7 +2954,7 @@
         ${fText('g_income', 'Annual Income (₹)', g.income, 'inputmode="numeric"')}
         ${fText('g_email', 'Email', g.email, 'type="email"')}
         ${fText('g_qualification', 'Qualification', g.qualification)}
-        ${fArea('g_homeAddress', 'Home Address', g.homeAddress)}
+        ${role === 'Local Guardian' ? fArea('g_homeAddress', 'Home Address', g.homeAddress) : ''}
       </div></div>`;
   }
 
@@ -2945,8 +3088,9 @@
             <select name="academicYear" id="stuFormYear">${
               academicYearOptions(s.academicYear || academicYearOf(s.admissionDate))}</select>
             <small style="color:var(--muted);font-size:11.5px">Follows the admission date until you set it yourself.</small></div>
-          ${fText('mentor', 'Mentor', s.mentor)}
+          ${fSel('source', 'Source', s.source, SOURCES)}
           ${fText('referredBy', 'Referred By', s.referredBy)}
+          ${fText('mentor', 'Mentor', s.mentor)}
           <div class="field"><label>Club</label><select name="house">
             <option value="">— None —</option>
             ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -2987,7 +3131,6 @@
           ${fText('per_thumbId', 'Biometric Scan', per.thumbId)}
           ${fSel('per_hostel', 'Hostel', per.hostel || 'No', YES_NO, false)}
           ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
-          ${fSel('per_lunch', 'Lunch', per.lunch || 'No', YES_NO, false)}
           ${fSel('per_nss', 'NSS', per.nss || 'No', YES_NO, false)}
           ${fText('per_voterId', 'Voter ID', per.voterId)}
           ${fText('per_pan', 'PAN No.', per.pan)}
@@ -3249,7 +3392,13 @@
 
       // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...f.querySelectorAll('[data-guardian]')].map(card => {
-        const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
+        /* A box that is not on this card reads as blank rather than throwing:
+           only the local guardian is asked for a home address, so the other two
+           cards genuinely do not have one. */
+        const val = (n) => {
+          const box = card.querySelector(`[name="g_${n}"]`);
+          return box ? (box.value || '').trim() : '';
+        };
         return { relation: card.dataset.role, name: val('name'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
@@ -3567,7 +3716,7 @@
     const out = [];
     roles.forEach(role => {
       const slug = role.replace(/\s+/g, '');
-      GUARDIAN_FIELDS.forEach(([f, label]) => {
+      guardianFieldsFor(role).forEach(([f, label]) => {
         const aliases = [`${role} ${label}`];
         // the shorter names the template used to carry
         if (f === 'name') aliases.push(role);
@@ -3632,6 +3781,7 @@
         { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
         { key:'academicYear', header:'Academic Year', aliases:['session'] },
         { key:'mentor', header:'Mentor' },
+        { key:'source', header:'Source', aliases:['enquiry source','lead source'] },
         { key:'referredBy', header:'Referred By', aliases:['referred','reference','referrer'] },
         { key:'house', header:'Clubs', aliases:['house','club'] },
 
@@ -3658,7 +3808,6 @@
         { key:'passport', header:'Passport No', into:'personal', as:'passport' },
         { key:'hostel', header:'Hostel', into:'personal', as:'hostel' },
         { key:'transport', header:'Transport', into:'personal', as:'transport' },
-        { key:'lunch', header:'Lunch', into:'personal', as:'lunch' },
         { key:'nss', header:'NSS', into:'personal', as:'nss' },
         { key:'languages', header:'Languages Known', into:'personal', as:'languages', aliases:['languages'] },
         { key:'hobbies', header:'Hobbies', into:'personal', as:'hobbies' },
@@ -3704,13 +3853,13 @@
         specialisation:'Marketing', specialisation2:'Finance',
         semester:2, section:'A', house:'Marketing Club', batch:'2025-2027', academicYear:'2026-27',
         bookingDate:'2025-07-02', admissionDate:'2025-08-17', mentor:'Dr. Rajesh Mehta',
-        referredBy:'Suresh Panda', cgpa:'8.2', backlogs:0, status:'Active',
+        source:'Office', referredBy:'Suresh Panda', cgpa:'8.2', backlogs:0, status:'Active',
         title:'Mr.', gender:'Male', dob:'2003-05-14', bloodGroup:'B+',
         admissionCategory:'General', religion:'Hindu', nationality:'Indian', birthplace:'Cuttack',
         aadhaar:'123456789012', univRegNo:'2126010045',
         identificationMark:'Mole on left cheek', thumbId:'BIO-10',
         voterId:'', pan:'', drivingLicense:'', passport:'',
-        hostel:'No', transport:'Yes', lunch:'Yes', nss:'No',
+        hostel:'No', transport:'Yes', nss:'No',
         languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
         'q_10th_institute':'Saraswati Vidya Mandir', 'q_10th_year':'2019', 'q_10th_marks':'88.4',
         'q_12th_institute':'Kendriya Vidyalaya', 'q_12th_year':'2021', 'q_12th_marks':'79.2',
@@ -4713,7 +4862,7 @@
         ${infoRow2('Blood Group', esc(f.bloodGroup || '—'), 'Marital Status', esc(f.maritalStatus || '—'))}
         ${infoRow2('Caste', esc(per.caste || '—'), 'Nationality', esc(per.nationality || '—'))}
         ${infoRow2('Religion', esc(per.religion || '—'), 'Thumb', esc(per.thumb || '—'))}
-        ${infoRow2('Lunch', esc(per.lunch || '—'), 'Transport', esc(per.transport || '—'))}
+        ${infoRow('Transport', esc(per.transport || '—'))}
         ${infoRow2('Breakfast', esc(per.breakfast || '—'), 'Dinner', esc(per.dinner || '—'))}`);
     }
 
@@ -4727,7 +4876,8 @@
           ${infoRow('Occupation', esc(g.occupation || '—'))}
           ${infoRow2('Total Income', g.income ? '₹' + esc(g.income) : '—', 'Mobile No', esc(g.mobile || '—'))}
           ${infoRow2('Phone No', esc(g.phone || '—'), 'Email ID', esc(g.email || '—'))}
-          ${infoRow('Home Address', esc(g.homeAddress || '—'))}`)}`).join('');
+          ${g.relation === 'Local Guardian'
+            ? infoRow('Home Address', esc(g.homeAddress || '—')) : ''}`)}`).join('');
     }
 
     if (tab === 'address') {
@@ -5033,7 +5183,6 @@
           ${fText('per_nationality', 'Nationality', per.nationality || 'Indian')}
           ${fText('per_religion', 'Religion', per.religion)}
           ${fText('per_thumb', 'Thumb', per.thumb)}
-          ${fSel('per_lunch', 'Lunch', per.lunch || 'No', YES_NO, false)}
           ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
           ${fSel('per_breakfast', 'Breakfast', per.breakfast || 'No', YES_NO, false)}
           ${fSel('per_dinner', 'Dinner', per.dinner || 'No', YES_NO, false)}
@@ -5211,7 +5360,13 @@
 
       // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...form.querySelectorAll('[data-guardian]')].map(card => {
-        const val = (n) => (card.querySelector(`[name="g_${n}"]`).value || '').trim();
+        /* A box that is not on this card reads as blank rather than throwing:
+           only the local guardian is asked for a home address, so the other two
+           cards genuinely do not have one. */
+        const val = (n) => {
+          const box = card.querySelector(`[name="g_${n}"]`);
+          return box ? (box.value || '').trim() : '';
+        };
         return { relation: card.dataset.role, name: val('name'), occupation: val('occupation'),
                  mobile: val('mobile'), phone: val('phone'), income: val('income'),
                  email: val('email'), qualification: val('qualification'),
@@ -13105,7 +13260,7 @@
         ['Aadhaar', d.aadhaar], ['PAN', d.pan], ['Voter ID', d.voterId],
         ['Driving License', d.drivingLicense], ['Passport', d.passport]])}
       ${block('Facilities Requested', [['Hostel', d.hostel], ['Transport', d.transport],
-        ['Lunch', d.lunch], ['NSS', d.nss]])}
+        ['NSS', d.nss]])}
       ${block('Previous Qualifications', SUB_QUALS.reduce((rows, [k, label]) => rows.concat([
         [label + ' — Institute', d[k + 'Institute']],
         [label + ' — Year', d[k + 'Year']],
@@ -13114,7 +13269,8 @@
         ['Name', d[k + 'Name']], ['Occupation', d[k + 'Occupation']],
         ['Mobile', d[k + 'Mobile']], ['Phone', d[k + 'Phone']],
         ['Annual Income', d[k + 'Income']], ['Email', d[k + 'Email']],
-        ['Qualification', d[k + 'Qualification']], ['Home Address', d[k + 'Address']]])).join('')}
+        ['Qualification', d[k + 'Qualification']]].concat(
+          k === 'guardian' ? [['Home Address', d[k + 'Address']]] : []))).join('')}
       ${block('Current Address', [['Address', d.address], ['State', d.state],
         ['District', d.district], ['City', d.city],
         ['Country', d.country], ['Pincode', d.pincode]])}
@@ -13163,7 +13319,7 @@
         languages: d.languages || '', hobbies: d.hobbies || '',
         voterId: d.voterId || '', pan: d.pan || '', drivingLicense: d.drivingLicense || '',
         passport: d.passport || '',
-        hostel: d.hostel || '', transport: d.transport || '', lunch: d.lunch || '',
+        hostel: d.hostel || '', transport: d.transport || '',
         nss: d.nss || '',
       },
       guardians: SUB_GUARDIANS.map(([k, relation]) => ({

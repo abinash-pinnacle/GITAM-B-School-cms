@@ -170,6 +170,9 @@ const COLLECTIONS = [
                      /* When the seat was booked, and who brought the student in.
                         The booking is usually weeks before the admission. */
                      'bookingDate', 'referredBy',
+                     /* Where the enquiry came from — the channel, which is a
+                        different question from who referred them. */
+                     'source',
                      /* The university's number, not ours. `roll` is the Student
                         ID the college issues and the student logs in with;
                         this is the ten digits the university registers them

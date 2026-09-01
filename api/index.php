@@ -1216,7 +1216,7 @@ function apply_fields(): array
         'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
         'batch', 'house', 'admissionDate',
         'dob', 'gender', 'bloodGroup', 'aadhaar', 'univRegNo', 'admissionCategory', 'religion',
-        'nationality', 'birthplace', 'identificationMark', 'hostel', 'transport', 'lunch',
+        'nationality', 'birthplace', 'identificationMark', 'hostel', 'transport',
         'nss', 'voterId', 'pan', 'drivingLicense', 'passport', 'languages', 'hobbies',
         'entranceExam', 'entranceRank',
         'address', 'state', 'district', 'city', 'country', 'pincode',

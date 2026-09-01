@@ -247,8 +247,6 @@
             <select name="hostel"><option>No</option><option>Yes</option></select></div>
           <div class="field"><label>Transport</label>
             <select name="transport"><option>No</option><option>Yes</option></select></div>
-          <div class="field"><label>Lunch</label>
-            <select name="lunch"><option>No</option><option>Yes</option></select></div>
           <div class="field"><label>NSS</label>
             <select name="nss"><option>No</option><option>Yes</option></select></div>
         </div>
@@ -370,7 +368,12 @@
       + '<div class="field"><label>Annual Income (₹)</label><input name="' + p + 'Income" inputmode="numeric" maxlength="12"></div>'
       + '<div class="field"><label>Email</label><input name="' + p + 'Email" type="email" maxlength="120"></div>'
       + '<div class="field"><label>Qualification</label><input name="' + p + 'Qualification" maxlength="60"></div>'
-      + '<div class="field full"><label>Home Address</label><textarea name="' + p + 'Address" maxlength="500"></textarea></div>'
+      /* Only the local guardian is asked for an address of their own. A parent's
+         is the student's address written a second time, and two copies of one
+         fact go out of step. */
+      + (p === 'guardian'
+          ? '<div class="field full"><label>Home Address</label><textarea name="' + p + 'Address" maxlength="500"></textarea></div>'
+          : '')
       + '</div>';
   }).join('');
 
