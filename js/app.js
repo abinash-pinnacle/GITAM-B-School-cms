@@ -3712,7 +3712,13 @@
 
       const login = spec.login(raw);
       const uname = String(login.username || '').toLowerCase();
-      if (existingUsers.has(uname) || usedUsers.has(uname)) {
+      /* A student signs in with their Student ID, so a row that leaves that
+         column blank has no username yet — it gets one when the server issues
+         the id, after this file has been accepted. Blank is therefore not a
+         name that can be taken: checking it here made the first blank row
+         claim "" and refused every blank row under it, so a sheet of two
+         hundred new students imported exactly one of them. */
+      if (uname && (existingUsers.has(uname) || usedUsers.has(uname))) {
         return { raw, error: `Username "${login.username}" already taken` };
       }
 
@@ -3789,7 +3795,7 @@
       }
 
       seen.add(key);
-      usedUsers.add(uname);
+      if (uname) usedUsers.add(uname);
       return { raw, data, login };
     });
   }

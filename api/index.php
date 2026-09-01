@@ -1281,6 +1281,17 @@ function api_apply(): void
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         send_json(['error' => 'bad-email', 'message' => 'That email address does not look right.'], 422);
     }
+    /* The university's number, if they have one. The shape is checked here —
+       the browser's copy of this rule is a courtesy and anything can post to
+       this endpoint. Whether somebody else already holds it is not checked
+       here on purpose: the same link is given to students already on the roll,
+       and one re-sending their own details must not be turned away for holding
+       their own number. That check happens when the office approves the row. */
+    $ureg = apply_clean($d['univRegNo'] ?? '', 20);
+    if ($ureg !== '' && !preg_match('/^\d{10}$/', $ureg)) {
+        send_json(['error' => 'bad-univreg',
+                   'message' => 'University Regd. No. must be exactly 10 digits, or left blank.'], 422);
+    }
 
     attempts_table();
     $now = time();
