@@ -56,19 +56,37 @@ const Store = {
   },
 
   // load everything from the server into the cache
+  /* Two attempts, a pause apart. The commonest failure here is not a server
+     that is down but one that is busy: the first request after a deploy runs
+     the schema migration, and a table being rebuilt can outlast the request
+     that triggered it. The message this used to end at said "try again in a
+     moment", so it tries again in a moment. */
   async load() {
-    const res = await fetch(`${API}/bootstrap`, { headers: this._headers() });
-    /* The token was revoked, expired with a password change, or belongs to an
-       account that has been switched off. Whatever the reason, this session is
-       over — drop it so the app asks for a sign-in rather than showing a shell
-       with no data in it. */
-    if (res.status === 401) {
-      this.setUser(null, null);
-      throw new Error('unauthorised');
+    for (let attempt = 0; ; attempt++) {
+      const again = attempt === 0;
+      let res;
+      try {
+        res = await fetch(`${API}/bootstrap`, { headers: this._headers() });
+      } catch (e) {
+        if (!again) throw e;              // the network, not the server
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      /* The token was revoked, expired with a password change, or belongs to an
+         account that has been switched off. Whatever the reason, this session is
+         over — drop it so the app asks for a sign-in rather than showing a shell
+         with no data in it. Asking twice would not change the answer. */
+      if (res.status === 401) {
+        this.setUser(null, null);
+        throw new Error('unauthorised');
+      }
+      if (res.ok) {
+        this.data = await res.json();
+        return this.data;
+      }
+      if (!again) throw new Error('bootstrap failed');
+      await new Promise(r => setTimeout(r, 2000));
     }
-    if (!res.ok) throw new Error('bootstrap failed');
-    this.data = await res.json();
-    return this.data;
   },
 
   // server-side login — the account decides the role, the caller does not pick
