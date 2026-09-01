@@ -2302,34 +2302,77 @@
     $('#psheet').onclick = () => printMarksheet(sid);
   }
 
-  /* the Students page as an exportable report */
+  /* The Students page as an exportable report.
+
+     Columns without `print: false` are the printed roll — a list somebody can
+     read on paper. Everything is in the spreadsheet, because that is what an
+     office exports one for: the parents' numbers, the address, the date of
+     birth, the things that are on the record and not on the screen. */
   function studentReport(rows) {
+    const guardian = (s, relation) => {
+      const list = stuPart(s, 'guardians');
+      return (Array.isArray(list) ? list : []).find(g => g && g.relation === relation) || {};
+    };
     return {
       title: 'Student Report', sheetName: 'Students', subtitle: reportStamp(),
       columns: [
-        { header: 'Student ID', key: 'roll', width: 14 },
-        { header: 'First Name', key: 'firstName', width: 16 },
-        { header: 'Middle Name', key: 'middleName', width: 14 },
-        { header: 'Last Name', key: 'lastName', width: 16 },
-        { header: 'Batch', key: 'batch', width: 14 },
-        { header: 'Status', key: 'status', width: 10 },
-        { header: 'Course', key: 'course', width: 12 },
-        { header: 'Department', key: 'branch', width: 12 },
-        { header: 'Specialisation', key: 'specialisation', width: 18 },
-        { header: 'Year', key: 'year', width: 8, type: 'number' },
-        { header: 'Semester', key: 'semester', width: 10, type: 'number' },
-        { header: 'Section', key: 'section', width: 9 },
-        { header: 'Academic Year', key: 'academicYear', width: 15 },
-        { header: 'Email', key: 'email', width: 26 },
-        { header: 'Phone', key: 'phone', width: 14 },
-        { header: 'Attendance %', key: 'attendance', width: 14 },
-        { header: 'GPA', key: 'gpa', width: 9 },
+        { header: 'Student ID', key: 'roll', width: 12 },
+        { header: 'Roll No.', key: 'serialNo', width: 10, print: false },
+        { header: 'First Name', key: 'firstName', width: 15 },
+        { header: 'Middle Name', key: 'middleName', width: 13, print: false },
+        { header: 'Last Name', key: 'lastName', width: 15 },
+        { header: 'Course', key: 'course', width: 11 },
+        { header: 'Branch', key: 'branchName', width: 26 },
+        { header: 'Specialisation', key: 'specialisation', width: 15 },
+        { header: 'Specialisation II', key: 'specialisation2', width: 15, print: false },
+        { header: 'Semester', key: 'semester', width: 9, type: 'number' },
+        { header: 'Year', key: 'year', width: 7, type: 'number', print: false },
+        { header: 'Section', key: 'section', width: 8 },
+        { header: 'Batch', key: 'batch', width: 12 },
+        { header: 'Academic Year', key: 'academicYear', width: 13 },
+        { header: 'Admission Date', key: 'admissionDate', width: 14, print: false },
+        { header: 'Phone', key: 'phone', width: 13 },
+        { header: 'WhatsApp', key: 'whatsapp', width: 13, print: false },
+        { header: 'Email', key: 'email', width: 24, print: false },
+        { header: 'College Email', key: 'domainEmail', width: 24, print: false },
+        { header: 'Date of Birth', key: 'dob', width: 12, print: false },
+        { header: 'Gender', key: 'gender', width: 9, print: false },
+        { header: 'Blood Group', key: 'bloodGroup', width: 11, print: false },
+        { header: 'Admission Category', key: 'admissionCategory', width: 16, print: false },
+        { header: 'Aadhaar', key: 'aadhaar', width: 15, print: false },
+        { header: "Father's Name", key: 'fatherName', width: 20, print: false },
+        { header: "Father's Mobile", key: 'fatherMobile', width: 13, print: false },
+        { header: "Mother's Name", key: 'motherName', width: 20, print: false },
+        { header: "Mother's Mobile", key: 'motherMobile', width: 13, print: false },
+        { header: 'Address', key: 'address', width: 32, print: false },
+        { header: 'City', key: 'city', width: 14, print: false },
+        { header: 'State', key: 'state', width: 14, print: false },
+        { header: 'Pincode', key: 'pincode', width: 10, print: false },
+        { header: 'Mentor', key: 'mentor', width: 18, print: false },
+        { header: 'Department', key: 'branch', width: 12, print: false },
+        { header: 'Status', key: 'status', width: 9 },
+        { header: 'Attendance %', key: 'attendance', width: 12 },
+        { header: 'GPA', key: 'gpa', width: 8 },
+        { header: 'CGPA', key: 'cgpa', width: 8, print: false },
+        { header: 'Backlogs', key: 'backlogs', width: 9, type: 'number', print: false },
       ],
-      rows: rows.map(s => Object.assign({}, s, {
-        attendance: studentAttendancePct(s.id) ?? '—',
-        gpa: studentGPA(s.id) ?? '—',
-      })),
-      totals: { roll: 'TOTAL', name: rows.length + ' students' },
+      rows: rows.map(s => {
+        const per = stuPart(s, 'personal');
+        const cur = (stuPart(s, 'addressInfo') || {}).current || {};
+        const father = guardian(s, 'Father');
+        const mother = guardian(s, 'Mother');
+        return Object.assign({}, s, {
+          admissionCategory: per.admissionCategory || '',
+          fatherName: father.name || '', fatherMobile: father.mobile || '',
+          motherName: mother.name || '', motherMobile: mother.mobile || '',
+          address: cur.address || '', city: cur.city || '',
+          state: cur.state || '', pincode: cur.pincode || '',
+          attendance: studentAttendancePct(s.id) ?? '—',
+          gpa: studentGPA(s.id) ?? '—',
+        });
+      }),
+      // under a column wide enough to hold it — `name` was not one of the columns
+      totals: { roll: 'TOTAL', firstName: plural(rows.length, 'student') },
     };
   }
 
@@ -7763,6 +7806,9 @@
   function reportSignatory() { return readOnly() ? 'Center Head' : 'Accounts Officer'; }
   function printReport(r) {
     if (!r.rows.length) { toast('Nothing to print for these filters.', 'err'); return; }
+    /* A spreadsheet can be forty columns wide and still be read; a sheet of A4
+       cannot. A column marked `print: false` is in the file and off the page. */
+    r = Object.assign({}, r, { columns: r.columns.filter(c => c.print !== false) });
     const totalsRow = r.totals ? `<tfoot><tr>${r.columns.map(c =>
       `<td style="font-weight:700${c.money ? ';text-align:right' : ''}">${esc(
         r.totals[c.key] === undefined ? '' : (c.money ? money(r.totals[c.key]) : r.totals[c.key]))}</td>`).join('')}</tr></tfoot>` : '';
