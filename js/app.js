@@ -2342,36 +2342,46 @@
 
     return {
       title: 'Student Report', sheetName: 'Students', subtitle: reportStamp(),
+      /* The same order as the form's Basic tab, group for group: who they are,
+         how to reach them, what they are studying, then the rest. A sheet is the
+         form laid on its side, and nobody should have to re-learn it.
+
+         The fourteen without `print: false` are the printed roll. */
       columns: [
-        // ---- the printed roll ----
+        // ---- identity ----
         { header: 'Student ID', key: 'roll', width: 12 },
-        { header: 'First Name', key: 'firstName', width: 15 },
-        { header: 'Last Name', key: 'lastName', width: 15 },
-        { header: 'Course', key: 'course', width: 11 },
-        { header: 'Branch', key: 'branchName', width: 26 },
-        { header: 'Specialisation', key: 'specialisation', width: 15 },
-        { header: 'Semester', key: 'semester', width: 9, type: 'number' },
-        { header: 'Section', key: 'section', width: 8 },
-        { header: 'Batch', key: 'batch', width: 12 },
-        { header: 'Academic Year', key: 'academicYear', width: 13 },
-        { header: 'Phone', key: 'phone', width: 13 },
-        { header: 'Status', key: 'status', width: 9 },
-        { header: 'Attendance %', key: 'attendance', width: 12 },
-        { header: 'GPA', key: 'gpa', width: 8 },
-        // ---- and the rest of the record ----
-        only('Roll No.', 'serialNo', 10),
         only('University Regd. No.', 'univRegNo', 18),
         only('Title', 'title', 8),
+        { header: 'First Name', key: 'firstName', width: 15 },
         only('Middle Name', 'middleName', 13),
-        only('Specialisation II', 'specialisation2', 15),
-        only('Year', 'year', 7),
-        only('Club', 'house', 16),
-        only('Admission Date', 'admissionDate', 14),
-        only('Mentor', 'mentor', 18),
-        only('Department', 'branch', 12),
+        { header: 'Last Name', key: 'lastName', width: 15 },
+        // ---- contact ----
+        { header: 'Phone', key: 'phone', width: 13 },
         only('WhatsApp', 'whatsapp', 13),
         only('Email', 'email', 24),
         only('College Email', 'domainEmail', 24),
+        only('Emergency Contact Name', 'emergencyName', 22),
+        only('Emergency Contact No', 'emergencyPhone', 18),
+        // ---- course ----
+        { header: 'Course', key: 'course', width: 11 },
+        { header: 'Branch', key: 'branchName', width: 26 },
+        { header: 'Specialisation', key: 'specialisation', width: 15 },
+        only('Specialisation II', 'specialisation2', 15),
+        { header: 'Semester', key: 'semester', width: 9, type: 'number' },
+        { header: 'Section', key: 'section', width: 8 },
+        only('Roll No.', 'serialNo', 10),
+        { header: 'Batch', key: 'batch', width: 12 },
+        only('Admission Date', 'admissionDate', 14),
+        { header: 'Academic Year', key: 'academicYear', width: 13 },
+        only('Mentor', 'mentor', 18),
+        only('Club', 'house', 16),
+        only('Year', 'year', 7),
+        only('Department', 'branch', 12),
+        // ---- the rest of the record ----
+        { header: 'Status', key: 'status', width: 9 },
+        { header: 'Attendance %', key: 'attendance', width: 12 },
+        { header: 'GPA', key: 'gpa', width: 8 },
+        only('Aadhaar No.', 'aadhaar', 15),
         only('Date of Birth', 'dob', 12),
         only('Gender', 'gender', 9),
         only('Blood Group', 'bloodGroup', 11),
@@ -2382,7 +2392,6 @@
         only('Identification Mark', 'identificationMark', 22),
         only('Languages Known', 'languages', 20),
         only('Hobbies', 'hobbies', 20),
-        only('Aadhaar No.', 'aadhaar', 15),
         only('PAN No.', 'pan', 12),
         only('Voter ID', 'voterId', 14),
         only('Driving License No.', 'drivingLicense', 16),
@@ -2413,8 +2422,6 @@
         only('Medical Conditions', 'conditions', 24),
         only('Regular Medication', 'medication', 24),
         only('Health Notes', 'healthNotes', 24),
-        only('Emergency Contact Name', 'emergencyName', 22),
-        only('Emergency Contact No', 'emergencyPhone', 18),
         only('CGPA', 'cgpa', 8),
         only('Backlogs', 'backlogs', 9),
         only('Documents Submitted', 'documents', 34),
@@ -2706,6 +2713,7 @@
         `<button type="button" class="fin-tab ${i ? '' : 'active'}" data-pane="${k}">${label}</button>`).join('')}</div>
 
       <div class="sf-pane" data-pane="basic">
+        <h4 class="ro-sub" style="margin-top:4px">Identity</h4>
         <div class="form-grid">
           <div class="field"><label>Student ID</label>
             ${id
@@ -2724,7 +2732,6 @@
               : `<input id="rollInput" value="—" readonly>
                  <small style="color:var(--muted);font-size:11.5px">Generated from the admission
                    year and branch when you save.</small>`}</div>
-          ${fText('serialNo', 'Roll No.', s.serialNo)}
           <div class="field"><label>University Regd. No.</label>
             <!-- No hint: the office types this one in, and knows what it is. The
                  rules still hold on save — ten digits, and nobody else's. -->
@@ -2735,12 +2742,22 @@
             <input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
           ${fText('middleName', 'Middle Name', s.middleName)}
           ${fText('lastName', 'Last Name', s.lastName)}
-          ${fText('email', 'Email ID', s.email, 'type="email" placeholder="name@example.com"')}
-          ${fText('domainEmail', 'Domain Email ID', s.domainEmail, 'type="email"')}
+        </div>
+
+        <h4 class="ro-sub">Contact</h4>
+        <div class="form-grid">
           <div class="field"><label>Mobile No</label>
             <input name="phone" id="phoneInput" inputmode="numeric" placeholder="10-digit number"
                    value="${esc(s.phone || '')}"></div>
           ${fText('whatsapp', 'WhatsApp No', s.whatsapp, 'inputmode="numeric" maxlength="10"')}
+          ${fText('email', 'Email ID', s.email, 'type="email" placeholder="name@example.com"')}
+          ${fText('domainEmail', 'Domain Email ID', s.domainEmail, 'type="email"')}
+          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
+          ${fText('h_emergencyPhone', 'Emergency Contact No', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
+        </div>
+
+        <h4 class="ro-sub">Course</h4>
+        <div class="form-grid">
           <div class="field"><label>Course</label>
             <select name="course" id="stuFormCourse">${courseOptions(s.course, true)}</select></div>
           <div class="field"><label>Branch</label>
@@ -2755,24 +2772,27 @@
           <div class="field"><label>Semester</label>
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
+          ${fText('serialNo', 'Roll No.', s.serialNo)}
           ${fText('batch', 'Batch', s.batch, 'placeholder="e.g. 2025-2027"')}
-          <div class="field"><label>Club</label><select name="house">
-            <option value="">— None —</option>
-            ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-          </select></div>
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           <div class="field"><label>Academic Year</label>
             <select name="academicYear" id="stuFormYear">${
               academicYearOptions(s.academicYear || academicYearOf(s.admissionDate))}</select>
             <small style="color:var(--muted);font-size:11.5px">Follows the admission date until you set it yourself.</small></div>
           ${fText('mentor', 'Mentor', s.mentor)}
+          <div class="field"><label>Club</label><select name="house">
+            <option value="">— None —</option>
+            ${clubList().map(c => `<option ${c === s.house ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select></div>
+        </div>
+
+        <h4 class="ro-sub">Other</h4>
+        <div class="form-grid">
           ${fText('aadhaar', 'Aadhaar No.', s.aadhaar, 'inputmode="numeric" maxlength="12"')}
           <div class="field"><label>Status</label><select name="status">${
             ['Active', 'Inactive'].map(v =>
               `<option ${((s.status || 'Active') === v) ? 'selected' : ''}>${v}</option>`).join('')
           }</select></div>
-          ${fText('h_emergencyPhone', 'Emergency Contact No', health.emergencyPhone, 'inputmode="numeric" maxlength="10"')}
-          ${fText('h_emergencyName', 'Emergency Contact Name', health.emergencyName)}
           ${photoField(s.photo)}
         </div>
         ${id && can('placement', 'edit') ? `<h4 class="ro-sub">Placement Eligibility</h4>
@@ -3389,37 +3409,48 @@
         { key:'roll', header:'Student ID',
           aliases:['reg no','regno','reg. no','registration',
                    'registration no','registration number','student id'] },
-        { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
-        { key:'middleName', header:'Middle Name' },
-        { key:'lastName', header:'Last Name', aliases:['surname'] },
-        { key:'serialNo', header:'Roll No', aliases:['serial no','serial'] },
         { key:'univRegNo', header:'University Regd. No',
           /* Not 'registration number' — the Student ID column has answered to
              that since before this one existed, and a sheet that says it means
              the number the college issued. */
           aliases:['university registration number','university regd no','univ regd no',
                    'university reg no','univ reg no'] },
-        { key:'email', header:'Email', aliases:['e-mail','email id'] },
-        { key:'domainEmail', header:'Domain Email', aliases:['college email','institute email'] },
+        { key:'title', header:'Title', into:'personal', as:'title' },
+        { key:'firstName', header:'First Name', required:true, aliases:['name','full name','student name'] },
+        { key:'middleName', header:'Middle Name' },
+        { key:'lastName', header:'Last Name', aliases:['surname'] },
+
+        // ---- contact ----
         { key:'phone', header:'Phone', aliases:['mobile','mobile no','phone number','contact'] },
         { key:'whatsapp', header:'WhatsApp No', aliases:['whatsapp'] },
+        { key:'email', header:'Email', aliases:['e-mail','email id'] },
+        { key:'domainEmail', header:'Domain Email', aliases:['college email','institute email'] },
+        { key:'emergencyName', header:'Emergency Contact Name', into:'health', as:'emergencyName',
+          aliases:['emergency contact'] },
+        { key:'emergencyPhone', header:'Emergency Contact No', into:'health', as:'emergencyPhone',
+          aliases:['emergency phone'] },
+
+        // ---- course ----
         { key:'course', header:'Course' },
         { key:'branchName', header:'Branch', aliases:['branch name','mba branch'] },
         { key:'specialisation', header:'Specialisation I', aliases:['stream','spec','specialisation'] },
         { key:'specialisation2', header:'Specialisation II', aliases:['second specialisation','spec 2'] },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
-        { key:'house', header:'Clubs', aliases:['house','club'] },
+        { key:'serialNo', header:'Roll No', aliases:['serial no','serial'] },
         { key:'batch', header:'Batch' },
-        { key:'academicYear', header:'Academic Year', aliases:['session'] },
         { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
+        { key:'academicYear', header:'Academic Year', aliases:['session'] },
         { key:'mentor', header:'Mentor' },
+        { key:'house', header:'Clubs', aliases:['house','club'] },
+
+        // ---- the rest ----
+        { key:'status', header:'Status', def:'Active' },
         { key:'cgpa', header:'CGPA', aliases:['gpa'] },
         { key:'backlogs', header:'Backlogs', number:true, def:0, aliases:['active backlogs'] },
-        { key:'status', header:'Status', def:'Active' },
+        { key:'aadhaar', header:'Aadhaar No', aliases:['aadhar','aadhaar','adhaar'] },
 
         // ---- personal ----
-        { key:'title', header:'Title', into:'personal', as:'title' },
         { key:'gender', header:'Gender' },
         { key:'dob', header:'Date of Birth', aliases:['dob'] },
         { key:'bloodGroup', header:'Blood Group', aliases:['blood'] },
@@ -3428,7 +3459,6 @@
         { key:'religion', header:'Religion', into:'personal', as:'religion' },
         { key:'nationality', header:'Nationality', into:'personal', as:'nationality' },
         { key:'birthplace', header:'Birthplace', into:'personal', as:'birthplace', aliases:['birth place'] },
-        { key:'aadhaar', header:'Aadhaar No', aliases:['aadhar','aadhaar','adhaar'] },
         { key:'identificationMark', header:'Identification Mark', into:'personal', as:'identificationMark' },
         { key:'thumbId', header:'Biometric Scan', into:'personal', as:'thumbId', aliases:['thumb id'] },
         { key:'voterId', header:'Voter ID', into:'personal', as:'voterId' },
@@ -3464,11 +3494,7 @@
         { key:'permCountry', header:'Permanent Country', into:'permanent', as:'country' },
         { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
 
-        // ---- health: the two contact columns are on the Basic tab of the form ----
-        { key:'emergencyName', header:'Emergency Contact Name', into:'health', as:'emergencyName',
-          aliases:['emergency contact'] },
-        { key:'emergencyPhone', header:'Emergency Contact No', into:'health', as:'emergencyPhone',
-          aliases:['emergency phone'] },
+        // ---- health: the emergency contact is asked for on the Basic tab ----
         { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
         { key:'conditions', header:'Medical Conditions', into:'health', as:'conditions' },
         { key:'medication', header:'Regular Medication', into:'health', as:'medication' },
@@ -3895,18 +3921,29 @@
       const bad = checked.filter((r) => r.error);
       const shown = checked.slice(0, 60);
 
+      /* The two columns somebody recognises a row by: its key, and the person's
+         name. Named rather than taken by position — the preview used to show
+         whatever happened to be first and second, so inserting a column made it
+         identify every row by a mostly-empty one. */
+      const byKey = (k) => spec.columns.find((c) => c.key === k);
+      const idCol = byKey(spec.keyField) || spec.columns[0];
+      const nameCol = byKey('firstName') || byKey('name') || spec.columns[1];
+
       $('#impResult').innerHTML = `
         <div class="imp-summary">
           <span class="imp-ok">${ok.length} ready</span>
           ${bad.length ? `<span class="imp-bad">${bad.length} skipped</span>` : ''}
         </div>
+        <!-- The key and the name, named rather than taken by position: a column
+             inserted second used to become the one the preview identified rows
+             by, which after a reorder was a mostly-empty column of dashes. -->
         <div class="tbl-wrap imp-table"><table><thead><tr>
-          <th>#</th><th>${spec.columns[0].header}</th><th>${spec.columns[1].header}</th><th>Status</th>
+          <th>#</th><th>${idCol.header}</th><th>${nameCol.header}</th><th>Status</th>
         </tr></thead><tbody>
           ${shown.map((r, i) => `<tr>
             <td>${i + 2}</td>
-            <td>${esc(r.raw[spec.columns[0].key] || '—')}</td>
-            <td>${esc(r.raw[spec.columns[1].key] || '—')}</td>
+            <td>${esc(r.raw[idCol.key] || '—')}</td>
+            <td>${esc(r.raw[nameCol.key] || '—')}</td>
             <td>${r.error ? `<span class="imp-bad">✗ ${esc(r.error)}</span>`
                            : '<span class="imp-ok">✓ Ready</span>'}</td>
           </tr>`).join('')}
