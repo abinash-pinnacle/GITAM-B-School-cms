@@ -3306,10 +3306,51 @@
      created and what will be skipped and why. */
   const DEFAULT_IMPORT_PASSWORD = 'pass123';
 
+  /* The repeating groups, as import columns. The export builds its headings from
+     QUAL_LEVELS and GUARDIAN_ROLES x GUARDIAN_FIELDS; these are built from the
+     same two lists, so the file the page writes is a file the page can read. The
+     spellings the template used before are kept as aliases — a sheet somebody
+     started filling in last month still uploads. */
+  const QUAL_LEGACY = { '10th': 'Class 10', '12th': 'Class 12', 'Diploma': 'Diploma', '+3': '+3' };
+
+  function qualImportColumns() {
+    const out = [];
+    QUAL_LEVELS.forEach(level => {
+      const was = QUAL_LEGACY[level];
+      const col = (as, label, aliases) => out.push({
+        key: `q_${level}_${as}`, header: `${level} — ${label}`, into: `qual:${level}`, as,
+        aliases: was ? aliases.map(a => `${was} ${a}`) : [],
+      });
+      col('institute', 'Institute', ['School', 'Institute', 'College']);
+      col('year', 'Year', ['Year', 'Passing Year']);
+      col('marks', '%', ['Marks', 'Percentage', '%']);
+    });
+    return out;
+  }
+
+  function guardianImportColumns(roles) {
+    const out = [];
+    roles.forEach(role => {
+      const slug = role.replace(/\s+/g, '');
+      GUARDIAN_FIELDS.forEach(([f, label]) => {
+        const aliases = [`${role} ${label}`];
+        // the shorter names the template used to carry
+        if (f === 'name') aliases.push(role);
+        if (f === 'income') {
+          aliases.push(`${role} Income`);
+          if (role === 'Father') aliases.push('Annual Income', 'Income');
+        }
+        out.push({ key: `g_${slug}_${f}`, header: `${role} — ${label}`,
+                   into: `guardian:${role}`, as: f, aliases });
+      });
+    });
+    return out;
+  }
+
   /* Columns marked `into` are collected into one of the record's JSON blobs —
-     `into:'personal', as:'title'` writes personal.title. `into:'father'` and
-     the rest build the named family blocks the forms ask for. `into:'current'`
-     / `'permanent'` build the two addresses. */
+     `into:'personal', as:'title'` writes personal.title. `into:'guardian:Father'`
+     and the rest build the named family blocks the forms ask for.
+     `into:'current'` / `'permanent'` build the two addresses. */
   const IMPORT_SPECS = {
     students: {
       title: 'Students',
@@ -3370,42 +3411,26 @@
         { key:'languages', header:'Languages Known', into:'personal', as:'languages', aliases:['languages'] },
         { key:'hobbies', header:'Hobbies', into:'personal', as:'hobbies' },
 
-        // ---- schooling ----
-        { key:'q10Institute', header:'Class 10 School', into:'qual10', as:'institute' },
-        { key:'q10Year', header:'Class 10 Year', into:'qual10', as:'year' },
-        { key:'q10Marks', header:'Class 10 Marks', into:'qual10', as:'marks' },
-        { key:'q12Institute', header:'Class 12 School', into:'qual12', as:'institute' },
-        { key:'q12Year', header:'Class 12 Year', into:'qual12', as:'year' },
-        { key:'q12Marks', header:'Class 12 Marks', into:'qual12', as:'marks' },
-        { key:'qDipInstitute', header:'Diploma Institute', into:'qualDip', as:'institute' },
-        { key:'qDipYear', header:'Diploma Year', into:'qualDip', as:'year' },
-        { key:'qDipMarks', header:'Diploma Marks', into:'qualDip', as:'marks', aliases:['diploma percentage'] },
-        { key:'q3Institute', header:'+3 Institute', into:'qual3', as:'institute' },
-        { key:'q3Year', header:'+3 Year', into:'qual3', as:'year' },
-        { key:'q3Marks', header:'+3 Marks', into:'qual3', as:'marks', aliases:['+3 percentage'] },
-        { key:'entranceExam', header:'Entrance Exam', into:'academicInfo', as:'entranceExam' },
+        // ---- schooling: one row per level the form offers ----
+        ...qualImportColumns(),
+        { key:'entranceExam', header:'Entrance Examination', into:'academicInfo', as:'entranceExam',
+          aliases:['entrance exam'] },
         { key:'entranceRank', header:'Entrance Rank', into:'academicInfo', as:'entranceRank' },
 
-        // ---- guardian ----
-        { key:'fName', header:'Father Name', into:'father', as:'name', aliases:['father'] },
-        { key:'fOccupation', header:'Father Occupation', into:'father', as:'occupation' },
-        { key:'fMobile', header:'Father Mobile', into:'father', as:'mobile' },
-        { key:'fIncome', header:'Father Income', into:'father', as:'income', aliases:['annual income','income'] },
-        { key:'mName', header:'Mother Name', into:'mother', as:'name', aliases:['mother'] },
-        { key:'mOccupation', header:'Mother Occupation', into:'mother', as:'occupation' },
-        { key:'mMobile', header:'Mother Mobile', into:'mother', as:'mobile' },
-        { key:'lgName', header:'Local Guardian Name', into:'localGuardian', as:'name' },
-        { key:'lgMobile', header:'Local Guardian Mobile', into:'localGuardian', as:'mobile' },
+        // ---- guardian: the same eight questions the form asks of each ----
+        ...guardianImportColumns(GUARDIAN_ROLES),
 
         // ---- address ----
-        { key:'address', header:'Address', into:'current', as:'address' },
-        { key:'city', header:'City', into:'current', as:'city' },
-        { key:'state', header:'State', into:'current', as:'state' },
-        { key:'country', header:'Country', into:'current', as:'country' },
-        { key:'pincode', header:'Pincode', into:'current', as:'pincode', aliases:['pin','pin code'] },
+        { key:'address', header:'Address', into:'current', as:'address', aliases:['present address'] },
+        { key:'city', header:'City', into:'current', as:'city', aliases:['present city'] },
+        { key:'state', header:'State', into:'current', as:'state', aliases:['present state'] },
+        { key:'country', header:'Country', into:'current', as:'country', aliases:['present country'] },
+        { key:'pincode', header:'Pincode', into:'current', as:'pincode',
+          aliases:['pin','pin code','present pincode'] },
         { key:'permAddress', header:'Permanent Address', into:'permanent', as:'address' },
         { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
         { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
+        { key:'permCountry', header:'Permanent Country', into:'permanent', as:'country' },
         { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
 
         // ---- health: the two contact columns are on the Basic tab of the form ----
@@ -3414,6 +3439,12 @@
         { key:'emergencyPhone', header:'Emergency Contact No', into:'health', as:'emergencyPhone',
           aliases:['emergency phone'] },
         { key:'allergies', header:'Allergies', into:'health', as:'allergies' },
+        { key:'conditions', header:'Medical Conditions', into:'health', as:'conditions' },
+        { key:'medication', header:'Regular Medication', into:'health', as:'medication' },
+        { key:'height', header:'Height (cm)', into:'health', as:'height' },
+        { key:'weight', header:'Weight (kg)', into:'health', as:'weight' },
+        { key:'lastCheckup', header:'Last Check-up', into:'health', as:'lastCheckup' },
+        { key:'healthNotes', header:'Health Notes', into:'health', as:'notes' },
       ],
       sample: {
         roll:'', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
@@ -3429,14 +3460,14 @@
         voterId:'', pan:'', drivingLicense:'', passport:'',
         hostel:'No', transport:'Yes', lunch:'Yes', nss:'No',
         languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
-        q10Institute:'Saraswati Vidya Mandir', q10Year:'2019', q10Marks:'88.4',
-        q12Institute:'Kendriya Vidyalaya', q12Year:'2021', q12Marks:'79.2',
-        qDipInstitute:'', qDipYear:'', qDipMarks:'',
-        q3Institute:'Ravenshaw University', q3Year:'2024', q3Marks:'72.5',
+        'q_10th_institute':'Saraswati Vidya Mandir', 'q_10th_year':'2019', 'q_10th_marks':'88.4',
+        'q_12th_institute':'Kendriya Vidyalaya', 'q_12th_year':'2021', 'q_12th_marks':'79.2',
+        'q_+3_institute':'Ravenshaw University', 'q_+3_year':'2024', 'q_+3_marks':'72.5',
         entranceExam:'CAT', entranceRank:'4521',
-        fName:'Bhikari Das', fOccupation:'Farmer', fMobile:'7978851886', fIncome:'240000',
-        mName:'Sunita Das', mOccupation:'Homemaker', mMobile:'7978851887',
-        lgName:'Ramesh Das', lgMobile:'7978851888',
+        g_Father_name:'Bhikari Das', g_Father_occupation:'Farmer', g_Father_mobile:'7978851886',
+        g_Father_income:'240000', g_Father_qualification:'Class 10',
+        g_Mother_name:'Sunita Das', g_Mother_occupation:'Homemaker', g_Mother_mobile:'7978851887',
+        g_LocalGuardian_name:'Ramesh Das', g_LocalGuardian_mobile:'7978851888',
         address:'AT- Harekrushnapur, PO- Chhatabar', city:'Khordha', state:'Odisha',
         country:'India', pincode:'752054',
         permAddress:'AT- Harekrushnapur, PO- Chhatabar', permCity:'Khordha',
@@ -3493,13 +3524,8 @@
         { key:'languages', header:'Languages', into:'otherInfo', as:'languages' },
         { key:'hobbies', header:'Hobbies', into:'otherInfo', as:'hobbies' },
 
-        // ---- guardian: the same two the form asks for ----
-        { key:'fName', header:'Father Name', into:'father', as:'name', aliases:['father'] },
-        { key:'fOccupation', header:'Father Occupation', into:'father', as:'occupation' },
-        { key:'fMobile', header:'Father Mobile', into:'father', as:'mobile' },
-        { key:'mName', header:'Mother Name', into:'mother', as:'name', aliases:['mother'] },
-        { key:'mOccupation', header:'Mother Occupation', into:'mother', as:'occupation' },
-        { key:'mMobile', header:'Mother Mobile', into:'mother', as:'mobile' },
+        // ---- guardian: the two an employee's file keeps ----
+        ...guardianImportColumns(EMP_GUARDIAN_ROLES),
 
         // ---- address ----
         { key:'address', header:'Address', into:'current', as:'address' },
@@ -3532,8 +3558,8 @@
         attendanceCardId:'1010', aadhaar:'559343140635', pan:'PSUPS3169H', voterId:'',
         bankAccount:'34986453071', bankName:'SBI', ifsc:'SBIN0008214',
         languages:'Odia, English', hobbies:'Gardening',
-        fName:'Gopal Sahu', fOccupation:'Teacher', fMobile:'7978851885',
-        mName:'Prativa Sahu', mOccupation:'Homemaker', mMobile:'7978851886',
+        g_Father_name:'Gopal Sahu', g_Father_occupation:'Teacher', g_Father_mobile:'7978851885',
+        g_Mother_name:'Prativa Sahu', g_Mother_occupation:'Homemaker', g_Mother_mobile:'7978851886',
         address:'Plot 45, Patia', city:'Bhubaneswar', state:'Odisha',
         country:'India', pincode:'751024',
         permAddress:'Plot 45, Patia', permCity:'Bhubaneswar',
@@ -3614,9 +3640,11 @@
 
       if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
       if (raw.whatsapp && !phoneValid(raw.whatsapp)) return { raw, error: 'WhatsApp must be 10 digits' };
-      for (const [field, who] of [['fMobile', "Father's"], ['mMobile', "Mother's"],
-                                  ['lgMobile', "Local guardian's"]]) {
-        if (raw[field] && !phoneValid(raw[field])) return { raw, error: `${who} mobile must be 10 digits` };
+      // every column the sheet files under a guardian's mobile, whichever sheet
+      for (const c of spec.columns.filter((x) => x.into && x.as === 'mobile')) {
+        if (raw[c.key] && !phoneValid(raw[c.key])) {
+          return { raw, error: `${c.header} must be 10 digits` };
+        }
       }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
       /* An id unique within this sheet can still belong to somebody already on
@@ -3700,18 +3728,18 @@
         data.addressInfo = { current: parts.current || {}, permanent: parts.permanent || {} };
       }
       // each family block is filed under the name the form gives it
-      const family = [['father', 'Father'], ['mother', 'Mother'], ['localGuardian', 'Local Guardian']]
-        .filter(([key]) => parts[key])
-        .map(([key, relation]) => Object.assign({ relation }, parts[key]));
+      const family = GUARDIAN_ROLES
+        .filter((relation) => parts[`guardian:${relation}`])
+        .map((relation) => Object.assign({ relation }, parts[`guardian:${relation}`]));
       if (family.length) data.guardians = family;
       if (raw.name && !data.name) data.name = raw.name;
-      // schooling arrives as two sets of three columns and is filed as the
+      // schooling arrives as three columns per level and is filed as the
       // qualification rows the profile page prints
       const quals = [];
-      [['qual10', '10th'], ['qual12', '12th'], ['qualDip', 'Diploma'], ['qual3', '+3']]
-        .forEach(([key, level]) => {
-          if (parts[key]) quals.push(Object.assign({ level }, parts[key]));
-        });
+      QUAL_LEVELS.forEach((level) => {
+        const q = parts[`qual:${level}`];
+        if (q) quals.push(Object.assign({ level }, q));
+      });
       if (quals.length) {
         data.academicInfo = Object.assign({}, data.academicInfo, { qualifications: quals });
       }
@@ -3779,7 +3807,16 @@
         return;
       }
 
-      const map = mapColumns(spec, rows[0]);
+      /* The headings are not always on the first line. A report exported from
+         this page carries its title, a timestamp and a blank row above them, and
+         somebody uploading their own export back is the commonest way a sheet
+         arrives here. So the heading row is looked for rather than assumed:
+         whichever of the first few rows recognises the most columns is it. */
+      let headerAt = 0, map = mapColumns(spec, rows[0]), best = Object.keys(map).length;
+      for (let i = 1; i < Math.min(rows.length, 12); i++) {
+        const m = mapColumns(spec, rows[i]);
+        if (Object.keys(m).length > best) { best = Object.keys(m).length; map = m; headerAt = i; }
+      }
       const unmatched = spec.columns.filter((c) => c.required && map[c.key] === undefined);
       if (unmatched.length) {
         $('#impResult').innerHTML = `<p class="imp-bad">Could not find the
@@ -3789,7 +3826,13 @@
         return;
       }
 
-      checked = validateRows(spec, rows.slice(1).filter((r) => r.some((c) => c)), map);
+      const body = rows.slice(headerAt + 1).filter((r) => r.some((c) => c));
+      if (!body.length) {
+        $('#impResult').innerHTML = '<p class="imp-bad">The headings are there but no rows under them.</p>';
+        $('#impGo').disabled = true;
+        return;
+      }
+      checked = validateRows(spec, body, map);
       const ok = checked.filter((r) => !r.error);
       const bad = checked.filter((r) => r.error);
       const shown = checked.slice(0, 60);
