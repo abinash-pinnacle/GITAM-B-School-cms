@@ -870,7 +870,7 @@
      Export and Print are hidden rather than refused: the rows are already in
      the browser by the time the page draws, so this is a control on the screen
      and not a gate. Import writes, and the server refuses that one for real. */
-  const ACTION_CONTROL_PATTERNS = [[/Print$/, 'print'], [/(Csv|Xls)$/, 'export']];
+  const ACTION_CONTROL_PATTERNS = [[/Print$/, 'print'], [/Xls$/, 'export']];
   const ACTION_CONTROL_IDS = { impStu: 'import', impFac: 'import', dashImport: 'import' };
   function gateControls(root, viewKey) {
     const m = moduleOfView(viewKey);
@@ -1636,9 +1636,8 @@
         <button class="btn-outline btn-sm" id="stuFilter">🔎 Filter</button>
         ${baseRoleOf(user.role) === 'admin'
           ? `<button class="btn-outline btn-sm" id="stuSeq" title="ID numbering">🔢 Numbering</button>` : ''}
-        <button class="btn-outline btn-sm" id="stuPrint">🖨 PDF</button>
-        <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
-        <button class="btn-outline btn-sm" id="stuXls">⬇ Excel</button>
+        <button class="btn-outline btn-sm" id="stuPrint">📄 Download PDF</button>
+        <button class="btn-outline btn-sm" id="stuXls">⬇ Download Excel</button>
         ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
         <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
       </div></div>
@@ -1786,8 +1785,10 @@
         $('#impStu').onclick = () => bulkImportModal('students');
       }
       const report = () => studentReport(matching());
-      $('#stuPrint').onclick = () => printReport(report());
-      $('#stuCsv').onclick = () => downloadCsv(report());
+      $('#stuPrint').onclick = () => {
+        printReport(report());
+        toast('Choose "Save as PDF" in the print dialog.');
+      };
       $('#stuXls').onclick = () => downloadXlsx(report());
       draw();
     };
@@ -4289,9 +4290,8 @@
           ${employeeValues('designation').map(d => `<option>${esc(d)}</option>`).join('')}</select>
         ${canEdit ? `<button class="btn-outline" id="impFac">⬆ Bulk Upload</button>
           <button class="btn-primary" id="addFac">+ Add Employee</button>` : `
-          <button class="btn-outline btn-sm" id="facPrint">🖨 Print</button>
-          <button class="btn-outline btn-sm" id="facCsv">📑 CSV</button>
-          <button class="btn-primary btn-sm" id="facXls">⬇ Excel</button>`}
+          <button class="btn-outline btn-sm" id="facPrint">📄 Download PDF</button>
+          <button class="btn-primary btn-sm" id="facXls">⬇ Download Excel</button>`}
       </div></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
@@ -4361,8 +4361,10 @@
       }
       else {
         const report = () => facultyReport(filtered());
-        $('#facPrint').onclick = () => printReport(report());
-        $('#facCsv').onclick = () => downloadCsv(report());
+        $('#facPrint').onclick = () => {
+          printReport(report());
+          toast('Choose "Save as PDF" in the print dialog.');
+        };
         $('#facXls').onclick = () => downloadXlsx(report());
       }
       draw();
@@ -5272,9 +5274,8 @@
         ${canEdit ? `<button class="btn-primary" id="addCou">+ Add Course</button>` : `
           <select class="filter-sel" id="couBranch"><option value="">All Courses</option>${branchOptions()}</select>
           <select class="filter-sel" id="couSem"><option value="">All Semesters</option>${semesterOptions()}</select>
-          <button class="btn-outline btn-sm" id="couPrint">🖨 Print</button>
-          <button class="btn-outline btn-sm" id="couCsv">📑 CSV</button>
-          <button class="btn-primary btn-sm" id="couXls">⬇ Excel</button>`}</div></div>
+          <button class="btn-outline btn-sm" id="couPrint">📄 Download PDF</button>
+          <button class="btn-primary btn-sm" id="couXls">⬇ Download Excel</button>`}</div></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Code</th><th>Course Name</th><th>Type</th><th>Course</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
         ${canEdit ? '<th>Actions</th>' : '<th style="text-align:right">Students</th>'}
@@ -5319,8 +5320,10 @@
       if (canEdit) $('#addCou').onclick = () => courseForm();
       else {
         const report = () => courseReport(filtered());
-        $('#couPrint').onclick = () => printReport(report());
-        $('#couCsv').onclick = () => downloadCsv(report());
+        $('#couPrint').onclick = () => {
+          printReport(report());
+          toast('Choose "Save as PDF" in the print dialog.');
+        };
         $('#couXls').onclick = () => downloadXlsx(report());
       }
       draw();
@@ -8106,7 +8109,7 @@
     return true;
   }
 
-  /* ---------- report rendering + export (print / PDF / CSV / Excel) ---------- */
+  /* ---------- report rendering + export (print / PDF / Excel) ---------- */
   function cellText(col, row) {
     const v = row[col.key];
     if (v === null || v === undefined || v === '') return '—';
@@ -8125,16 +8128,14 @@
   }
   function exportButtons(p) {
     return `<button class="btn-outline btn-sm" id="${p}Print">🖨 Print</button>
-      <button class="btn-outline btn-sm" id="${p}Pdf">📄 PDF</button>
-      <button class="btn-outline btn-sm" id="${p}Csv">📑 CSV</button>
-      <button class="btn-primary btn-sm" id="${p}Xls">⬇ Excel</button>`;
+      <button class="btn-outline btn-sm" id="${p}Pdf">📄 Download PDF</button>
+      <button class="btn-primary btn-sm" id="${p}Xls">⬇ Download Excel</button>`;
   }
   // `get()` returns { title, subtitle, columns, rows, totals }
   function bindExports(p, get) {
     const on = (suffix, fn) => { const el = $('#' + p + suffix); if (el) el.onclick = fn; };
     on('Print', () => printReport(get()));
     on('Pdf', () => { printReport(get()); toast('Choose "Save as PDF" in the print dialog.'); });
-    on('Csv', () => downloadCsv(get()));
     on('Xls', () => downloadXlsx(get()));
   }
   function reportStamp() {
@@ -8162,24 +8163,6 @@
         ${totalsRow}</table>
       <p style="font-size:11px;color:#777;margin-top:10px">${r.rows.length} record(s)</p>
       <div class="sign"><span>${esc(reportSignatory())}</span><span>Principal / Director</span></div>`);
-  }
-  function downloadCsv(r) {
-    if (!r.rows.length) { toast('Nothing to export for these filters.', 'err'); return; }
-    const q = (v) => {
-      const s = String(v ?? '');
-      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    };
-    const lines = [r.columns.map(c => q(c.header)).join(',')];
-    r.rows.forEach(row => lines.push(r.columns.map(c => q(row[c.key] ?? '')).join(',')));
-    if (r.totals) lines.push(r.columns.map(c => q(r.totals[c.key] ?? '')).join(','));
-    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${r.title.replace(/[^\w]+/g, '-')}-${today()}.csv`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('CSV downloaded.');
   }
   function downloadXlsx(r) {
     if (!window.XLSXLite) { toast('Excel module failed to load.', 'err'); return; }
@@ -11188,7 +11171,7 @@
       <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0">
         Student, faculty, attendance, fee collection, pending fee, semester-wise fee, asset,
         library, department, course and overall college reports — each with search, filters,
-        a date range, print, PDF, CSV and Excel export.</p></div>`;
+        a date range, print, PDF and Excel export.</p></div>`;
 
     viewDashboard.after = () => {
       $('#chGoReports').onclick = () => navigate('chreports');
