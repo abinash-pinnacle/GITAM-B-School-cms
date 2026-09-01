@@ -158,6 +158,32 @@ const Store = {
     } catch (e) { return null; }
   },
 
+  /** every admission year the id counter knows about, and who holds one */
+  async studentSeq() {
+    try {
+      const res = await fetch(`${API}/student-seq`, { headers: this._headers() });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) { return null; }
+  },
+
+  /* Start a year's numbering again. Refused while any student still holds an id
+     for that year, which is what keeps it from handing a number out twice. */
+  async resetStudentSeq(year) {
+    try {
+      const res = await fetch(`${API}/reset-student-seq`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify({ year }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: (data && data.message) || 'That could not be reset.' };
+      return data;
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
+
   /* Give a student a different id. With no `roll` the server issues the next
      one — for a year that was typed wrong. With a `roll` it uses that one, which
      only the administrator may do. Either way the login moves with the id.

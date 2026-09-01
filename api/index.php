@@ -1093,6 +1093,93 @@ function api_reissue_student_id(): void
     }
 }
 
+/** how many students on the roll hold an id of this scheme for a year */
+function students_in_year(string $yy): int
+{
+    $rows = fetch_all('SELECT ' . qi('roll') . ' AS roll FROM ' . qi('students')
+        . ' WHERE ' . qi('roll') . ' LIKE ?', [$yy . '%']);
+    $n = 0;
+    foreach ($rows as $r) {
+        $roll = trim((string) ($r['roll'] ?? ''));
+        $len = strlen($roll);
+        // an id of the current scheme, not a ten-digit one from the old
+        if (ctype_digit($roll) && $len >= 4 + STUDENT_SEQ_WIDTH && $len <= 8) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
+/** every year the counter knows about, what it would issue next, and who is in the way */
+function api_student_seq(): void
+{
+    if (base_role(current_role()) !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator manages ID numbering.'], 403);
+    }
+    seq_table();
+    $rows = fetch_all('SELECT ' . qi('k') . ' AS k, ' . qi('n') . ' AS n FROM ' . qi('_id_seq')
+        . ' WHERE ' . qi('k') . " LIKE 'student:%'");
+    $out = [];
+    foreach ($rows as $r) {
+        $yy = substr((string) $r['k'], strlen('student:'));
+        $out[] = [
+            'yy'       => $yy,
+            'year'     => '20' . $yy,
+            'issued'   => (int) $r['n'],
+            'next'     => (int) $r['n'] + 1,
+            'students' => students_in_year($yy),
+        ];
+    }
+    usort($out, fn($a, $b) => strcmp($b['yy'], $a['yy']));
+    send_json($out);
+}
+
+/**
+ * Start a year's numbering again.
+ *
+ * Refused while any student holds an id for that year — that is what makes this
+ * safe rather than merely warned about. Delete the practice records first and
+ * the year begins at 01 again.
+ */
+function api_reset_student_seq(): void
+{
+    if (base_role(current_role()) !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator manages ID numbering.'], 403);
+    }
+    $yy = admission_yy((string) (body()['year'] ?? ''));
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        lock_collection('students');
+        $held = students_in_year($yy);
+        if ($held > 0) {
+            if ($own) {
+                db()->rollBack();
+            }
+            send_json([
+                'error'   => 'in-use',
+                'held'    => $held,
+                'message' => $held . ' student(s) still have a 20' . $yy . ' ID. '
+                    . 'Delete them first, or their numbers would be given out twice.',
+            ], 409);
+        }
+        run_sql('DELETE FROM ' . qi('_id_seq') . ' WHERE ' . qi('k') . ' = ?', ['student:' . $yy]);
+        if ($own) {
+            db()->commit();
+        }
+        send_json(['ok' => true, 'year' => '20' . $yy]);
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+}
+
 /* ---------------- the public admission form ----------------
    Everything the form may set. A field not on this list is dropped, so the
    shape of what lands in the queue is decided here and not by the caller. */
@@ -1784,6 +1871,12 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'reissue-student-id') {
         api_reissue_student_id();
+    }
+    if ($method === 'GET' && $resource === 'student-seq') {
+        api_student_seq();
+    }
+    if ($method === 'POST' && $resource === 'reset-student-seq') {
+        api_reset_student_seq();
     }
     /* What the next id would be, without taking it. Signed in only — it says
        how many students the college has admitted this year. */

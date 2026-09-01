@@ -1634,6 +1634,8 @@
       <div class="panel-tools">
         <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
         <button class="btn-outline btn-sm" id="stuFilter">🔎 Filter</button>
+        ${baseRoleOf(user.role) === 'admin'
+          ? `<button class="btn-outline btn-sm" id="stuSeq" title="ID numbering">🔢 Numbering</button>` : ''}
         <button class="btn-outline btn-sm" id="stuPrint">🖨 PDF</button>
         <button class="btn-outline btn-sm" id="stuCsv">📑 CSV</button>
         <button class="btn-outline btn-sm" id="stuXls">⬇ Excel</button>
@@ -1768,6 +1770,8 @@
       };
 
       $('#stuSearch').oninput = () => { page = 1; draw(); };
+      const seqBtn = $('#stuSeq');
+      if (seqBtn) seqBtn.onclick = () => numberingModal(draw);
       $('#stuFilter').onclick = () => advFilterModal(rosterStudents(), adv, (next) => {
         adv = next; page = 1; draw();
       });
@@ -3020,6 +3024,57 @@
     if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
     if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
     return regNoDuplicate(v, excludeId);
+  }
+
+  /* What the id counter will issue next, per admission year, and a way to start
+     a year again after the practice records have been cleared out. Reset is only
+     offered when no student holds an id for that year — the refusal is the
+     useful part, because it says exactly what is in the way. */
+  function numberingModal(after) {
+    const draw = (rows) => {
+      const body = !rows || !rows.length
+        ? `<p class="empty" style="padding:18px 2px">No IDs have been issued yet. The first student
+             admitted in a year gets 01.</p>`
+        : `<div class="tbl-wrap"><table><thead><tr>
+             <th>Admission Year</th><th>Issued so far</th><th>Next ID number</th>
+             <th>Students holding one</th><th>Actions</th>
+           </tr></thead><tbody>${rows.map(r => `<tr>
+             <td><b>${esc(r.year)}</b></td>
+             <td>${r.issued}</td>
+             <td class="mono">${String(r.next).padStart(2, '0')}</td>
+             <td>${r.students}</td>
+             <td>${r.students === 0
+               ? `<button class="btn-sm btn-del" data-reset="${esc(r.yy)}">↺ Start again at 01</button>`
+               : `<small style="color:var(--muted)">Delete those ${r.students} first</small>`}</td>
+           </tr>`).join('')}</tbody></table></div>`;
+      openModal('ID Numbering', `
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
+          A Student ID is the admission year, the branch code and a running number. The number never
+          goes backwards on its own — that is what stops a deleted ID being handed to somebody
+          else.<br>
+          After a practice run, delete those students and the year can start again at 01.</p>
+        ${body}
+        <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`,
+        true);
+      $('#cx').onclick = closeModal;
+      document.querySelectorAll('#modalBody [data-reset]').forEach(b => {
+        b.onclick = () => {
+          const yy = b.dataset.reset;
+          confirmDelete('Start 20' + yy + ' again',
+            `The next student admitted in <b>20${esc(yy)}</b> will be given number <b>01</b>.<br>
+             No student holds a 20${esc(yy)} ID, so nothing can end up with a number twice.`,
+            'Start again at 01', () => {
+              Store.resetStudentSeq('20' + yy).then(res => {
+                if (!res || res.error) { toast((res && res.error) || 'Could not reset.', 'err'); return; }
+                toast(`20${yy} numbering starts again at 01.`);
+                closeModal();
+                if (after) after();
+              });
+            });
+        };
+      });
+    };
+    Store.studentSeq().then(rows => draw(rows || []));
   }
 
   /* Setting an id by hand. Read-only everywhere else, because nobody types one
