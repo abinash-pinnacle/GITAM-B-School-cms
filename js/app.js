@@ -3767,8 +3767,9 @@
 
     openModal(`Bulk Upload · ${spec.title}`, `
       <div class="imp-intro">
-        <p>Upload an <b>.xlsx</b> or <b>.csv</b> file. The first row must be the column
-           headings — order does not matter, and extra columns are ignored.</p>
+        <p>Upload an <b>.xlsx</b> or <b>.csv</b> file. One row must be the column headings —
+           order does not matter, extra columns are ignored, and anything above the headings
+           is skipped. A report exported from this page can be uploaded straight back.</p>
         <p class="imp-cols"><b>Columns:</b> ${spec.columns.map((c) =>
             c.required ? `<b>${c.header} *</b>` : c.header).join(' · ')}</p>
         <p class="imp-note">Every new account gets the password
