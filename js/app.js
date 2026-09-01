@@ -7582,22 +7582,21 @@
   function sessionLabel(y) {
     return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
   }
-  /* The session a date falls in. The academic year begins in July, so anything
-     from January to June still belongs to the session that started the previous
-     year — which is why a student admitted in March 2025 is 2024-25 and not
-     2025-26. */
-  const SESSION_START_MONTH = 6;          // July, zero-indexed
+  /* The session an admission date falls in: the calendar year it is in, and
+     the year after. A student admitted on 1 January 2025 is 2025-26.
+
+     Deliberately the same year the Student ID takes, and deliberately not a
+     July-to-June session. Two answers derived from one date have to agree, or a
+     record reads 2024-25 beside an ID that begins 25 and somebody has to work
+     out which one lied. The college counts a session by the year it is written
+     on, so both do. */
   function academicYearOf(dateStr) {
     const d = dateStr ? new Date(dateStr + 'T00:00:00') : null;
     if (!d || isNaN(d.getTime())) return currentAcademicYear();
-    const y = d.getFullYear();
-    return sessionLabel(d.getMonth() >= SESSION_START_MONTH ? y : y - 1);
+    return sessionLabel(d.getFullYear());
   }
   /** the session running now */
-  function currentAcademicYear() {
-    const n = new Date();
-    return sessionLabel(n.getMonth() >= SESSION_START_MONTH ? n.getFullYear() : n.getFullYear() - 1);
-  }
+  function currentAcademicYear() { return sessionLabel(new Date().getFullYear()); }
   function academicYearOptions(sel) {
     const list = academicYearList();
     const current = sel || list.find(v => v.startsWith(String(new Date().getFullYear()))) || list[0];
