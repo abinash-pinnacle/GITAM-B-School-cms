@@ -2726,10 +2726,10 @@
                    year and branch when you save.</small>`}</div>
           ${fText('serialNo', 'Roll No.', s.serialNo)}
           <div class="field"><label>University Regd. No.</label>
+            <!-- No hint: the office types this one in, and knows what it is. The
+                 rules still hold on save — ten digits, and nobody else's. -->
             <input name="univRegNo" inputmode="numeric" maxlength="10"
-                   value="${esc(s.univRegNo || '')}">
-            <small style="color:var(--muted);font-size:11.5px">The university's 10-digit number,
-              not the Student ID. Leave blank until it arrives.</small></div>
+                   placeholder="10-digit number" value="${esc(s.univRegNo || '')}"></div>
           ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
           <div class="field"><label>First Name</label>
             <input name="firstName" value="${esc(s.firstName || s.name || '')}" required></div>
