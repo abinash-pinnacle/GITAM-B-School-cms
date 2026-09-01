@@ -1211,7 +1211,7 @@ function apply_fields(): array
         return $fields;
     }
     $f = [
-        'roll', 'serialNo', 'title', 'firstName', 'middleName', 'lastName',
+        'roll', 'title', 'firstName', 'middleName', 'lastName',
         'email', 'domainEmail', 'phone', 'whatsapp',
         'course', 'branchName', 'specialisation', 'specialisation2', 'semester', 'section',
         'batch', 'house', 'admissionDate',
@@ -1219,8 +1219,8 @@ function apply_fields(): array
         'nationality', 'birthplace', 'identificationMark', 'hostel', 'transport', 'lunch',
         'nss', 'voterId', 'pan', 'drivingLicense', 'passport', 'languages', 'hobbies',
         'entranceExam', 'entranceRank',
-        'address', 'city', 'state', 'country', 'pincode',
-        'permAddress', 'permCity', 'permState', 'permCountry', 'permPincode',
+        'address', 'state', 'district', 'city', 'country', 'pincode',
+        'permAddress', 'permState', 'permDistrict', 'permCity', 'permCountry', 'permPincode',
         'height', 'weight', 'allergies', 'conditions', 'medication', 'healthNotes',
         'emergencyName', 'emergencyPhone',
     ];

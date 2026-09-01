@@ -161,7 +161,11 @@ const COLLECTIONS = [
                      /* the rest of the file. The columns below are the ones other
                         screens read — an ID card wants the date of birth and the
                         blood group, the admissions dashboard wants the date. */
-                     'serialNo', 'mentor', 'domainEmail', 'whatsapp', 'dob', 'gender',
+                     /* `serialNo` is deliberately absent. It held a second roll number
+                        beside the Student ID and the university's, and nobody could say
+                        which of the three a form meant. The column stays in the database
+                        untouched — it is simply no longer read, written or asked for. */
+                     'mentor', 'domainEmail', 'whatsapp', 'dob', 'gender',
                      'bloodGroup', 'admissionDate', 'house', 'aadhaar',
                      /* The university's number, not ours. `roll` is the Student
                         ID the college issues and the student logs in with;

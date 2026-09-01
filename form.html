@@ -191,8 +191,6 @@
             <select name="semester"><option value=""></option>
               <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
           <div class="field"><label>Section</label><input name="section" maxlength="8" placeholder="A"></div>
-          <!-- the class roll number, which is not either of the two on step 1 -->
-          <div class="field"><label>Roll No.</label><input name="serialNo" maxlength="20"></div>
           <div class="field"><label>Batch</label><input name="batch" maxlength="20" placeholder="e.g. 2025-2027"></div>
           <div class="field"><label>Date of Admission</label><input name="admissionDate" type="date"></div>
           <div class="field"><label>Club</label><input name="house" maxlength="60"></div>
@@ -277,10 +275,11 @@
       <!-- 6 ------------------------------------------------------------ -->
       <div class="pane" data-pane="Address">
         <h3 class="sec">Current address</h3>
-        <div class="grid">
+        <div class="grid" data-address>
           <div class="field full"><label>Address</label><textarea name="address" maxlength="500"></textarea></div>
-          <div class="field"><label>City</label><input name="city" maxlength="60"></div>
-          <div class="field"><label>State</label><input name="state" maxlength="60"></div>
+          <div class="field"><label>State</label><select name="state" data-state></select></div>
+          <div class="field"><label>District</label><select name="district" data-district disabled></select></div>
+          <div class="field"><label>City</label><input name="city" maxlength="60" data-city></div>
           <div class="field"><label>Country</label><input name="country" maxlength="60" value="India"></div>
           <div class="field"><label>Pincode</label><input name="pincode" inputmode="numeric" maxlength="6"></div>
         </div>
@@ -290,10 +289,11 @@
           <label style="font-weight:500;display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="sameAddr" style="width:auto"> Same as my current address
           </label></div>
-        <div class="grid">
+        <div class="grid" data-address>
           <div class="field full"><label>Address</label><textarea name="permAddress" maxlength="500"></textarea></div>
-          <div class="field"><label>City</label><input name="permCity" maxlength="60"></div>
-          <div class="field"><label>State</label><input name="permState" maxlength="60"></div>
+          <div class="field"><label>State</label><select name="permState" data-state></select></div>
+          <div class="field"><label>District</label><select name="permDistrict" data-district disabled></select></div>
+          <div class="field"><label>City</label><input name="permCity" maxlength="60" data-city></div>
           <div class="field"><label>Country</label><input name="permCountry" maxlength="60" value="India"></div>
           <div class="field"><label>Pincode</label><input name="permPincode" inputmode="numeric" maxlength="6"></div>
         </div>
@@ -379,6 +379,67 @@
     if (e.target.getAttribute && e.target.getAttribute('inputmode') === 'numeric') {
       e.target.value = e.target.value.replace(/\D/g, '');
     }
+  });
+
+
+  /* State -> District -> City. City is typed, not picked: a district has more
+     towns than anybody would keep a list of. The lists live here rather than in
+     the app because this page loads nothing but itself. */
+  var STATES = ["ANDHRA PRADESH", "BIHAR", "CHHATTISGARH", "JHARKHAND", "ODISHA", "WEST BENGAL"];
+  var DISTRICTS = {
+    "ANDHRA PRADESH": ["Alluri Sitharama Raju","Anakapalli","Ananthapuramu","Annamayya","Bapatla","Chittoor",
+      "Dr. B.R. Ambedkar Konaseema","East Godavari","Eluru","Guntur","Kakinada","Krishna",
+      "Kurnool","Nandyal","NTR","Palnadu","Parvathipuram Manyam","Prakasam",
+      "Sri Potti Sriramulu Nellore","Sri Sathya Sai","Srikakulam","Tirupati","Visakhapatnam",
+      "Vizianagaram","West Godavari","YSR Kadapa"],
+    "BIHAR": ["Araria","Arwal","Aurangabad","Banka","Begusarai","Bhagalpur","Bhojpur","Buxar","Darbhanga",
+      "East Champaran","Gaya","Gopalganj","Jamui","Jehanabad","Kaimur","Katihar","Khagaria",
+      "Kishanganj","Lakhisarai","Madhepura","Madhubani","Munger","Muzaffarpur","Nalanda","Nawada",
+      "Patna","Purnia","Rohtas","Saharsa","Samastipur","Saran","Sheikhpura","Sheohar","Sitamarhi",
+      "Siwan","Supaul","Vaishali","West Champaran"],
+    "CHHATTISGARH": ["Balod","Baloda Bazar","Balrampur-Ramanujganj","Bastar","Bemetara","Bijapur","Bilaspur",
+      "Dantewada","Dhamtari","Durg","Gariaband","Gaurela-Pendra-Marwahi","Janjgir-Champa",
+      "Jashpur","Kabirdham","Kanker","Khairagarh-Chhuikhadan-Gandai","Kondagaon","Korba","Korea",
+      "Mahasamund","Manendragarh-Chirmiri-Bharatpur","Mohla-Manpur-Ambagarh Chowki","Mungeli",
+      "Narayanpur","Raigarh","Raipur","Rajnandgaon","Sakti","Sarangarh-Bilaigarh","Sukma",
+      "Surajpur","Surguja"],
+    "JHARKHAND": ["Bokaro","Chatra","Deoghar","Dhanbad","Dumka","East Singhbhum","Garhwa","Giridih","Godda",
+      "Gumla","Hazaribagh","Jamtara","Khunti","Koderma","Latehar","Lohardaga","Pakur","Palamu",
+      "Ramgarh","Ranchi","Sahibganj","Saraikela-Kharsawan","Simdega","West Singhbhum"],
+    "ODISHA": ["Angul","Balangir","Balasore","Bargarh","Bhadrak","Boudh","Cuttack","Deogarh","Dhenkanal",
+      "Gajapati","Ganjam","Jagatsinghpur","Jajpur","Jharsuguda","Kalahandi","Kandhamal",
+      "Kendrapara","Kendujhar","Khordha","Koraput","Malkangiri","Mayurbhanj","Nabarangpur",
+      "Nayagarh","Nuapada","Puri","Rayagada","Sambalpur","Subarnapur","Sundargarh"],
+    "WEST BENGAL": ["Alipurduar","Bankura","Birbhum","Cooch Behar","Dakshin Dinajpur","Darjeeling","Hooghly",
+      "Howrah","Jalpaiguri","Jhargram","Kalimpong","Kolkata","Malda","Murshidabad","Nadia",
+      "North 24 Parganas","Paschim Bardhaman","Paschim Medinipur","Purba Bardhaman",
+      "Purba Medinipur","Purulia","South 24 Parganas","Uttar Dinajpur"],
+  };
+
+  function fillDistricts(sel, state, blankFirst) {
+    var list = DISTRICTS[String(state || '').toUpperCase()] || [];
+    sel.innerHTML = '<option value="">'
+      + (list.length ? '— Select District —' : '— Select State first —') + '</option>'
+      + list.map(function (d) { return '<option>' + d + '</option>'; }).join('');
+    sel.disabled = !list.length;
+    if (blankFirst) sel.value = '';
+  }
+
+  [].slice.call(document.querySelectorAll('select[data-state]')).forEach(function (sel) {
+    sel.innerHTML = '<option value="">— Select State —</option>'
+      + STATES.map(function (s) { return '<option>' + s + '</option>'; }).join('');
+  });
+  [].slice.call(document.querySelectorAll('[data-address]')).forEach(function (group) {
+    var st = group.querySelector('select[data-state]');
+    var di = group.querySelector('select[data-district]');
+    var ci = group.querySelector('input[data-city]');
+    if (!st || !di) return;
+    fillDistricts(di, '', true);
+    // a state change makes the district and the town below it wrong, so both go
+    st.addEventListener('change', function () {
+      fillDistricts(di, st.value, true);
+      if (ci) ci.value = '';
+    });
   });
 
   var panes = [].slice.call(document.querySelectorAll('.pane'));

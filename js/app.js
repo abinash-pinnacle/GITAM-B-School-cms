@@ -1988,7 +1988,6 @@
       <div class="stu-lastatt"><span>Last Date of Class Attendance</span><strong>${esc(last || '—')}</strong></div>
       <div class="tbl-wrap"><table class="info-tbl"><tbody>
         ${infoRow('Registration No', `<span class="mono">${esc(s.roll || '—')}</span>`)}
-        ${infoRow('Serial No.', esc(s.serialNo || '—'))}
         ${infoRow('Name', esc(s.name || '—'))}
         ${infoRow('Mentor', esc(s.mentor || '—'))}
         ${infoRow('Course', esc(s.course || '—'))}
@@ -2111,8 +2110,9 @@
     if (tab === 'address') {
       const block = (title, a) => `<h4 class="ro-sub">${title}</h4>` + infoTable(`
         ${infoRow('Address', esc(a.address || '—'))}
-        ${infoRow2('City', esc(a.city || '—'), 'State', esc(a.state || '—'))}
-        ${infoRow2('Country', esc(a.country || '—'), 'Pincode', esc(a.pincode || '—'))}`);
+        ${infoRow2('State', esc(a.state || '—'), 'District', esc(a.district || '—'))}
+        ${infoRow2('City', esc(a.city || '—'), 'Country', esc(a.country || '—'))}
+        ${infoRow('Pincode', esc(a.pincode || '—'))}`);
       return `<h4 class="ro-sub">Address Info</h4>`
         + block('Current Address', addr.current || {})
         + block('Permanent Address', addr.permanent || {});
@@ -2125,7 +2125,7 @@
         : `<tr><td colspan="3" class="empty">No documents on record.</td></tr>`;
       return `<h4 class="ro-sub">Original Docs</h4>
         <div class="tbl-wrap"><table><thead><tr>
-          <th>Document Type</th><th>Document Name</th><th>Original / Photo Copy</th>
+          <th>Document Type</th><th>Document Name</th><th>Original / Xerox</th>
         </tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
@@ -2370,7 +2370,6 @@
         only('Specialisation II', 'specialisation2', 15),
         { header: 'Semester', key: 'semester', width: 9, type: 'number' },
         { header: 'Section', key: 'section', width: 8 },
-        only('Roll No.', 'serialNo', 10),
         { header: 'Batch', key: 'batch', width: 12 },
         only('Admission Date', 'admissionDate', 14),
         { header: 'Academic Year', key: 'academicYear', width: 13 },
@@ -2407,13 +2406,15 @@
         ...qualColumns,
         ...guardianColumns,
         only('Present Address', 'curAddress', 32),
-        only('Present City', 'curCity', 14),
         only('Present State', 'curState', 14),
+        only('Present District', 'curDistrict', 16),
+        only('Present City', 'curCity', 14),
         only('Present Country', 'curCountry', 12),
         only('Present Pincode', 'curPincode', 11),
         only('Permanent Address', 'permAddress', 32),
-        only('Permanent City', 'permCity', 14),
         only('Permanent State', 'permState', 14),
+        only('Permanent District', 'permDistrict', 16),
+        only('Permanent City', 'permCity', 14),
         only('Permanent Country', 'permCountry', 12),
         only('Permanent Pincode', 'permPincode', 11),
         only('Height (cm)', 'height', 11),
@@ -2450,9 +2451,11 @@
           hostel: per.hostel || '', transport: per.transport || '',
           lunch: per.lunch || '', nss: per.nss || '',
           entranceExam: aca.entranceExam || '', entranceRank: aca.entranceRank || '',
-          curAddress: cur.address || '', curCity: cur.city || '', curState: cur.state || '',
+          curAddress: cur.address || '', curState: cur.state || '',
+          curDistrict: cur.district || '', curCity: cur.city || '',
           curCountry: cur.country || '', curPincode: cur.pincode || '',
-          permAddress: perm.address || '', permCity: perm.city || '', permState: perm.state || '',
+          permAddress: perm.address || '', permState: perm.state || '',
+          permDistrict: perm.district || '', permCity: perm.city || '',
           permCountry: perm.country || '', permPincode: perm.pincode || '',
           height: health.height || '', weight: health.weight || '',
           lastCheckup: health.lastCheckup || '', allergies: health.allergies || '',
@@ -2666,7 +2669,107 @@
   /* Which of the two the college is holding. A date of issue is printed on the
      document itself; what the desk needs to know later is whether the original
      is in the cabinet or only a copy of it. */
-  const DOC_COPIES = ['Original', 'Photo Copy'];
+  const DOC_COPIES = ['Original', 'Xerox'];
+
+  /* ---------- where somebody is from ----------
+
+     Six states, and the districts of each. The lists are sorted on the way in
+     rather than by hand, so a district added below lands in the right place
+     without anybody re-alphabetising the file.
+
+     City is deliberately not a list. A state has districts and a district has
+     more towns than anybody would maintain, so the first two are picked and the
+     third is typed. */
+  const STATES = ['ANDHRA PRADESH', 'BIHAR', 'CHHATTISGARH', 'JHARKHAND', 'ODISHA', 'WEST BENGAL'];
+
+  const DISTRICTS = {
+    'ANDHRA PRADESH': [
+      'Alluri Sitharama Raju', 'Anakapalli', 'Ananthapuramu', 'Annamayya', 'Bapatla', 'Chittoor',
+      'Dr. B.R. Ambedkar Konaseema', 'East Godavari', 'Eluru', 'Guntur', 'Kakinada', 'Krishna',
+      'Kurnool', 'Nandyal', 'NTR', 'Palnadu', 'Parvathipuram Manyam', 'Prakasam',
+      'Sri Potti Sriramulu Nellore', 'Sri Sathya Sai', 'Srikakulam', 'Tirupati', 'Visakhapatnam',
+      'Vizianagaram', 'West Godavari', 'YSR Kadapa'],
+    'BIHAR': [
+      'Araria', 'Arwal', 'Aurangabad', 'Banka', 'Begusarai', 'Bhagalpur', 'Bhojpur', 'Buxar',
+      'Darbhanga', 'East Champaran', 'Gaya', 'Gopalganj', 'Jamui', 'Jehanabad', 'Kaimur',
+      'Katihar', 'Khagaria', 'Kishanganj', 'Lakhisarai', 'Madhepura', 'Madhubani', 'Munger',
+      'Muzaffarpur', 'Nalanda', 'Nawada', 'Patna', 'Purnia', 'Rohtas', 'Saharsa', 'Samastipur',
+      'Saran', 'Sheikhpura', 'Sheohar', 'Sitamarhi', 'Siwan', 'Supaul', 'Vaishali',
+      'West Champaran'],
+    'CHHATTISGARH': [
+      'Balod', 'Baloda Bazar', 'Balrampur-Ramanujganj', 'Bastar', 'Bemetara', 'Bijapur',
+      'Bilaspur', 'Dantewada', 'Dhamtari', 'Durg', 'Gariaband', 'Gaurela-Pendra-Marwahi',
+      'Janjgir-Champa', 'Jashpur', 'Kabirdham', 'Kanker', 'Khairagarh-Chhuikhadan-Gandai',
+      'Kondagaon', 'Korba', 'Korea', 'Mahasamund', 'Manendragarh-Chirmiri-Bharatpur',
+      'Mohla-Manpur-Ambagarh Chowki', 'Mungeli', 'Narayanpur', 'Raigarh', 'Raipur',
+      'Rajnandgaon', 'Sakti', 'Sarangarh-Bilaigarh', 'Sukma', 'Surajpur', 'Surguja'],
+    'JHARKHAND': [
+      'Bokaro', 'Chatra', 'Deoghar', 'Dhanbad', 'Dumka', 'East Singhbhum', 'Garhwa', 'Giridih',
+      'Godda', 'Gumla', 'Hazaribagh', 'Jamtara', 'Khunti', 'Koderma', 'Latehar', 'Lohardaga',
+      'Pakur', 'Palamu', 'Ramgarh', 'Ranchi', 'Sahibganj', 'Saraikela-Kharsawan', 'Simdega',
+      'West Singhbhum'],
+    'ODISHA': [
+      'Angul', 'Balangir', 'Balasore', 'Bargarh', 'Bhadrak', 'Boudh', 'Cuttack', 'Deogarh',
+      'Dhenkanal', 'Gajapati', 'Ganjam', 'Jagatsinghpur', 'Jajpur', 'Jharsuguda', 'Kalahandi',
+      'Kandhamal', 'Kendrapara', 'Kendujhar', 'Khordha', 'Koraput', 'Malkangiri', 'Mayurbhanj',
+      'Nabarangpur', 'Nayagarh', 'Nuapada', 'Puri', 'Rayagada', 'Sambalpur', 'Subarnapur',
+      'Sundargarh'],
+    'WEST BENGAL': [
+      'Alipurduar', 'Bankura', 'Birbhum', 'Cooch Behar', 'Dakshin Dinajpur', 'Darjeeling',
+      'Hooghly', 'Howrah', 'Jalpaiguri', 'Jhargram', 'Kalimpong', 'Kolkata', 'Malda',
+      'Murshidabad', 'Nadia', 'North 24 Parganas', 'Paschim Bardhaman', 'Paschim Medinipur',
+      'Purba Bardhaman', 'Purba Medinipur', 'Purulia', 'South 24 Parganas', 'Uttar Dinajpur'],
+  };
+  Object.keys(DISTRICTS).forEach(s => DISTRICTS[s].sort((a, b) => a.localeCompare(b)));
+
+  /** the stored value as one of ours, whatever case it was typed in */
+  function canonState(v) {
+    const s = String(v || '').trim().toUpperCase();
+    return STATES.includes(s) ? s : '';
+  }
+  function districtsOf(state) { return DISTRICTS[canonState(state)] || []; }
+
+  /* A record written before the dropdown existed can hold "Odisha", or a state
+     that is not on the list at all. It is offered back as it was found rather
+     than silently dropped — a list with one odd entry on it is better than a
+     record losing its address the next time somebody opens it. */
+  function optionsWith(list, chosen, blank) {
+    const v = String(chosen || '').trim();
+    const known = !v || list.some(x => x.toLowerCase() === v.toLowerCase());
+    return `<option value="">${esc(blank)}</option>` + (known ? list : list.concat([v]))
+      .map(x => `<option${x.toLowerCase() === v.toLowerCase() ? ' selected' : ''}>${esc(x)}</option>`)
+      .join('');
+  }
+  const stateField = (name, val) => `<div class="field"><label>State</label>
+    <select name="${name}" data-state>${
+      optionsWith(STATES, canonState(val) || val, '— Select State —')}</select></div>`;
+  const districtField = (name, val, state) => {
+    const list = districtsOf(state);
+    return `<div class="field"><label>District</label>
+      <select name="${name}" data-district${list.length ? '' : ' disabled'}>${
+        optionsWith(list, val, list.length ? '— Select District —' : '— Select State first —')
+      }</select></div>`;
+  };
+
+  /* State drives District, and changing it clears both District and City.
+     Delegated, because there are two address blocks on a form and either may be
+     rebuilt while it is open. */
+  document.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!el || typeof el.matches !== 'function' || !el.matches('select[data-state]')) return;
+    const group = el.closest('[data-address]');
+    if (!group) return;
+    const dist = group.querySelector('select[data-district]');
+    if (dist) {
+      const list = districtsOf(el.value);
+      dist.innerHTML = optionsWith(list, '',
+        list.length ? '— Select District —' : '— Select State first —');
+      dist.disabled = !list.length;
+    }
+    const city = group.querySelector('input[data-city]');
+    if (city) city.value = '';
+  }, true);
+
 
   const fText = (name, label, val, extra) =>
     `<div class="field"><label>${label}</label>
@@ -2718,7 +2821,7 @@
       <div class="form-grid">
         ${fSel('d_type', 'Document Type', d.type, DOC_TYPES)}
         ${fText('d_name', 'Document Name', d.name)}
-        ${fSel('d_copy', 'Original / Photo Copy', d.copy, DOC_COPIES)}
+        ${fSel('d_copy', 'Original / Xerox', d.copy, DOC_COPIES)}
       </div></div>`;
   }
 
@@ -2759,10 +2862,11 @@
                   ['guardians', 'Guardians'], ['address', 'Address'],
                   ['health', 'Health'], ['docs', 'Documents']];
 
-    const addressBlock = (prefix, a) => `<div class="form-grid">
+    const addressBlock = (prefix, a) => `<div class="form-grid" data-address>
       ${fArea(prefix + '_address', 'Address', a.address)}
-      ${fText(prefix + '_city', 'City', a.city)}
-      ${fText(prefix + '_state', 'State', a.state)}
+      ${stateField(prefix + '_state', a.state)}
+      ${districtField(prefix + '_district', a.district, a.state)}
+      ${fText(prefix + '_city', 'City', a.city, 'data-city')}
       ${fText(prefix + '_country', 'Country', a.country || 'India')}
       ${fText(prefix + '_pincode', 'Pincode', a.pincode, 'inputmode="numeric" maxlength="6"')}
     </div>`;
@@ -2831,7 +2935,6 @@
           <div class="field"><label>Semester</label>
             <input name="semester" type="number" min="1" max="4" value="${s.semester || 1}"></div>
           ${fText('section', 'Section', s.section || 'A')}
-          ${fText('serialNo', 'Roll No.', s.serialNo)}
           ${fText('batch', 'Batch', s.batch, 'placeholder="e.g. 2025-2027"')}
           ${fDate('admissionDate', 'Admission Date', s.admissionDate)}
           <div class="field"><label>Academic Year</label>
@@ -3052,10 +3155,15 @@
       $('#sfDocs').insertAdjacentHTML('beforeend', originalDocRow({}));
     };
     $('#sfSameAddr').onclick = () => {
-      ['address', 'city', 'state', 'country', 'pincode'].forEach(k => {
-        const from = document.querySelector(`[name="cur_${k}"]`);
-        const to = document.querySelector(`[name="perm_${k}"]`);
-        if (from && to) to.value = from.value;
+      const box = (p, k) => document.querySelector(`[name="${p}_${k}"]`);
+      /* The state goes first and is announced, because that is what rebuilds
+         the permanent district list — copying a district into a list that does
+         not hold it yet would drop it. */
+      const from = box('cur', 'state'), to = box('perm', 'state');
+      if (from && to) { to.value = from.value; to.dispatchEvent(new Event('change', { bubbles: true })); }
+      ['address', 'district', 'city', 'country', 'pincode'].forEach(k => {
+        const a = box('cur', k), b = box('perm', k);
+        if (a && b) b.value = a.value;
       });
       toast('Copied from the current address.');
     };
@@ -3514,7 +3622,6 @@
         { key:'specialisation2', header:'Specialisation II', aliases:['second specialisation','spec 2'] },
         { key:'semester', header:'Semester', number:true, def:1, aliases:['sem'] },
         { key:'section', header:'Section', def:'A', aliases:['sec'] },
-        { key:'serialNo', header:'Roll No', aliases:['serial no','serial'] },
         { key:'batch', header:'Batch' },
         { key:'admissionDate', header:'Admission Date', aliases:['doa','date of admission'] },
         { key:'academicYear', header:'Academic Year', aliases:['session'] },
@@ -3560,14 +3667,16 @@
 
         // ---- address ----
         { key:'address', header:'Address', into:'current', as:'address', aliases:['present address'] },
-        { key:'city', header:'City', into:'current', as:'city', aliases:['present city'] },
         { key:'state', header:'State', into:'current', as:'state', aliases:['present state'] },
+        { key:'district', header:'District', into:'current', as:'district', aliases:['present district'] },
+        { key:'city', header:'City', into:'current', as:'city', aliases:['present city'] },
         { key:'country', header:'Country', into:'current', as:'country', aliases:['present country'] },
         { key:'pincode', header:'Pincode', into:'current', as:'pincode',
           aliases:['pin','pin code','present pincode'] },
         { key:'permAddress', header:'Permanent Address', into:'permanent', as:'address' },
-        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
         { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
+        { key:'permDistrict', header:'Permanent District', into:'permanent', as:'district' },
+        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
         { key:'permCountry', header:'Permanent Country', into:'permanent', as:'country' },
         { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
 
@@ -3581,7 +3690,7 @@
         { key:'healthNotes', header:'Health Notes', into:'health', as:'notes' },
       ],
       sample: {
-        roll:'', firstName:'Rahul', middleName:'Kumar', lastName:'Das', serialNo:'10',
+        roll:'', firstName:'Rahul', middleName:'Kumar', lastName:'Das',
         email:'rahul@nmiet.in', domainEmail:'rahul@nmiet.edu.in',
         phone:'9810000010', whatsapp:'9810000010',
         course:'MBA', branchName:'General Management',
@@ -3603,10 +3712,11 @@
         g_Father_income:'240000', g_Father_qualification:'Class 10',
         g_Mother_name:'Sunita Das', g_Mother_occupation:'Homemaker', g_Mother_mobile:'7978851887',
         g_LocalGuardian_name:'Ramesh Das', g_LocalGuardian_mobile:'7978851888',
-        address:'AT- Harekrushnapur, PO- Chhatabar', city:'Khordha', state:'Odisha',
+        address:'AT- Harekrushnapur, PO- Chhatabar', state:'ODISHA',
+        district:'Khordha', city:'Bhubaneswar',
         country:'India', pincode:'752054',
-        permAddress:'AT- Harekrushnapur, PO- Chhatabar', permCity:'Khordha',
-        permState:'Odisha', permPincode:'752054',
+        permAddress:'AT- Harekrushnapur, PO- Chhatabar', permState:'ODISHA',
+        permDistrict:'Khordha', permCity:'Bhubaneswar', permPincode:'752054',
         emergencyName:'Bhikari Das', emergencyPhone:'7978851886', allergies:'None',
       },
       // students sign in with their registration number, same as the form does
@@ -3664,13 +3774,15 @@
 
         // ---- address ----
         { key:'address', header:'Address', into:'current', as:'address' },
-        { key:'city', header:'City', into:'current', as:'city' },
         { key:'state', header:'State', into:'current', as:'state' },
+        { key:'district', header:'District', into:'current', as:'district' },
+        { key:'city', header:'City', into:'current', as:'city' },
         { key:'country', header:'Country', into:'current', as:'country' },
         { key:'pincode', header:'Pincode', into:'current', as:'pincode', aliases:['pin','pin code'] },
         { key:'permAddress', header:'Permanent Address', into:'permanent', as:'address' },
-        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
         { key:'permState', header:'Permanent State', into:'permanent', as:'state' },
+        { key:'permDistrict', header:'Permanent District', into:'permanent', as:'district' },
+        { key:'permCity', header:'Permanent City', into:'permanent', as:'city' },
         { key:'permPincode', header:'Permanent Pincode', into:'permanent', as:'pincode' },
 
         // ---- health ----
@@ -3695,10 +3807,10 @@
         languages:'Odia, English', hobbies:'Gardening',
         g_Father_name:'Gopal Sahu', g_Father_occupation:'Teacher', g_Father_mobile:'7978851885',
         g_Mother_name:'Prativa Sahu', g_Mother_occupation:'Homemaker', g_Mother_mobile:'7978851886',
-        address:'Plot 45, Patia', city:'Bhubaneswar', state:'Odisha',
+        address:'Plot 45, Patia', state:'ODISHA', district:'Khordha', city:'Bhubaneswar',
         country:'India', pincode:'751024',
-        permAddress:'Plot 45, Patia', permCity:'Bhubaneswar',
-        permState:'Odisha', permPincode:'751024',
+        permAddress:'Plot 45, Patia', permState:'ODISHA',
+        permDistrict:'Khordha', permCity:'Bhubaneswar', permPincode:'751024',
         emergencyName:'Prativa Sahu', emergencyPhone:'7978851886',
         username:'meena', password:'pass123',
       },
@@ -4613,8 +4725,9 @@
     if (tab === 'address') {
       const block = (title, a) => `<h4 class="ro-sub">${title}</h4>` + infoTable(`
         ${infoRow('Address', esc(a.address || '—'))}
-        ${infoRow2('City/Town', esc(a.city || '—'), 'State/Province', esc(a.state || '—'))}
-        ${infoRow2('Country', esc(a.country || '—'), 'House No', esc(a.houseNo || '—'))}
+        ${infoRow2('State', esc(a.state || '—'), 'District', esc(a.district || '—'))}
+        ${infoRow2('City/Town', esc(a.city || '—'), 'Country', esc(a.country || '—'))}
+        ${infoRow('House No', esc(a.houseNo || '—'))}
         ${infoRow2('Pincode', esc(a.pincode || '—'), 'Phone No', esc(a.phone || '—'))}`);
       return `<h4 class="ro-sub">Address Info</h4>`
         + block('Current Address', addr.current || {})
@@ -4842,11 +4955,12 @@
                   ['address', 'Address'], ['other', 'Other Info'],
                   ['health', 'Health'], ['docs', 'Documents']];
 
-    const addressBlock = (prefix, a) => `<div class="form-grid">
+    const addressBlock = (prefix, a) => `<div class="form-grid" data-address>
       ${fArea(prefix + '_address', 'Address', a.address)}
       ${fText(prefix + '_houseNo', 'House No', a.houseNo)}
-      ${fText(prefix + '_city', 'City/Town', a.city)}
-      ${fText(prefix + '_state', 'State/Province', a.state)}
+      ${stateField(prefix + '_state', a.state)}
+      ${districtField(prefix + '_district', a.district, a.state)}
+      ${fText(prefix + '_city', 'City/Town', a.city, 'data-city')}
       ${fText(prefix + '_country', 'Country', a.country || 'India')}
       ${fText(prefix + '_pincode', 'Pincode', a.pincode, 'inputmode="numeric" maxlength="6"')}
       ${fText(prefix + '_phone', 'Phone No', a.phone, 'inputmode="numeric"')}
@@ -5034,10 +5148,15 @@
       bindDocRemovals(); bindDocFiles();
     };
     $('#ffSameAddr').onclick = () => {
-      ['address', 'houseNo', 'city', 'state', 'country', 'pincode', 'phone'].forEach(k => {
-        const from = document.querySelector(`[name="cur_${k}"]`);
-        const to = document.querySelector(`[name="perm_${k}"]`);
-        if (from && to) to.value = from.value;
+      const box = (p, k) => document.querySelector(`[name="${p}_${k}"]`);
+      /* The state goes first and is announced, because that is what rebuilds
+         the permanent district list — copying a district into a list that does
+         not hold it yet would drop it. */
+      const from = box('cur', 'state'), to = box('perm', 'state');
+      if (from && to) { to.value = from.value; to.dispatchEvent(new Event('change', { bubbles: true })); }
+      ['address', 'houseNo', 'district', 'city', 'country', 'pincode', 'phone'].forEach(k => {
+        const a = box('cur', k), b = box('perm', k);
+        if (a && b) b.value = a.value;
       });
       toast('Copied from the current address.');
     };
@@ -12960,7 +13079,7 @@
           catch (e) { return r.submittedAt || '—'; } })())}
         ${r.reviewedBy ? ` · reviewed by ${esc(r.reviewedBy)}` : ''}</p>
       ${r.reviewNote ? `<p style="font-size:13px;color:var(--red);margin:0 0 12px">${esc(r.reviewNote)}</p>` : ''}
-      ${block('Basic', [['Registration Number', d.roll || '(not given)'], ['Roll No.', d.serialNo],
+      ${block('Basic', [['Registration Number', d.roll || '(not given)'],
         ['Title', d.title], ['First Name', d.firstName], ['Middle Name', d.middleName],
         ['Last Name', d.lastName], ['Mobile', d.phone], ['WhatsApp', d.whatsapp],
         ['Email', d.email], ['College Email', d.domainEmail]])}
@@ -12988,10 +13107,12 @@
         ['Mobile', d[k + 'Mobile']], ['Phone', d[k + 'Phone']],
         ['Annual Income', d[k + 'Income']], ['Email', d[k + 'Email']],
         ['Qualification', d[k + 'Qualification']], ['Home Address', d[k + 'Address']]])).join('')}
-      ${block('Current Address', [['Address', d.address], ['City', d.city], ['State', d.state],
+      ${block('Current Address', [['Address', d.address], ['State', d.state],
+        ['District', d.district], ['City', d.city],
         ['Country', d.country], ['Pincode', d.pincode]])}
-      ${block('Permanent Address', [['Address', d.permAddress], ['City', d.permCity],
-        ['State', d.permState], ['Country', d.permCountry], ['Pincode', d.permPincode]])}
+      ${block('Permanent Address', [['Address', d.permAddress], ['State', d.permState],
+        ['District', d.permDistrict], ['City', d.permCity],
+        ['Country', d.permCountry], ['Pincode', d.permPincode]])}
       ${block('Health', [['Height (cm)', d.height], ['Weight (kg)', d.weight],
         ['Allergies', d.allergies], ['Medical Conditions', d.conditions],
         ['Regular Medication', d.medication], ['Notes', d.healthNotes]])}
@@ -13017,7 +13138,6 @@
     return {
       roll: String(roll || d.roll || '').trim(), name,
       firstName: d.firstName || '', middleName: d.middleName || '', lastName: d.lastName || '',
-      serialNo: d.serialNo || '',
       email: d.email || '', domainEmail: d.domainEmail || '',
       phone: d.phone || '', whatsapp: d.whatsapp || '',
       course: d.course || '', branch: d.course || '', branchName: d.branchName || '',
@@ -13046,10 +13166,12 @@
         qualification: d[k + 'Qualification'] || '', homeAddress: d[k + 'Address'] || '',
       })).filter(g => g.name || g.mobile),
       addressInfo: {
-        current: { address: d.address || '', city: d.city || '', state: d.state || '',
+        current: { address: d.address || '', state: d.state || '',
+                   district: d.district || '', city: d.city || '',
                    country: d.country || 'India', pincode: d.pincode || '' },
-        permanent: { address: d.permAddress || '', city: d.permCity || '',
-                     state: d.permState || '', country: d.permCountry || d.country || 'India',
+        permanent: { address: d.permAddress || '', state: d.permState || '',
+                     district: d.permDistrict || '', city: d.permCity || '',
+                     country: d.permCountry || d.country || 'India',
                      pincode: d.permPincode || '' },
       },
       academicInfo: {
