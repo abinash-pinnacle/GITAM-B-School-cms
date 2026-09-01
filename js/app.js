@@ -3154,14 +3154,21 @@
   function regNoDuplicate(roll, excludeId) {
     const v = String(roll || '').trim();
     const clash = Store.all('students').find(x => String(x.roll || '') === v && x.id !== excludeId);
-    return clash ? `Registration number ${v} already belongs to ${clash.name}.` : null;
+    return clash ? `Student ID ${v} already belongs to ${clash.name}.` : null;
   }
   /** A message naming what is wrong with this registration number, or null. */
   function regNoProblem(roll, excludeId) {
     const v = String(roll || '').trim();
     const len = regNoLength();
-    if (!/^\d+$/.test(v)) return 'Registration number must be digits only.';
-    if (v.length !== len) return `Registration number must be exactly ${len} digits (this one has ${v.length}).`;
+    if (!/^\d+$/.test(v)) return 'A Student ID is digits only.';
+    /* Two shapes are legitimate, and the server accepts both: an issued ID —
+       admission year, branch code and a running number — and the configured
+       length, which is what a number from the old scheme is. Refusing an issued
+       ID here for being six digits is the browser being stricter than the
+       server about the very ids the server hands out. */
+    if (!isIssuedId(v) && v.length !== len) {
+      return `A Student ID is ${len} digits, or an issued one — this has ${v.length}.`;
+    }
     return regNoDuplicate(v, excludeId);
   }
 
@@ -3827,7 +3834,14 @@
         return;
       }
 
-      const body = rows.slice(headerAt + 1).filter((r) => r.some((c) => c));
+      /* A report exported from this page ends with its totals line — "TOTAL"
+         under the id column and a count beside it. It is a summary of the rows
+         above, not one more of them, and it is not asking to be created. */
+      const isTotals = (r) => {
+        const first = r.find((c) => String(c ?? '').trim() !== '');
+        return String(first ?? '').trim().toUpperCase() === 'TOTAL';
+      };
+      const body = rows.slice(headerAt + 1).filter((r) => r.some((c) => c) && !isTotals(r));
       if (!body.length) {
         $('#impResult').innerHTML = '<p class="imp-bad">The headings are there but no rows under them.</p>';
         $('#impGo').disabled = true;

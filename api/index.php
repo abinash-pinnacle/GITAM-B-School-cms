@@ -1530,7 +1530,7 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
         $changed = $existing === null || (string) ($existing['roll'] ?? '') !== $roll;
         if ($changed && !$issued) {
             if (!preg_match('/^\d+$/', $roll)) {
-                return 'Registration number must be digits only.';
+                return 'A Student ID is digits only.';
             }
             /* Two shapes are legitimate now: the configured length, which is
                what an id from the old scheme is, and the issued shape of four
@@ -1538,7 +1538,7 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
                the other must not be refused for being the wrong length. */
             $issuedShape = strlen($roll) >= 4 + STUDENT_SEQ_WIDTH && strlen($roll) <= 8;
             if ($len > 0 && strlen($roll) !== $len && !$issuedShape) {
-                return "Registration number must be exactly $len digits.";
+                return "A Student ID is $len digits, or an issued one.";
             }
         }
         $clash = fetch_one(
@@ -1547,7 +1547,7 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
             $id ? [$roll, $id] : [$roll]
         );
         if ($clash) {
-            return "Registration number $roll already belongs to " . ($clash['name'] ?? 'another student') . '.';
+            return "Student ID $roll already belongs to " . ($clash['name'] ?? 'another student') . '.';
         }
     }
     return null;
