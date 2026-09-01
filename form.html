@@ -390,6 +390,12 @@
   }).join('');
   var stepBtns = [].slice.call(stepBar.querySelectorAll('button'));
 
+  /** which step a field is on, so the form can jump to it before complaining */
+  function paneOf(el) {
+    var p = el && el.closest ? el.closest('.pane') : null;
+    return Math.max(0, panes.indexOf(p));
+  }
+
   function showStep(i) {
     at = Math.max(0, Math.min(panes.length - 1, i));
     panes.forEach(function (p, n) { p.classList.toggle('on', n === at); });
@@ -434,9 +440,39 @@
       var fn = document.querySelector('[name="firstName"]'); if (fn) fn.focus();
       return;
     }
-    if ((d.phone || '').length !== 10) {
-      showStep(0); show('err', 'Mobile number must be exactly 10 digits.');
+    if (!/^[6-9]\d{9}$/.test((d.phone || '').trim())) {
+      showStep(0); show('err', 'Please enter a valid 10-digit mobile number.');
       var ph = document.querySelector('[name="phone"]'); if (ph) ph.focus();
+      return;
+    }
+    if ((d.whatsapp || '') !== '' && !/^[6-9]\d{9}$/.test(d.whatsapp.trim())) {
+      showStep(0); show('err', 'Please enter a valid 10-digit WhatsApp number.');
+      var wa = document.querySelector('[name="whatsapp"]'); if (wa) wa.focus();
+      return;
+    }
+    /* An address with a space or without a domain is a typo, and the office
+       cannot ask about it later — this page is the only chance. */
+    var EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+    var badEmail = ['email', 'domainEmail'].filter(function (k) {
+      return (d[k] || '').trim() !== '' && !EMAIL_RE.test(d[k].trim());
+    })[0];
+    if (badEmail) {
+      showStep(0); show('err', 'Please enter a valid email address.');
+      var em = document.querySelector('[name="' + badEmail + '"]'); if (em) em.focus();
+      return;
+    }
+    var emg = (d.emergencyPhone || '').trim();
+    if (emg !== '' && !/^[6-9]\d{9}$/.test(emg)) {
+      show('err', 'Please enter a valid 10-digit emergency contact number.');
+      var eg = document.querySelector('[name="emergencyPhone"]');
+      if (eg) { showStep(paneOf(eg)); eg.focus(); }
+      return;
+    }
+    // an emergency contact that is your own number is not an emergency contact
+    if (emg !== '' && emg === (d.phone || '').trim()) {
+      show('err', 'Student mobile number and emergency contact number cannot be the same.');
+      var eg2 = document.querySelector('[name="emergencyPhone"]');
+      if (eg2) { showStep(paneOf(eg2)); eg2.focus(); }
       return;
     }
     /* Blank is fine — most people applying do not have one yet. Nine digits is

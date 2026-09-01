@@ -509,6 +509,32 @@ const ADMISSION_READABLE = ['students', 'users', 'courses', 'syllabus', 'setting
 
 /** requisitions: staff raise them, admin/accountant approve them — students never see them */
 const STAFF_COLLECTIONS = ['requisitions'];
+
+/* The six tables an employee can sit in. They share a shape, and they share a
+   namespace: an employee id, an Aadhaar and an email address each belong to one
+   person across all six, not one person per table. */
+const STAFF_TABLES = ['faculty', 'accountants', 'centerheads', 'placementofficers',
+                      'coordinators', 'admissions'];
+
+/** columns holding an email address, checked for shape on the way in */
+const EMAIL_FIELDS = [
+    'students'          => ['email', 'domainEmail'],
+    'faculty'           => ['email'],
+    'accountants'       => ['email'],
+    'centerheads'       => ['email'],
+    'placementofficers' => ['email'],
+    'coordinators'      => ['email'],
+    'admissions'        => ['email'],
+    'users'             => ['email'],
+    'companies'         => ['hrEmail'],
+];
+
+/* Where an address must belong to one person. A student's is where a password
+   reset goes; an employee's is the same across all six staff tables. Blank is
+   never a clash — plenty of records carry no address at all. */
+const UNIQUE_EMAIL = [
+    'students' => ['email', 'domainEmail'],
+];
 const STAFF_ROLES = ['admin', 'accountant', 'center_head', 'faculty', 'librarian',
                      'course_coordinator'];
 

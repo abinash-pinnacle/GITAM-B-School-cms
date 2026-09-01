@@ -1273,13 +1273,28 @@ function api_apply(): void
     if ($first === '') {
         send_json(['error' => 'incomplete', 'message' => 'Your first name is required.'], 422);
     }
-    if (strlen($phone) !== 10) {
+    if (!preg_match(MOBILE_RE, $phone)) {
+        send_json(['error' => 'bad-phone', 'message' => BAD_MOBILE], 422);
+    }
+    $whatsapp = preg_replace('/\D/', '', apply_clean($d['whatsapp'] ?? '', 20));
+    if ($whatsapp !== '' && !preg_match(MOBILE_RE, $whatsapp)) {
         send_json(['error' => 'bad-phone',
-                   'message' => 'Mobile number must be exactly 10 digits.'], 422);
+                   'message' => 'Please enter a valid 10-digit WhatsApp number.'], 422);
     }
     $email = apply_clean($d['email'] ?? '', 120);
-    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        send_json(['error' => 'bad-email', 'message' => 'That email address does not look right.'], 422);
+    foreach (['email', 'domainEmail'] as $f) {
+        if (!email_ok(apply_clean($d[$f] ?? '', 120))) {
+            send_json(['error' => 'bad-email', 'message' => BAD_EMAIL], 422);
+        }
+    }
+    /* An emergency contact that is the applicant's own number is not an
+       emergency contact, and the office cannot ring back to ask. */
+    $emergency = preg_replace('/\D/', '', apply_clean($d['emergencyPhone'] ?? '', 20));
+    if ($emergency !== '' && !preg_match(MOBILE_RE, $emergency)) {
+        send_json(['error' => 'bad-emergency', 'message' => BAD_EMERGENCY], 422);
+    }
+    if ($emergency !== '' && $emergency === $phone) {
+        send_json(['error' => 'same-number', 'message' => SAME_NUMBER], 422);
     }
     /* The university's number, if they have one. The shape is checked here —
        the browser's copy of this rule is a courtesy and anything can post to
@@ -1516,16 +1531,164 @@ const PHONE_FIELDS = [
  * should type, and nobody types one now — an issued id is correct by the rule
  * that made it, and only has to be unique.
  */
+/* An Indian mobile is ten digits and starts with 6, 7, 8 or 9. Ten digits alone
+   was the old rule, which let 0000000000 through — a placeholder somebody typed
+   to get past a form, found months later by whoever tried to ring them. */
+const MOBILE_RE = '/^[6-9]\d{9}$/';
+/* Local part, one @, a domain with a dot and nothing empty either side of it.
+   Refuses "student@", "student.com", "@gmail.com" and "student gmail.com". */
+const EMAIL_RE = '/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/';
+
+const BAD_MOBILE = 'Please enter a valid 10-digit mobile number.';
+const BAD_EMERGENCY = 'Please enter a valid 10-digit emergency contact number.';
+const BAD_EMAIL = 'Please enter a valid email address.';
+const SAME_NUMBER = 'Student mobile number and emergency contact number cannot be the same.';
+const SAME_NUMBER_STAFF = 'Mobile number and emergency contact number cannot be the same.';
+
+function mobile_ok(string $v): bool
+{
+    return $v === '' || (bool) preg_match(MOBILE_RE, $v);
+}
+
+function email_ok(string $v): bool
+{
+    return $v === '' || (bool) preg_match(EMAIL_RE, $v);
+}
+
+/** a value out of one of the record's JSON blobs, whichever shape it arrived in */
+function blob_value(array $d, string $blob, string $key): ?string
+{
+    if (!array_key_exists($blob, $d)) {
+        return null;                      // not part of this write at all
+    }
+    $part = $d[$blob];
+    if (is_string($part)) {
+        $part = json_decode($part, true);  // a bulk write can send it encoded
+    }
+    if (!is_array($part) || !array_key_exists($key, $part)) {
+        return null;
+    }
+    return trim((string) $part[$key]);
+}
+
+/** the stored row, for the fields a partial update did not send */
+function stored_row(string $col, ?string $id): array
+{
+    if ($id === null) {
+        return [];
+    }
+    $row = fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    return is_array($row) ? $row : [];
+}
+
+/**
+ * The mobile number, the emergency number, and the rule that they differ.
+ *
+ * Both are resolved against the stored record first, so that changing only one
+ * of them still cannot end with a student whose emergency contact is their own
+ * number — which is a student with no emergency contact.
+ */
+function contact_problem(string $col, array $d, ?string $id): ?string
+{
+    $sendsPhone = array_key_exists('phone', $d);
+    $emergency = blob_value($d, 'health', 'emergencyPhone');
+    if (!$sendsPhone && $emergency === null) {
+        return null;
+    }
+    $stored = stored_row($col, $id);
+    $phone = $sendsPhone ? trim((string) $d['phone']) : trim((string) ($stored['phone'] ?? ''));
+    if ($emergency === null) {
+        $health = json_decode((string) ($stored['health'] ?? ''), true);
+        $emergency = is_array($health) ? trim((string) ($health['emergencyPhone'] ?? '')) : '';
+    }
+    if (!mobile_ok($phone)) {
+        return BAD_MOBILE;
+    }
+    if (!mobile_ok($emergency)) {
+        return BAD_EMERGENCY;
+    }
+    if ($phone !== '' && $phone === $emergency) {
+        return $col === 'students' ? SAME_NUMBER : SAME_NUMBER_STAFF;
+    }
+    return null;
+}
+
+/** whoever else already holds this address, as a message, or null */
+function email_taken(string $col, string $field, string $value, ?string $id): ?string
+{
+    if (trim($value) === '') {
+        return null;
+    }
+    // an employee's address spans all six staff tables; everything else is its own
+    $tables = in_array($col, STAFF_TABLES, true) ? STAFF_TABLES : [$col];
+    foreach ($tables as $table) {
+        $sql = 'SELECT * FROM ' . qi($table) . ' WHERE LOWER(' . qi($field) . ') = LOWER(?)';
+        $args = [trim($value)];
+        if ($id !== null && $table === $col) {
+            $sql .= ' AND ' . qi('id') . ' <> ?';
+            $args[] = $id;
+        }
+        $clash = fetch_one($sql, $args);
+        if ($clash) {
+            return 'The email address ' . trim($value) . ' already belongs to '
+                . ($clash['name'] ?? 'another record') . '.';
+        }
+    }
+    return null;
+}
+
 function row_problem(string $col, array $d, ?string $id = null, bool $issued = false): ?string
 {
     foreach (PHONE_FIELDS[$col] ?? [] as $field) {
         if (!array_key_exists($field, $d)) {
             continue;
         }
-        $phone = trim((string) ($d[$field] ?? ''));
         // blank is allowed — half the staff records have no number on file
-        if ($phone !== '' && !preg_match('/^\d{10}$/', $phone)) {
-            return 'Phone number must be exactly 10 digits.';
+        if (!mobile_ok(trim((string) ($d[$field] ?? '')))) {
+            return BAD_MOBILE;
+        }
+    }
+    if (array_key_exists('whatsapp', $d) && !mobile_ok(trim((string) $d['whatsapp']))) {
+        return 'Please enter a valid 10-digit WhatsApp number.';
+    }
+
+    foreach (EMAIL_FIELDS[$col] ?? [] as $field) {
+        if (array_key_exists($field, $d) && !email_ok(trim((string) ($d[$field] ?? '')))) {
+            return BAD_EMAIL;
+        }
+    }
+    /* The address a password reset goes to. Students by their own column;
+       employees across all six staff tables, the same as their employee id. */
+    foreach (UNIQUE_EMAIL[$col] ?? (in_array($col, STAFF_TABLES, true) ? ['email'] : []) as $field) {
+        if (!array_key_exists($field, $d)) {
+            continue;
+        }
+        $held = email_taken($col, $field, (string) $d[$field], $id);
+        if ($held !== null) {
+            return $held;
+        }
+    }
+
+    // the emergency contact, which lives inside the health blob
+    $contactBad = contact_problem($col, $d, $id);
+    if ($contactBad !== null) {
+        return $contactBad;
+    }
+
+    // every guardian's mobile and email, which live inside the guardians blob
+    if (array_key_exists('guardians', $d)) {
+        $list = is_string($d['guardians']) ? json_decode($d['guardians'], true) : $d['guardians'];
+        foreach (is_array($list) ? $list : [] as $g) {
+            if (!is_array($g)) {
+                continue;
+            }
+            $who = strtolower(trim((string) ($g['relation'] ?? 'guardian')));
+            if (!mobile_ok(trim((string) ($g['mobile'] ?? '')))) {
+                return rtrim(BAD_MOBILE, '.') . ' for the ' . $who . '.';
+            }
+            if (!email_ok(trim((string) ($g['email'] ?? '')))) {
+                return rtrim(BAD_EMAIL, '.') . ' for the ' . $who . '.';
+            }
         }
     }
 

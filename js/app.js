@@ -2519,7 +2519,27 @@
     $('#cx').onclick = closeModal;
   }
 
-  /* ---------- phone: digits only, exactly 10 (blank allowed — optional field) ---------- */
+  /* ---------- what a mobile number and an email address have to look like ----------
+
+     An Indian mobile is ten digits and starts with 6, 7, 8 or 9. Ten digits
+     alone was the old rule, which let 0000000000 and 1234567890 through — a
+     placeholder somebody typed to get past the form, found months later by the
+     person trying to ring them.
+
+     Blank stays allowed. Plenty of records legitimately carry no number, and
+     the forms that do require one say so themselves. */
+  const MOBILE_RE = /^[6-9]\d{9}$/;
+  /* Local part, one @, a domain with at least one dot and nothing empty on
+     either side of it. Rejects "student@", "student.com", "@gmail.com" and
+     "student gmail.com"; accepts "student@gmail.com" and "a@b.co.in". */
+  const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+
+  const BAD_MOBILE = 'Please enter a valid 10-digit mobile number.';
+  const BAD_EMERGENCY = 'Please enter a valid 10-digit emergency contact number.';
+  const BAD_EMAIL = 'Please enter a valid email address.';
+  const SAME_NUMBER = 'Student mobile number and emergency contact number cannot be the same.';
+  const SAME_NUMBER_STAFF = 'Mobile number and emergency contact number cannot be the same.';
+
   function bindPhoneInput(el) {
     if (!el) return;
     el.maxLength = 10;
@@ -2527,7 +2547,45 @@
   }
   function phoneValid(v) {
     const p = String(v || '').trim();
-    return p === '' || /^\d{10}$/.test(p);
+    return p === '' || MOBILE_RE.test(p);
+  }
+  function emailValid(v) {
+    const e = String(v || '').trim();
+    return e === '' || EMAIL_RE.test(e);
+  }
+
+  /* Digits only, and no more than the box allows — while typing and on paste
+     alike. One listener on the document rather than one per box, because
+     guardian cards and document rows are added to a form after it was wired,
+     and a box bound at open time would not be there yet. */
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el || typeof el.matches !== 'function') return;
+    if (el.matches('input[inputmode="numeric"]')) {
+      const max = parseInt(el.getAttribute('maxlength'), 10);
+      const digits = el.value.replace(/\D/g, '');
+      const cut = max > 0 ? digits.slice(0, max) : digits;
+      if (el.value !== cut) el.value = cut;
+      return;
+    }
+    /* An <input type="email"> is checked by the browser before any handler
+       runs, and the browser's own wording is not ours — and it accepts
+       "student@gmail", which we do not. Both are settled by giving the box our
+       verdict and our sentence to say. */
+    if (el.matches('input[type="email"]')) {
+      el.setCustomValidity(emailValid(el.value) ? '' : BAD_EMAIL);
+    }
+  }, true);
+
+  /* The two questions asked of every form that carries both: is the emergency
+     number a number, and is it a different one. A student whose emergency
+     contact is their own mobile has no emergency contact. */
+  function contactProblem(mobile, emergency, sameMessage) {
+    const m = String(mobile || '').trim(), e = String(emergency || '').trim();
+    if (m && !MOBILE_RE.test(m)) return BAD_MOBILE;
+    if (e && !MOBILE_RE.test(e)) return BAD_EMERGENCY;
+    if (m && e && m === e) return sameMessage;
+    return null;
   }
 
   /* ---------- the student form ---------- */
@@ -3014,12 +3072,18 @@
         const regBad = regNoDuplicate(d.roll, id);
         if (regBad) { toast(regBad, 'err'); return; }
       }
-      if (!phoneValid(d.phone)) { toast('Mobile number must be exactly 10 digits.', 'err'); return; }
-      if (d.whatsapp && !/^\d{10}$/.test(d.whatsapp)) {
-        toast('WhatsApp number must be exactly 10 digits.', 'err'); return;
+      /* Trimmed before anything looks at them: a trailing space is invisible on
+         the screen and turns a valid address into an invalid one. */
+      ['email', 'domainEmail', 'phone', 'whatsapp', 'h_emergencyPhone']
+        .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
+
+      const contactBad = contactProblem(d.phone, d.h_emergencyPhone, SAME_NUMBER);
+      if (contactBad) { toast(contactBad, 'err'); return; }
+      if (d.whatsapp && !MOBILE_RE.test(d.whatsapp)) {
+        toast('Please enter a valid 10-digit WhatsApp number.', 'err'); return;
       }
-      if (d.h_emergencyPhone && !/^\d{10}$/.test(d.h_emergencyPhone)) {
-        toast('Emergency contact number must be exactly 10 digits.', 'err'); return;
+      if (!emailValid(d.email) || !emailValid(d.domainEmail)) {
+        toast(BAD_EMAIL, 'err'); return;
       }
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
@@ -3036,7 +3100,10 @@
       const clash = takenBy('students', 'phone', d.phone, id)
         || takenBy('students', 'whatsapp', d.whatsapp, id)
         || takenBy('students', 'aadhaar', d.aadhaar, id)
-        || takenBy('students', 'univRegNo', d.univRegNo, id);
+        || takenBy('students', 'univRegNo', d.univRegNo, id)
+        // an address is where a password reset goes; two students cannot share one
+        || takenBy('students', 'email', d.email, id)
+        || takenBy('students', 'domainEmail', d.domainEmail, id);
       if (clash) { toast(clash, 'err'); return; }
       // the placement fields are only on the form when editing — a student
       // being admitted today has neither a CGPA nor a backlog yet
@@ -3074,9 +3141,14 @@
                  email: val('email'), qualification: val('qualification'),
                  homeAddress: val('homeAddress') };
       }).filter(g => g.name || g.mobile);
-      const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
+      const badGuardian = guardianRows.find(g => g.mobile && !MOBILE_RE.test(g.mobile));
       if (badGuardian) {
-        toast(`The ${badGuardian.relation.toLowerCase()}'s mobile number must be exactly 10 digits.`, 'err');
+        toast(`${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`, 'err');
+        return;
+      }
+      const badGuardianEmail = guardianRows.find(g => !emailValid(g.email));
+      if (badGuardianEmail) {
+        toast(`${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`, 'err');
         return;
       }
 
@@ -3141,7 +3213,8 @@
   /* Whoever else already holds this value in this column, as a message, or
      null. Blank is not a clash — plenty of records have no WhatsApp number. */
   const FIELD_LABEL = { phone: 'Mobile number', whatsapp: 'WhatsApp number',
-                        aadhaar: 'Aadhaar number', email: 'Email',
+                        aadhaar: 'Aadhaar number', email: 'Email address',
+                        domainEmail: 'Domain email address',
                         univRegNo: 'University registration number' };
   function takenBy(col, field, value, excludeId) {
     const v = String(value || '').trim();
@@ -3161,7 +3234,8 @@
   const STAFF_TABLES = ['faculty', 'accountants', 'centerheads', 'placementofficers',
                         'coordinators', 'admissions'];
   const STAFF_FIELD_LABEL = { empId: 'Employee ID', bputRegdNo: 'BPUT Regd No.',
-                              aadhaar: 'Aadhaar number', attendanceCardId: 'Attendance Card ID' };
+                              aadhaar: 'Aadhaar number', attendanceCardId: 'Attendance Card ID',
+                              email: 'Email address' };
   function staffFieldTaken(field, value, excludeId) {
     const v = String(value || '').trim().toLowerCase();
     if (!v) return null;
@@ -3177,7 +3251,9 @@
   }
   /** the first of these that somebody else already holds, as a message */
   function staffClash(d, excludeId) {
-    return ['empId', 'bputRegdNo', 'aadhaar', 'attendanceCardId']
+    // email included: an employee's address is where their login and every
+    // notice goes, so two people cannot share one
+    return ['empId', 'bputRegdNo', 'aadhaar', 'attendanceCardId', 'email']
       .map(f => staffFieldTaken(f, d[f], excludeId)).find(Boolean) || null;
   }
 
@@ -3696,12 +3772,34 @@
         if (regBad && !/already belongs/.test(regBad)) return { raw, error: regBad };
       }
 
-      if (raw.phone && !phoneValid(raw.phone)) return { raw, error: 'Phone must be 10 digits' };
-      if (raw.whatsapp && !phoneValid(raw.whatsapp)) return { raw, error: 'WhatsApp must be 10 digits' };
+      /* The same rules the forms apply, on two hundred rows at once. Trimmed
+         first: a cell copied out of another sheet often carries a space. */
+      ['email', 'domainEmail', 'phone', 'whatsapp', 'emergencyPhone']
+        .forEach((k) => { if (typeof raw[k] === 'string') raw[k] = raw[k].trim(); });
+      const contactBad = contactProblem(raw.phone, raw.emergencyPhone,
+        spec.collection === 'students' ? SAME_NUMBER : SAME_NUMBER_STAFF);
+      if (contactBad) return { raw, error: contactBad };
+      if (raw.whatsapp && !MOBILE_RE.test(raw.whatsapp)) {
+        return { raw, error: 'Please enter a valid 10-digit WhatsApp number.' };
+      }
+      for (const c of spec.columns.filter((x) => x.as === 'email' || /email/i.test(x.key))) {
+        if (!emailValid(raw[c.key])) return { raw, error: `${c.header}: ${BAD_EMAIL}` };
+      }
+      // an address must not repeat, in the file or against the roll
+      for (const f of ['email', 'domainEmail']) {
+        const v = String(raw[f] || '').trim().toLowerCase();
+        if (!v || !spec.columns.some((c) => c.key === f)) continue;
+        const held = takenBy(spec.collection, f, raw[f], null);
+        if (held) return { raw, error: held };
+        if (seenIds.has(f + ':' + v)) {
+          return { raw, error: `Duplicate ${FIELD_LABEL[f] || f} in this file` };
+        }
+        seenIds.add(f + ':' + v);
+      }
       // every column the sheet files under a guardian's mobile, whichever sheet
       for (const c of spec.columns.filter((x) => x.into && x.as === 'mobile')) {
-        if (raw[c.key] && !phoneValid(raw[c.key])) {
-          return { raw, error: `${c.header} must be 10 digits` };
+        if (raw[c.key] && !MOBILE_RE.test(raw[c.key])) {
+          return { raw, error: `${c.header}: ${BAD_MOBILE}` };
         }
       }
       if (raw.aadhaar && !/^\d{12}$/.test(raw.aadhaar)) return { raw, error: 'Aadhaar must be 12 digits' };
@@ -4947,7 +5045,11 @@
       e.preventDefault();
       const form = e.target;
       const d = formData(form);
-      if (!phoneValid(d.phone)) { toast('Mobile number must be exactly 10 digits.', 'err'); return; }
+      ['email', 'phone', 'h_emergencyPhone']
+        .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
+      const contactBad = contactProblem(d.phone, d.h_emergencyPhone, SAME_NUMBER_STAFF);
+      if (contactBad) { toast(contactBad, 'err'); return; }
+      if (!emailValid(d.email)) { toast(BAD_EMAIL, 'err'); return; }
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
         toast('AADHAAR number must be exactly 12 digits.', 'err'); return;
       }
@@ -4986,9 +5088,14 @@
                  email: val('email'), qualification: val('qualification'),
                  homeAddress: val('homeAddress') };
       }).filter(g => g.name || g.mobile);
-      const badGuardian = guardianRows.find(g => g.mobile && !/^\d{10}$/.test(g.mobile));
+      const badGuardian = guardianRows.find(g => g.mobile && !MOBILE_RE.test(g.mobile));
       if (badGuardian) {
-        toast(`The ${badGuardian.relation.toLowerCase()}'s mobile number must be exactly 10 digits.`, 'err');
+        toast(`${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`, 'err');
+        return;
+      }
+      const badGuardianEmail = guardianRows.find(g => !emailValid(g.email));
+      if (badGuardianEmail) {
+        toast(`${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`, 'err');
         return;
       }
 
@@ -13257,7 +13364,9 @@
       const clash = Store.all('users').find(x =>
         (x.username || '').toLowerCase() === username.toLowerCase() && x.id !== uid);
       if (clash) { toast(`User id "${username}" is already taken.`, 'err'); return; }
-      if (d.phone && !phoneValid(d.phone)) { toast('Mobile must be exactly 10 digits.', 'err'); return; }
+      if (typeof d.email === 'string') d.email = d.email.trim();
+      if (d.phone && !phoneValid(d.phone)) { toast(BAD_MOBILE, 'err'); return; }
+      if (!emailValid(d.email)) { toast(BAD_EMAIL, 'err'); return; }
       const patch = { name: (d.name || '').trim(), username, empId: d.empId || '',
                       email: d.email || '', phone: d.phone || '' };
       // the signed-in account cannot change its own role or switch itself off
@@ -13527,10 +13636,12 @@
       e.preventDefault();
       const d = formData(e.target);
       if (!d.name) { toast('Company name is required.', 'err'); return; }
-      if (!phoneValid(d.hrPhone)) { toast('HR phone must be exactly 10 digits.', 'err'); return; }
-      if (!phoneValid(d.coordinatorPhone)) {
-        toast('Coordinator mobile must be exactly 10 digits.', 'err'); return;
+      ['hrEmail', 'hrPhone', 'coordinatorPhone']
+        .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
+      if (!phoneValid(d.hrPhone) || !phoneValid(d.coordinatorPhone)) {
+        toast(BAD_MOBILE, 'err'); return;
       }
+      if (!emailValid(d.hrEmail)) { toast(BAD_EMAIL, 'err'); return; }
       // one HR number belongs to one company — a repeat almost always means
       // the same company entered twice under a slightly different name
       const phoneClash = Store.all('companies').find(x =>
