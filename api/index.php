@@ -11,6 +11,50 @@
  *   PUT    /api/{collection}/{id}   -> patch the given fields
  *   DELETE /api/{collection}/{id}   -> remove a row
  */
+
+/* A warning belongs in the log and nowhere else.
+   Nothing here ever said so, which left it to whatever the host's php.ini
+   happened to say — and shared hosting usually says display_errors is on. One
+   notice from any line of this file then prints itself above the payload, and
+   what reaches the browser is not JSON any more. The session signs in and can
+   read nothing, which is what has been happening, and the notice helpfully
+   names the server's directories on the way past.
+   Everything is still reported; it goes to the error log. */
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('html_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
+/* And a second line of defence for anything that prints regardless — a stray
+   echo, a byte-order mark ahead of an opening tag, a warning from a module
+   that ignores the setting above. It is collected here and thrown away by
+   send_json, so the body is the payload and nothing else. */
+ob_start();
+
+/* A fatal is the one failure the try/catch at the bottom of this file cannot
+   see: PHP stops where it stands, and with warnings no longer being printed
+   the browser is handed an empty body and reports that it could not reach a
+   server that answered perfectly well. So the last thing this process does is
+   check whether it died owing somebody a reply, and send one. */
+register_shutdown_function(static function (): void {
+    $e = error_get_last();
+    if ($e === null || !in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        return;
+    }
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('[nmiet-api] fatal: ' . $e['message'] . ' at ' . $e['file'] . ':' . $e['line']);
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    // the file and the line stay in the log; what goes out names neither
+    echo json_encode(['error' => 'server error',
+                      'message' => 'Server error — please try again.']);
+});
+
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');
@@ -18,6 +62,15 @@ header('Cache-Control: no-store');
 
 function send_json($data, int $status = 200): void
 {
+    /* Whatever else was printed is dropped, and noted where it can be read
+       without breaking anything. */
+    $stray = '';
+    while (ob_get_level() > 0) {
+        $stray .= (string) ob_get_clean();
+    }
+    if (trim($stray) !== '') {
+        error_log('[nmiet-api] discarded stray output: ' . substr(trim($stray), 0, 500));
+    }
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;

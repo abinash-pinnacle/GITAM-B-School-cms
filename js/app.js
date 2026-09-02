@@ -307,6 +307,11 @@
       /* Say which of the three it was. A message that fits every cause fits
          none of them, and this screen is the only place the person can see. */
       const status = err && err.status;
+      if (err && err.badBody) {
+        $('#loginError').textContent =
+          'Signed in, but ' + err.message + ' — please show this to the administrator.';
+        return;
+      }
       $('#loginError').textContent = status === 401
         ? 'Signed in, but the session was not accepted. Please sign in again.'
         : status

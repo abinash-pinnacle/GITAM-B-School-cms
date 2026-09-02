@@ -94,7 +94,25 @@ const Store = {
         throw new Error('unauthorised');
       }
       if (res.ok) {
-        this.data = await res.json();
+        /* Read as text and parse here, rather than res.json(), because when
+           the body is not JSON the difference matters and res.json() throws
+           the same shapeless error either way. A PHP warning printed above the
+           payload, or a body cut short because the process died half way
+           through writing it, both arrive as "could not reach the server" —
+           which sends people to check their wifi over a fault on the server.
+           So say what actually came back. */
+        const text = await res.text();
+        try {
+          this.data = JSON.parse(text);
+        } catch (e) {
+          const head = text.slice(0, 160).replace(/\s+/g, ' ').trim();
+          const err = new Error(
+            'the server sent ' + text.length + ' bytes that are not readable'
+            + (head ? ': ' + head : ''));
+          err.status = res.status;
+          err.badBody = true;
+          throw err;
+        }
         return this.data;
       }
       /* Carry why. "Could not load its data" sent two evenings running to
