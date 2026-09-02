@@ -2884,6 +2884,9 @@
   document.addEventListener('input', (e) => {
     const el = e.target;
     if (!el || typeof el.matches !== 'function') return;
+    /* The red goes the moment the box is touched. A form that keeps accusing a
+       field somebody has already corrected teaches people to ignore the red. */
+    if (el.classList) el.classList.remove('is-bad');
     if (el.matches('input[inputmode="numeric"]')) {
       const max = parseInt(el.getAttribute('maxlength'), 10);
       const digits = el.value.replace(/\D/g, '');
@@ -2899,6 +2902,75 @@
       el.setCustomValidity(emailValid(el.value) ? '' : BAD_EMAIL);
     }
   }, true);
+
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList) e.target.classList.remove('is-bad');
+  }, true);
+
+  /* A required box on a tab that is not the open one used to stop a form dead.
+     The browser refuses to submit, and it cannot draw its "please fill this in"
+     bubble against something that is display:none, so it gives up silently —
+     Save appeared to do nothing at all. Chrome says as much, but only in the
+     console, where nobody in an office is looking:
+
+         An invalid form control with name='firstName' is not focusable.
+
+     It is easy to walk into: fill the student in, wander through Academic and
+     Guardians, press Save from there having missed the name on Basic, and the
+     form neither saves nor complains.
+
+     So when the box holding things up is on a tab that is out of sight, open
+     that tab and put the cursor in it. The complaint then lands where the
+     person is looking, beside the field they have to fill.
+
+     Only the first box of an attempt is considered, which is the one the
+     browser would have gone to. If that one is already on screen the browser
+     handles it perfectly well and this stays out of the way. */
+  let invalidHandled = false;
+  document.addEventListener('invalid', (e) => {
+    if (invalidHandled) return;
+    invalidHandled = true;
+    setTimeout(() => { invalidHandled = false; }, 0);
+
+    const el = e.target;
+    if (!el || typeof el.closest !== 'function') return;
+    const pane = el.closest('.sf-pane.hidden');
+    if (!pane) return;                    // on screen already — leave it alone
+
+    e.preventDefault();                   // suppress a bubble that cannot be drawn
+    const tab = el.form
+      && el.form.querySelector(`.fin-tabs [data-pane="${pane.dataset.pane}"]`);
+    if (tab) tab.click();
+    // once the pane is on screen the box can take focus and speak for itself
+    setTimeout(() => { el.focus(); el.reportValidity(); }, 0);
+  }, true);
+
+  /* Saying what is wrong is only half of it; the other half is saying where.
+
+     Names the mistake in red along the bottom, then points at the box it means:
+     opens the tab the box sits on, outlines it, scrolls it into the middle of
+     the panel and gives it the cursor. One box is marked at a time — the first
+     thing to fix — because a form lit up in six places tells nobody where to
+     start.
+
+     Returns false so a check can read `return badField(...)`, which keeps each
+     rule to the one line that states it. */
+  function badField(form, target, message) {
+    if (message) toast(message, 'err');
+    form.querySelectorAll('.is-bad').forEach(x => x.classList.remove('is-bad'));
+    const el = typeof target === 'string'
+      ? form.querySelector(`[name="${target}"]`) : target;
+    if (!el) return false;
+    const pane = el.closest('.sf-pane');
+    if (pane && pane.classList.contains('hidden')) {
+      const tab = form.querySelector(`.fin-tabs [data-pane="${pane.dataset.pane}"]`);
+      if (tab) tab.click();
+    }
+    el.classList.add('is-bad');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.focus({ preventScroll: true });
+    return false;
+  }
 
   /* The two questions asked of every form that carries both: is the emergency
      number a number, and is it a different one. A student whose emergency
@@ -3552,45 +3624,48 @@
          somebody enrolled under an older scheme. */
       if (id) {
         const regBad = regNoDuplicate(d.roll, id);
-        if (regBad) { toast(regBad, 'err'); return; }
+        if (regBad) return badField(f, 'roll', regBad);
       }
       /* Trimmed before anything looks at them: a trailing space is invisible on
          the screen and turns a valid address into an invalid one. */
       ['email', 'domainEmail', 'phone', 'whatsapp', 'h_emergencyPhone']
         .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
 
+      /* Whichever of the two numbers is at fault gets the cursor. Told only
+         that they cannot match, somebody changes the wrong one. */
       const contactBad = contactProblem(d.phone, d.h_emergencyPhone, SAME_NUMBER);
-      if (contactBad) { toast(contactBad, 'err'); return; }
+      if (contactBad) {
+        return badField(f, contactBad === BAD_MOBILE ? 'phone' : 'h_emergencyPhone', contactBad);
+      }
       if (d.whatsapp && !MOBILE_RE.test(d.whatsapp)) {
-        toast('Please enter a valid 10-digit WhatsApp number.', 'err'); return;
+        return badField(f, 'whatsapp', 'Please enter a valid 10-digit WhatsApp number.');
       }
-      if (!emailValid(d.email) || !emailValid(d.domainEmail)) {
-        toast(BAD_EMAIL, 'err'); return;
-      }
+      if (!emailValid(d.email)) return badField(f, 'email', BAD_EMAIL);
+      if (!emailValid(d.domainEmail)) return badField(f, 'domainEmail', BAD_EMAIL);
       if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
-        toast('Aadhaar number must be exactly 12 digits.', 'err'); return;
+        return badField(f, 'aadhaar', 'Aadhaar number must be exactly 12 digits.');
       }
       /* Blank or ten digits, nothing in between. It arrives weeks after
          admission, so it cannot be required — but a nine-digit one is a typo
          that will be found the day it is needed and not before. */
       if (d.univRegNo && !/^\d{10}$/.test(d.univRegNo)) {
-        toast('University registration number must be exactly 10 digits.', 'err'); return;
+        return badField(f, 'univRegNo',
+          'University registration number must be exactly 10 digits.');
       }
       /* A number nobody else holds. Two students sharing a mobile is the same
          mistake as two sharing a registration number — the office rings one and
-         reaches the other. */
-      const clash = takenBy('students', 'phone', d.phone, id)
-        || takenBy('students', 'whatsapp', d.whatsapp, id)
-        || takenBy('students', 'aadhaar', d.aadhaar, id)
-        || takenBy('students', 'univRegNo', d.univRegNo, id)
-        // an address is where a password reset goes; two students cannot share one
-        || takenBy('students', 'email', d.email, id)
-        || takenBy('students', 'domainEmail', d.domainEmail, id);
-      if (clash) { toast(clash, 'err'); return; }
+         reaches the other. Checked a column at a time so the box that clashes
+         is the box that is marked. */
+      for (const k of ['phone', 'whatsapp', 'aadhaar', 'univRegNo',
+                       // an address is where a password reset goes
+                       'email', 'domainEmail']) {
+        const clash = takenBy('students', k, d[k], id);
+        if (clash) return badField(f, k, clash);
+      }
       // the placement fields are only on the form when editing — a student
       // being admitted today has neither a CGPA nor a backlog yet
       if (d.cgpa != null && d.cgpa !== '' && (isNaN(+d.cgpa) || +d.cgpa < 0 || +d.cgpa > 10)) {
-        toast('CGPA must be between 0 and 10.', 'err'); return;
+        return badField(f, 'cgpa', 'CGPA must be between 0 and 10.');
       }
 
       // pull the prefixed fields out into the blob each tab is stored as
@@ -3630,15 +3705,23 @@
                  email: val('email'), qualification: val('qualification'),
                  homeAddress: val('homeAddress') };
       }).filter(g => g.name || g.mobile);
+      /* Three cards carry the same field names, so the card is found by the
+         relation it is headed with — otherwise the father's card is marked for
+         the mother's typo. */
+      const guardianBox = (relation, field) => {
+        const card = [...f.querySelectorAll('[data-guardian]')]
+          .find(c => c.dataset.role === relation);
+        return card ? card.querySelector(`[name="g_${field}"]`) : null;
+      };
       const badGuardian = guardianRows.find(g => g.mobile && !MOBILE_RE.test(g.mobile));
       if (badGuardian) {
-        toast(`${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`, 'err');
-        return;
+        return badField(f, guardianBox(badGuardian.relation, 'mobile'),
+          `${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`);
       }
       const badGuardianEmail = guardianRows.find(g => !emailValid(g.email));
       if (badGuardianEmail) {
-        toast(`${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`, 'err');
-        return;
+        return badField(f, guardianBox(badGuardianEmail.relation, 'email'),
+          `${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`);
       }
 
       const documents = [...f.querySelectorAll('[data-document]')].map(card => {
@@ -3739,10 +3822,11 @@
     return null;
   }
   /** the first of these that somebody else already holds, as a message */
+  /* email included: an employee's address is where their login and every
+     notice goes, so two people cannot share one */
+  const STAFF_UNIQUE_FIELDS = ['empId', 'bputRegdNo', 'aadhaar', 'attendanceCardId', 'email'];
   function staffClash(d, excludeId) {
-    // email included: an employee's address is where their login and every
-    // notice goes, so two people cannot share one
-    return ['empId', 'bputRegdNo', 'aadhaar', 'attendanceCardId', 'email']
+    return STAFF_UNIQUE_FIELDS
       .map(f => staffFieldTaken(f, d[f], excludeId)).find(Boolean) || null;
   }
 
@@ -5570,17 +5654,24 @@
          anybody asked for. */
       d.name = [d.per_title, d.per_firstName, d.per_middleName, d.per_lastName]
         .map(x => (x || '').trim()).filter(Boolean).join(' ');
-      if (!(d.per_firstName || '').trim()) { toast('An employee needs a first name.', 'err'); return; }
+      if (!(d.per_firstName || '').trim()) {
+        return badField(form, 'per_firstName', 'An employee needs a first name.');
+      }
       ['email', 'phone', 'h_emergencyPhone']
         .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
       const contactBad = contactProblem(d.phone, d.h_emergencyPhone, SAME_NUMBER_STAFF);
-      if (contactBad) { toast(contactBad, 'err'); return; }
-      if (!emailValid(d.email)) { toast(BAD_EMAIL, 'err'); return; }
-      if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
-        toast('AADHAAR number must be exactly 12 digits.', 'err'); return;
+      if (contactBad) {
+        return badField(form, contactBad === BAD_MOBILE ? 'phone' : 'h_emergencyPhone', contactBad);
       }
-      const idClash = staffClash(d, id);
-      if (idClash) { toast(idClash, 'err'); return; }
+      if (!emailValid(d.email)) return badField(form, 'email', BAD_EMAIL);
+      if (d.aadhaar && !/^\d{12}$/.test(d.aadhaar)) {
+        return badField(form, 'aadhaar', 'AADHAAR number must be exactly 12 digits.');
+      }
+      // the same columns staffClash reads, one at a time, so the box is known
+      for (const k of STAFF_UNIQUE_FIELDS) {
+        const clash = staffFieldTaken(k, d[k], id);
+        if (clash) return badField(form, k, clash);
+      }
       const username = (d.username || '').trim();
       const password = (d.password || '').trim();
       delete d.username; delete d.password;
@@ -5589,7 +5680,9 @@
       if (username) {
         const clash = Store.all('users').find(u =>
           (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
-        if (clash) { toast('Username "' + username + '" already taken.', 'err'); return; }
+        if (clash) {
+          return badField(form, 'username', 'Username "' + username + '" already taken.');
+        }
       }
 
       const take = (prefix) => {
@@ -5620,15 +5713,23 @@
                  email: val('email'), qualification: val('qualification'),
                  homeAddress: val('homeAddress') };
       }).filter(g => g.name || g.mobile);
+      /* Three cards carry the same field names, so the card is found by the
+         relation it is headed with — otherwise the father's card is marked for
+         the mother's typo. */
+      const guardianBox = (relation, field) => {
+        const card = [...form.querySelectorAll('[data-guardian]')]
+          .find(c => c.dataset.role === relation);
+        return card ? card.querySelector(`[name="g_${field}"]`) : null;
+      };
       const badGuardian = guardianRows.find(g => g.mobile && !MOBILE_RE.test(g.mobile));
       if (badGuardian) {
-        toast(`${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`, 'err');
-        return;
+        return badField(form, guardianBox(badGuardian.relation, 'mobile'),
+          `${BAD_MOBILE.slice(0, -1)} for the ${badGuardian.relation.toLowerCase()}.`);
       }
       const badGuardianEmail = guardianRows.find(g => !emailValid(g.email));
       if (badGuardianEmail) {
-        toast(`${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`, 'err');
-        return;
+        return badField(form, guardianBox(badGuardianEmail.relation, 'email'),
+          `${BAD_EMAIL.slice(0, -1)} for the ${badGuardianEmail.relation.toLowerCase()}.`);
       }
 
       const documents = [...form.querySelectorAll('[data-document]')].map(card => {
