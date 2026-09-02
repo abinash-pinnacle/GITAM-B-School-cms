@@ -2297,10 +2297,25 @@ function reject_row(string $problem, ?int $index = null): void
  * records gets exactly theirs — the filter lives here so it applies to
  * /api/{collection} and to the bootstrap payload alike.
  */
-/** may this role read this collection at all? */
+/**
+ * May this role read this collection at all?
+ *
+ * Strict for the student, who is the one role the college has not vetted and
+ * the one that could read everybody's file. For everyone on the staff the
+ * answer is what it was before this gate existed — the older rules below
+ * still keep finance, placement and the audit log to the roles they belong
+ * to — because tightening the staff list without walking every staff screen
+ * against real data was what left the admissions desk signed in and unable
+ * to draw a page. What a clerk may see of a lecturer is a real question; it
+ * is not one to answer by guesswork on a live system.
+ */
 function role_may_read(string $col): bool
 {
-    $allowed = ROLE_READABLE[current_role()] ?? [];
+    $role = current_role();
+    if ($role !== 'student') {
+        return true;
+    }
+    $allowed = ROLE_READABLE[$role] ?? [];
     return in_array('*', $allowed, true) || in_array($col, $allowed, true);
 }
 

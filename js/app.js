@@ -299,7 +299,6 @@
       delete user.token;   // held by the store alone, never by a page
       applyReadOnly();
       await Store.load();
-      startApp();
     } catch (err) {
       // Sign-in itself can succeed and the load right after it still fail, so
       // this must not claim the server is unreachable — and telling a college
@@ -319,8 +318,27 @@
             + `${err.message && !/^bootstrap failed/.test(err.message) ? ' — ' + err.message : ''}).`
             + ' Please tell the administrator.'
           : 'Signed in, but the app could not reach the server. Please check the connection and try again.';
+      return;
     } finally {
       btn.disabled = false; btn.textContent = 'Sign In';
+    }
+    /* Drawing the first screen is a different thing from loading the data,
+       and it used to sit inside the same try — so a line of this file
+       tripping over one record was reported as the server being unreachable,
+       and sent people to check their wifi. It says what it is now, and names
+       the error, because that is the only clue there will be. */
+    try {
+      startApp();
+    } catch (err) {
+      console.error(err);
+      user = null;
+      Store.setUser(null, null);
+      $('#appScreen').classList.add('hidden');
+      $('#loginScreen').classList.remove('hidden');
+      $('#loginError').textContent =
+        'Signed in and loaded, but the screen could not be drawn ('
+        + ((err && err.message) || String(err)).slice(0, 140)
+        + '). Please show this to the administrator.';
     }
   }
 
