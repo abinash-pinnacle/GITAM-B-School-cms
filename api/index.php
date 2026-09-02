@@ -1392,13 +1392,25 @@ function api_apply(): void
         apply_clean($d['lastName'] ?? '', 80),
     ])));
 
-    /* Whether this is somebody already on the roll. Only a registration number
-       can say so — a phone number is not proof of identity and two students may
-       share a parent's. Recorded now so the office sees at a glance which rows
-       are new admissions and which are existing students filling in gaps. */
-    $existing = $roll === '' ? null
-        : fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
+    /* Whether this is somebody already on the roll. The form no longer asks
+       for a Student ID — the college issues it, and asking a student to copy it
+       back confused everyone — so the university registration number does the
+       work: a real number they carry, unique by rule and ten digits by the time
+       it gets here. A Student ID still counts when one arrives through the API.
+
+       A phone number deliberately does not: two students may share a parent's,
+       and being wrong here puts one person's form on another person's record.
+       Where neither number is given the review screen flags a likely match
+       instead, and a person decides. */
+    $existing = null;
+    if ($roll !== '') {
+        $existing = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
             . ' WHERE LOWER(' . qi('roll') . ') = LOWER(?)', [$roll]);
+    }
+    if (!$existing && $ureg !== '') {
+        $existing = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('students')
+            . ' WHERE ' . qi('univRegNo') . ' = ?', [$ureg]);
+    }
 
     /* Filling it in twice replaces the first attempt rather than queuing two.
        Matched on the registration number when there is one and on the phone

@@ -13226,7 +13226,7 @@
      ADMISSION FORMS — what the public link collected, before it is admitted.
 
      Nothing here writes to `students` until somebody presses Approve. A
-     registration number already on the roll is an update rather than a second
+     Student ID already on the roll is an update rather than a second
      record, which is what lets one link serve both a new admission and an
      existing student filling in what was missing.
      ========================================================= */
@@ -13256,7 +13256,7 @@
     const canEdit = !readOnly();
     const html = `<div class="panel"><div class="panel-head"><h3>Admission Forms</h3>
       <div class="panel-tools">
-        <input class="search-box" id="sbQ" placeholder="Search name / reg no / phone...">
+        <input class="search-box" id="sbQ" placeholder="Search name / student id / phone...">
         <select class="filter-sel" id="sbStatus">
           <option value="Pending">Pending</option>
           <option value="">All</option>
@@ -13267,11 +13267,11 @@
       </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
         Students fill the public form themselves; nothing here touches the roll until you approve it.
-        A form sent with a registration number already on the roll updates that student instead of
+        A form sent with a Student ID already on the roll updates that student instead of
         creating a second one — the <b>Type</b> column says which.</p>
       <div id="sbStats" class="stat-grid" style="margin:0 0 16px"></div>
       <div class="tbl-wrap"><table><thead><tr>
-        <th>Reg No</th><th>Name</th><th>Type</th><th>Course</th><th>Phone</th>
+        <th>Student ID</th><th>Name</th><th>Type</th><th>Course</th><th>Phone</th>
         <th>Submitted</th><th>Status</th><th>Actions</th>
       </tr></thead><tbody id="sbBody"></tbody></table></div><div id="sbPager"></div></div>`;
 
@@ -13369,10 +13369,22 @@
   }
 
   /** everything the student typed, laid out the way the profile lays it out */
+  /* Somebody on the roll whose phone or email this form carries. Not proof —
+     two students may share a parent's number — which is why it is shown rather
+     than acted on. Without a Student ID box on the form this is the only thing
+     standing between a returning student and a second record. */
+  function looksLikeExisting(r, d) {
+    const same = (a, b) => String(a || '').trim() !== ''
+      && String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    return Store.all('students').find(s =>
+      same(r.phone || d.phone, s.phone) || same(r.email || d.email, s.email)) || null;
+  }
+
   function submissionModal(id, after) {
     const r = Store.find('submissions', id); if (!r) return;
     const d = subData(r);
     const st = r.status || 'Pending';
+    const twin = r.kind === 'update' ? null : looksLikeExisting(r, d);
     const block = (title, pairs) => {
       const rows = pairs.filter(([, v]) => String(v || '').trim())
         .map(([k, v]) => infoRow(k, esc(v))).join('');
@@ -13388,7 +13400,15 @@
           catch (e) { return r.submittedAt || '—'; } })())}
         ${r.reviewedBy ? ` · reviewed by ${esc(r.reviewedBy)}` : ''}</p>
       ${r.reviewNote ? `<p style="font-size:13px;color:var(--red);margin:0 0 12px">${esc(r.reviewNote)}</p>` : ''}
-      ${block('Basic', [['Registration Number', d.roll || '(not given)'],
+      ${twin ? `<p style="font-size:13px;background:var(--bg);border-left:3px solid var(--amber, #f5a623);
+          padding:10px 12px;margin:0 0 14px;line-height:1.7;border-radius:0 8px 8px 0">
+          <b>Already on the roll?</b> ${esc(twin.name || '—')}
+          (<span class="mono">${esc(twin.roll || '—')}</span>) has the same
+          ${esc(String(r.phone || d.phone || '').trim().toLowerCase()
+                === String(twin.phone || '').trim().toLowerCase() ? 'mobile number' : 'email address')}.
+          Approving this form adds a second student — edit that record instead if it is the same
+          person.</p>` : ''}
+      ${block('Basic', [['Student ID', d.roll || '(not given)'],
         ['Title', d.title], ['First Name', d.firstName], ['Middle Name', d.middleName],
         ['Last Name', d.lastName], ['Mobile', d.phone], ['WhatsApp', d.whatsapp],
         ['Email', d.email], ['College Email', d.domainEmail]])}
