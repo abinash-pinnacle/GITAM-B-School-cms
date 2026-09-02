@@ -284,6 +284,7 @@
     const btn = $('#loginForm button[type="submit"]');
     $('#loginError').textContent = '';
     btn.disabled = true; btn.textContent = 'Signing in...';
+    let stage = 'signing in';
     try {
       // no role picker — the account the credentials belong to sets the role
       const found = await Store.login(u, p);
@@ -297,7 +298,9 @@
          server answers 401 to a request that carries neither. */
       Store.setUser(found.id, found.token);
       delete user.token;   // held by the store alone, never by a page
+      stage = 'preparing the session';
       applyReadOnly();
+      stage = 'loading the data';
       await Store.load();
     } catch (err) {
       // Sign-in itself can succeed and the load right after it still fail, so
@@ -317,7 +320,15 @@
           ? `Signed in, but the app could not load its data (error ${status}`
             + `${err.message && !/^bootstrap failed/.test(err.message) ? ' — ' + err.message : ''}).`
             + ' Please tell the administrator.'
-          : 'Signed in, but the app could not reach the server. Please check the connection and try again.';
+          /* No status means no reply was read at all — the request never
+             reached the server, or a line of this file threw before or while
+             reading it. Those are different faults with different fixes, and
+             the error's own words are what tell them apart, so they go on the
+             screen: "Failed to fetch" is the network; anything else is us. */
+          : 'Signed in, but ' + stage + ' failed ('
+            + ((err && (err.name + ': ' + err.message)) || String(err)).slice(0, 160)
+            + '). Please show this to the administrator.';
+      console.error('sign-in failed while ' + stage, err);
       return;
     } finally {
       btn.disabled = false; btn.textContent = 'Sign In';
