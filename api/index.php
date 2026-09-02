@@ -2463,12 +2463,22 @@ function api_login(): void
             'message' => 'More than one account uses this username. Contact the administrator.',
         ], 409);
     }
-    /* Reused when the account already has one, so signing in on a phone does
-       not sign the same person out on their desk. Logout, a password change and
-       being deactivated all clear it, which is what makes it revocable. */
-    $token = (string) ($rows[0]['token'] ?? '');
-    if ($token === '') {
-        $token = session_start_for((string) $rows[0]['id']);
+    /* A fresh session every time, always.
+
+       This used to reuse a token already sitting in the users.token column
+       when one was there — a leftover from before sessions lived in their own
+       table. But that column's value has no row in _sessions, so login handed
+       it back, the very next request looked it up in _sessions, found nothing,
+       and answered 401: signed in, and unable to read a thing. It only bit the
+       accounts that still carried an old token — which is why it looked like it
+       was one login and not the rest.
+
+       So the token is always minted here, and the stale column is wiped on the
+       way past so it can never be mistaken for a session again. */
+    $token = session_start_for((string) $rows[0]['id']);
+    if (($rows[0]['token'] ?? '') !== '' && in_array('token', COLLECTIONS['users'], true)) {
+        run_sql('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = NULL WHERE ' . qi('id') . ' = ?',
+            [(string) $rows[0]['id']]);
     }
     login_succeeded($keys);
     audit('login', 'users', (string) $rows[0]['id'],
@@ -2799,84 +2809,6 @@ try {
            is: compare this against the same hash of the file being deployed.
            It reveals nothing; the file it hashes cannot be read over HTTP. */
         $build = ['build' => substr(hash_file('sha256', __FILE__) ?: '', 0, 12)];
-        /* A read-only self-test of the session round trip, so a live database
-           that will not hand a just-written session back can be seen from
-           outside without a login. Creates one throwaway row, reads it, deletes
-           it, and reports what happened. Named nowhere in the app; harmless. */
-        if (isset($_GET['session'])) {
-            /* Cross-request test: `persist` creates a real session the way login
-               does and hands the token back; `verify` reads it the way the next
-               request does, exactly through session_user(). This is what login
-               and bootstrap do, split across two calls, so a live database that
-               drops a session between requests shows itself here. */
-            if ($_GET['session'] === 'header') {
-                // does the X-Auth-Token request header survive the trip to here?
-                send_json([
-                    'ok' => true,
-                    'request_token_saw' => request_token(),
-                    'HTTP_X_AUTH_TOKEN'  => $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '(absent)',
-                    'all_x_headers' => array_values(array_filter(array_keys($_SERVER),
-                        fn($k) => str_starts_with($k, 'HTTP_X'))),
-                ] + $build);
-            }
-            if ($_GET['session'] === 'persist') {
-                /* Bind to a named account (?as=username) so a session for that
-                   exact role can be tested end to end — the bug is role-shaped,
-                   and an admin session would not have shown it. No password is
-                   involved and the session is deleted by the verify call; this
-                   whole block comes out once the cause is found. */
-                $as = (string) ($_GET['as'] ?? '');
-                $row = $as !== ''
-                    ? fetch_one('SELECT ' . qi('id') . ', ' . qi('role') . ' FROM ' . qi('users')
-                        . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)', [$as])
-                    : fetch_one('SELECT ' . qi('id') . ', ' . qi('role') . ' FROM ' . qi('users') . ' LIMIT 1');
-                if (!$row) {
-                    send_json(['ok' => false, 'error' => 'no such user'] + $build);
-                }
-                $t = session_start_for((string) $row['id']);
-                send_json(['ok' => true, 'token' => $t, 'uid' => $row['id'], 'role' => $row['role']] + $build);
-            }
-            if ($_GET['session'] === 'verify') {
-                $t = (string) ($_GET['t'] ?? '');
-                sessions_table();
-                $raw = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$t]);
-                $now = time();
-                $rep = [
-                    'session_row' => $raw ? 'present' : 'MISSING',
-                    'issued_at'   => $raw['issued_at'] ?? null,
-                    'seen_at'     => $raw['seen_at'] ?? null,
-                    'now'         => $now,
-                    'age'         => $raw ? $now - (int) $raw['issued_at'] : null,
-                    'user_found'  => null,
-                ];
-                if ($raw) {
-                    $u = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?',
-                        [(string) $raw['userId']]);
-                    $rep['user_found'] = $u ? 'yes' : 'NO (userId=' . $raw['userId'] . ')';
-                }
-                $rep['session_user'] = session_user($t) ? 'authorised' : 'null';
-                run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$t]);
-                send_json(['ok' => true, 'verify' => $rep] + $build);
-            }
-            $probe = [];
-            try {
-                sessions_table();
-                $tok = 'selftest-' . bin2hex(random_bytes(8));
-                $now = time();
-                run_sql('INSERT INTO ' . qi('_sessions') . ' (' . qi('token') . ', ' . qi('userId')
-                    . ', ' . qi('issued_at') . ', ' . qi('seen_at') . ') VALUES (?, ?, ?, ?)',
-                    [$tok, 'selftest', $now, $now]);
-                $back = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$tok]);
-                $probe['written_then_read'] = $back ? 'yes' : 'NO';
-                $probe['issued_at_back'] = $back['issued_at'] ?? null;
-                $probe['now'] = $now;
-                run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$tok]);
-                $probe['live_rows'] = (int) (fetch_one('SELECT COUNT(*) AS c FROM ' . qi('_sessions'))['c'] ?? -1);
-            } catch (Throwable $e) {
-                $probe['error'] = $e->getMessage();
-            }
-            send_json(['ok' => true, 'session' => $probe] + $build);
-        }
         if (!isset($_GET['db'])) {
             send_json(['ok' => true] + $build);
         }
