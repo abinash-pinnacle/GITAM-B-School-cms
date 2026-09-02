@@ -4975,7 +4975,7 @@
         ${infoRow2('Category', esc(f.category || '—'), 'Total Experience', esc(per.experience || '—'))}
         ${infoRow2('Blood Group', esc(f.bloodGroup || '—'), 'Marital Status', esc(f.maritalStatus || '—'))}
         ${infoRow2('Caste', esc(per.caste || '—'), 'Nationality', esc(per.nationality || '—'))}
-        ${infoRow2('Religion', esc(per.religion || '—'), 'Thumb', esc(per.thumb || '—'))}
+        ${infoRow2('Religion', esc(per.religion || '—'), 'Biometric Scan', esc(per.thumb || '—'))}
         ${infoRow2('Transport', esc(per.transport || '—'), 'Breakfast', esc(per.breakfast || '—'))}
         ${infoRow('Dinner', esc(per.dinner || '—'))}`);
     }
@@ -5238,6 +5238,16 @@
       ${fText(prefix + '_phone', 'Phone No', a.phone, 'inputmode="numeric"')}
     </div>`;
 
+    /* A record written when Full Name was the only box has a name and no parts.
+       Split it — first word, last word, whatever is between — so the boxes open
+       filled and saving cannot blank the name every list and login prints. */
+    const nameParts = (() => {
+      const words = String(f.name || '').trim().split(/\s+/).filter(Boolean);
+      const title = TITLES_LIST.includes(words[0]) ? words.shift() : '';
+      return { title, first: words.shift() || '', last: words.length ? words.pop() : '',
+               middle: words.join(' ') };
+    })();
+
     openModal((id ? 'Edit' : 'Add') + ' Employee', `<form id="f">
       <div class="fin-tabs" id="ffTabs">${TABS.map(([k, label], i) =>
         `<button type="button" class="fin-tab ${i ? '' : 'active'}" data-pane="${k}">${label}</button>`).join('')}</div>
@@ -5247,8 +5257,11 @@
           <div class="field"><label>Employee ID</label>
             <input name="empId" value="${esc(f.empId || '')}" required></div>
           ${fText('bputRegdNo', 'BPUT Regd No.', f.bputRegdNo)}
-          <div class="field"><label>Full Name</label>
-            <input name="name" value="${esc(f.name || '')}" required></div>
+          ${fSel('per_title', 'Title', per.title || nameParts.title, TITLES_LIST)}
+          <div class="field"><label>First Name</label>
+            <input name="per_firstName" value="${esc(per.firstName || nameParts.first)}" required></div>
+          ${fText('per_middleName', 'Middle Name', per.middleName || nameParts.middle)}
+          ${fText('per_lastName', 'Last Name', per.lastName || nameParts.last)}
           <div class="field"><label>Employee Role</label>
             <select name="role">${employeeRoles().map(r =>
               `<option value="${r}" ${r === tableRole(col, f) ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
@@ -5283,10 +5296,6 @@
 
       <div class="sf-pane hidden" data-pane="personal">
         <div class="form-grid">
-          ${fSel('per_title', 'Title', per.title, TITLES_LIST)}
-          ${fText('per_firstName', 'First Name', per.firstName)}
-          ${fText('per_middleName', 'Middle Name', per.middleName)}
-          ${fText('per_lastName', 'Last Name', per.lastName)}
           ${fDate('dob', 'Date of Birth', f.dob)}
           ${fSel('gender', 'Gender', f.gender, GENDERS)}
           ${fText('per_birthplace', 'Birth Place', per.birthplace)}
@@ -5296,7 +5305,7 @@
           ${fText('per_caste', 'Caste', per.caste)}
           ${fText('per_nationality', 'Nationality', per.nationality || 'Indian')}
           ${fText('per_religion', 'Religion', per.religion)}
-          ${fText('per_thumb', 'Thumb', per.thumb)}
+          ${fText('per_thumb', 'Biometric Scan', per.thumb)}
           ${fSel('per_transport', 'Transport', per.transport || 'No', YES_NO, false)}
           ${fSel('per_breakfast', 'Breakfast', per.breakfast || 'No', YES_NO, false)}
           ${fSel('per_dinner', 'Dinner', per.dinner || 'No', YES_NO, false)}
@@ -5437,6 +5446,15 @@
       e.preventDefault();
       const form = e.target;
       const d = formData(form);
+      /* The name is not a box any more: it is the three parts joined, so the
+         two can never disagree. Everything downstream — the roll, the login,
+         every report — still reads `name`. */
+      /* The title is part of it. Every list, report and ID card prints `name`,
+         and "Dr. Rajesh Mehta" losing its Dr. on the first edit is not a change
+         anybody asked for. */
+      d.name = [d.per_title, d.per_firstName, d.per_middleName, d.per_lastName]
+        .map(x => (x || '').trim()).filter(Boolean).join(' ');
+      if (!(d.per_firstName || '').trim()) { toast('An employee needs a first name.', 'err'); return; }
       ['email', 'phone', 'h_emergencyPhone']
         .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
       const contactBad = contactProblem(d.phone, d.h_emergencyPhone, SAME_NUMBER_STAFF);
