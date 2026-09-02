@@ -2799,6 +2799,30 @@ try {
            is: compare this against the same hash of the file being deployed.
            It reveals nothing; the file it hashes cannot be read over HTTP. */
         $build = ['build' => substr(hash_file('sha256', __FILE__) ?: '', 0, 12)];
+        /* A read-only self-test of the session round trip, so a live database
+           that will not hand a just-written session back can be seen from
+           outside without a login. Creates one throwaway row, reads it, deletes
+           it, and reports what happened. Named nowhere in the app; harmless. */
+        if (isset($_GET['session'])) {
+            $probe = [];
+            try {
+                sessions_table();
+                $tok = 'selftest-' . bin2hex(random_bytes(8));
+                $now = time();
+                run_sql('INSERT INTO ' . qi('_sessions') . ' (' . qi('token') . ', ' . qi('userId')
+                    . ', ' . qi('issued_at') . ', ' . qi('seen_at') . ') VALUES (?, ?, ?, ?)',
+                    [$tok, 'selftest', $now, $now]);
+                $back = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$tok]);
+                $probe['written_then_read'] = $back ? 'yes' : 'NO';
+                $probe['issued_at_back'] = $back['issued_at'] ?? null;
+                $probe['now'] = $now;
+                run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$tok]);
+                $probe['live_rows'] = (int) (fetch_one('SELECT COUNT(*) AS c FROM ' . qi('_sessions'))['c'] ?? -1);
+            } catch (Throwable $e) {
+                $probe['error'] = $e->getMessage();
+            }
+            send_json(['ok' => true, 'session' => $probe] + $build);
+        }
         if (!isset($_GET['db'])) {
             send_json(['ok' => true] + $build);
         }
