@@ -1661,12 +1661,116 @@
      The text fields match anywhere in the value; the dropdowns are built from
      the values the roll actually holds, so neither offers a batch nobody is
      in nor a name nobody has. */
-  const ADV_TEXT = [['roll', 'Student ID'], ['firstName', 'First Name'],
-                    ['middleName', 'Middle Name'], ['lastName', 'Last Name'],
-                    ['phone', 'Phone No.']];
-  const ADV_SELECT = [['branch', 'Department'], ['specialisation', 'Specialisation'],
-                      ['section', 'Section'], ['batch', 'Batch'], ['course', 'Course'],
-                      ['status', 'Status']];
+  /* ---------- the advanced filter ----------
+
+     One entry per question the admission form asks, in the form's order and
+     under the form's headings: somebody who has just typed a value in knows
+     where to look for it again.
+
+     `read` is what makes this possible. Eleven of these are columns on the row;
+     the rest live inside the personal, academic, guardian, address and health
+     blobs, and reading them off `s[key]` — which is what the filter used to do —
+     is why they were unsearchable.
+
+     `sel` means the value comes from a short list, so the filter offers a
+     dropdown built from what is actually on the roll and matches it exactly.
+     Everything else is free text and matches anywhere in the cell. */
+  const _per = (s) => stuPart(s, 'personal') || {};
+  const _aca = (s) => stuPart(s, 'academicInfo') || {};
+  const _hlt = (s) => stuPart(s, 'health') || {};
+  const _cur = (s) => (stuPart(s, 'addressInfo') || {}).current || {};
+  const _perm = (s) => (stuPart(s, 'addressInfo') || {}).permanent || {};
+  const _g = (s, rel) => guardianOf(s, rel) || {};
+
+  const ADV_FIELDS = [
+    // ---- Identity ----
+    ['Identity', 'roll', 'Student ID', 0, (s) => s.roll],
+    ['Identity', 'univRegNo', 'University Regd. No.', 0, (s) => s.univRegNo],
+    ['Identity', 'title', 'Title', 1, (s) => _per(s).title],
+    ['Identity', 'firstName', 'First Name', 0, (s) => s.firstName],
+    ['Identity', 'middleName', 'Middle Name', 0, (s) => s.middleName],
+    ['Identity', 'lastName', 'Last Name', 0, (s) => s.lastName],
+
+    // ---- Contact ----
+    ['Contact', 'phone', 'Mobile No', 0, (s) => s.phone],
+    ['Contact', 'whatsapp', 'WhatsApp No', 0, (s) => s.whatsapp],
+    ['Contact', 'email', 'Email ID', 0, (s) => s.email],
+    ['Contact', 'domainEmail', 'Domain Email ID', 0, (s) => s.domainEmail],
+    ['Contact', 'emergencyName', 'Emergency Contact Name', 0, (s) => _hlt(s).emergencyName],
+    ['Contact', 'emergencyPhone', 'Emergency Contact No', 0, (s) => _hlt(s).emergencyPhone],
+
+    // ---- Course ----
+    ['Course', 'course', 'Course', 1, (s) => s.course],
+    ['Course', 'branchName', 'Branch', 1, (s) => s.branchName],
+    ['Course', 'branch', 'Department', 1, (s) => s.branch],
+    ['Course', 'specialisation', 'Specialisation I', 1, (s) => s.specialisation],
+    ['Course', 'specialisation2', 'Specialisation II', 1, (s) => s.specialisation2],
+    ['Course', 'semester', 'Semester', 1, (s) => s.semester],
+    ['Course', 'section', 'Section', 1, (s) => s.section],
+    ['Course', 'batch', 'Batch', 1, (s) => s.batch],
+    ['Course', 'bookingDate', 'Date of Booking', 0, (s) => s.bookingDate],
+    ['Course', 'admissionDate', 'Admission Date', 0, (s) => s.admissionDate],
+    ['Course', 'academicYear', 'Academic Year', 1, (s) => s.academicYear],
+    ['Course', 'source', 'Source', 1, (s) => s.source],
+    ['Course', 'referredBy', 'Referred By', 0, (s) => s.referredBy],
+    ['Course', 'mentor', 'Mentor', 1, (s) => s.mentor],
+    ['Course', 'house', 'Club', 1, (s) => s.house],
+    ['Course', 'status', 'Status', 1, (s) => s.status],
+
+    // ---- Personal ----
+    ['Personal', 'gender', 'Gender', 1, (s) => s.gender],
+    ['Personal', 'dob', 'Date of Birth', 0, (s) => s.dob],
+    ['Personal', 'bloodGroup', 'Blood Group', 1, (s) => s.bloodGroup],
+    ['Personal', 'admissionCategory', 'Admission Category', 1, (s) => _per(s).admissionCategory],
+    ['Personal', 'religion', 'Religion', 1, (s) => _per(s).religion],
+    ['Personal', 'nationality', 'Nationality', 1, (s) => _per(s).nationality],
+    ['Personal', 'birthplace', 'Birthplace', 0, (s) => _per(s).birthplace],
+    ['Personal', 'identificationMark', 'Identification Mark', 0, (s) => _per(s).identificationMark],
+    ['Personal', 'thumbId', 'Biometric Scan', 0, (s) => _per(s).thumbId],
+    ['Personal', 'hostel', 'Hostel', 1, (s) => _per(s).hostel],
+    ['Personal', 'transport', 'Transport', 1, (s) => _per(s).transport],
+    ['Personal', 'nss', 'NSS', 1, (s) => _per(s).nss],
+    ['Personal', 'languages', 'Languages Known', 0, (s) => _per(s).languages],
+    ['Personal', 'hobbies', 'Hobbies', 0, (s) => _per(s).hobbies],
+
+    // ---- Identity documents ----
+    ['Documents', 'aadhaar', 'Aadhaar No.', 0, (s) => s.aadhaar],
+    ['Documents', 'voterId', 'Voter ID', 0, (s) => _per(s).voterId],
+    ['Documents', 'pan', 'PAN No.', 0, (s) => _per(s).pan],
+    ['Documents', 'drivingLicense', 'Driving License No.', 0, (s) => _per(s).drivingLicense],
+    ['Documents', 'passport', 'Passport No.', 0, (s) => _per(s).passport],
+
+    // ---- Entrance ----
+    ['Entrance', 'entranceExam', 'Entrance Examination', 1, (s) => _aca(s).entranceExam],
+    ['Entrance', 'entranceRank', 'Entrance Rank', 0, (s) => _aca(s).entranceRank],
+
+    // ---- Family ----
+    ['Family', 'fName', "Father's Name", 0, (s) => _g(s, 'Father').name],
+    ['Family', 'fOccupation', "Father's Occupation", 1, (s) => _g(s, 'Father').occupation],
+    ['Family', 'fMobile', "Father's Mobile", 0, (s) => _g(s, 'Father').mobile],
+    ['Family', 'mName', "Mother's Name", 0, (s) => _g(s, 'Mother').name],
+    ['Family', 'mOccupation', "Mother's Occupation", 1, (s) => _g(s, 'Mother').occupation],
+    ['Family', 'mMobile', "Mother's Mobile", 0, (s) => _g(s, 'Mother').mobile],
+    ['Family', 'lgName', "Local Guardian's Name", 0, (s) => _g(s, 'Local Guardian').name],
+    ['Family', 'lgMobile', "Local Guardian's Mobile", 0, (s) => _g(s, 'Local Guardian').mobile],
+
+    // ---- Address ----
+    ['Address', 'state', 'State / Union Territory', 1, (s) => _cur(s).state],
+    ['Address', 'district', 'District', 1, (s) => _cur(s).district],
+    ['Address', 'city', 'City', 1, (s) => _cur(s).city],
+    ['Address', 'pincode', 'Pincode', 0, (s) => _cur(s).pincode],
+    ['Address', 'country', 'Country', 1, (s) => _cur(s).country],
+    ['Address', 'permState', 'Permanent State / UT', 1, (s) => _perm(s).state],
+    ['Address', 'permDistrict', 'Permanent District', 1, (s) => _perm(s).district],
+    ['Address', 'permCity', 'Permanent City', 1, (s) => _perm(s).city],
+    ['Address', 'permPincode', 'Permanent Pincode', 0, (s) => _perm(s).pincode],
+  ].map(([group, key, label, sel, read]) => ({ group, key, label, sel: !!sel, read }));
+
+  const ADV_GROUPS = [...new Set(ADV_FIELDS.map(f => f.group))];
+  /** how to read a filterable value off a student, by key */
+  const ADV_READ = Object.fromEntries(ADV_FIELDS.map(f => [f.key, f.read]));
+  /** the keys a dropdown sets, which are matched whole rather than by substring */
+  const ADV_EXACT = ADV_FIELDS.filter(f => f.sel).map(f => f.key);
   /* Each range reads one number off the record. Four of them live on the
      Academic tab as the marks for that qualification; the fifth is the CGPA
      column the roll already prints. */
@@ -1778,11 +1882,14 @@
         });
         return out;
       };
-      // a text filter matches anywhere in the cell; a dropdown is exact
-      const EXACT = ADV_SELECT.map(([k]) => k);
+      /* A text filter matches anywhere in the cell — "2026" in Admission Date
+         finds the year — and a dropdown matches the whole value. The reader is
+         what lets a field inside a JSON blob be filtered at all; a key with no
+         reader is a column on the row, which is what the header filters are. */
       const passes = (s, f) => Object.entries(f).every(([k, v]) => {
-        const cell = String(s[k] ?? '').toLowerCase();
-        return EXACT.includes(k) ? cell === v : cell.includes(v);
+        const read = ADV_READ[k];
+        const cell = String((read ? read(s) : s[k]) ?? '').toLowerCase();
+        return ADV_EXACT.includes(k) ? cell === v : cell.includes(v);
       });
       /* An open end is no bound at all. A student with nothing recorded is out
          of every range that has one — the office cannot say a blank is between
@@ -1897,15 +2004,16 @@
   function advFilterModal(rows, current, onApply) {
     const adv = current;
     const val = (k) => esc(adv.fields[k] || '');
-    const textField = ([k, label]) =>
+    const textField = ({ key: k, label }) =>
       `<div class="field"><label>${esc(label)}</label>
         <input data-a="${k}" value="${val(k)}" placeholder="Any"></div>`;
     /* Built from the roll itself, so a dropdown never offers a batch or a
-       section nobody is in. The applied value is held folded to lower case,
+       district nobody is in. The applied value is held folded to lower case,
        which is what it is compared against. */
-    const selectField = ([k, label]) => {
+    const selectField = ({ key: k, label, read }) => {
       const cur = adv.fields[k] || '';
-      const vals = [...new Set(rows.map(r => String(r[k] ?? '').trim()).filter(Boolean))].sort();
+      const vals = [...new Set(rows.map(r => String(read(r) ?? '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       return `<div class="field"><label>${esc(label)}</label><select data-a="${k}">
         <option value="">Any</option>
         ${vals.map(v => `<option ${v.toLowerCase() === cur ? 'selected' : ''}>${esc(v)}</option>`).join('')}
@@ -1919,11 +2027,12 @@
     </div>`;
 
     openModal('Advanced Filter', `
-      <h4 class="ro-sub">Personal / Academic Details</h4>
-      <div class="form-grid">
-        ${ADV_TEXT.map(textField).join('')}
-        ${ADV_SELECT.map(selectField).join('')}
-      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.7">
+        Every question the admission form asks, in the order it asks them. A typed
+        box matches anywhere in the answer; a dropdown offers only what is on the roll.</p>
+      ${ADV_GROUPS.map((g, i) => `<h4 class="ro-sub"${i ? ' style="margin-top:18px"' : ''}>${esc(g)}</h4>
+        <div class="form-grid">${ADV_FIELDS.filter(f => f.group === g)
+          .map(f => f.sel ? selectField(f) : textField(f)).join('')}</div>`).join('')}
       <h4 class="ro-sub" style="margin-top:18px">Academic Performance</h4>
       <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">
         Leave both boxes empty to ignore a row. A student with nothing recorded for
@@ -2182,7 +2291,13 @@
         ${infoRow2('House', esc(s.house || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Year', esc(String(s.year || '—')), 'Semester', esc(String(s.semester || '—')))}
         ${infoRow2('Date of Booking', esc(s.bookingDate || '—'), 'Admission Date', esc(s.admissionDate || '—'))}
-        ${infoRow2('Source', esc(s.source || '—'), 'Referred By', esc(s.referredBy || '—'))}
+        ${/* The office's own note on where the enquiry came from and who sent
+              them. It is about the college's intake, not about the student, and
+              the student is the one person not shown it. `own` belongs to the
+              page that calls this, not to this function — asking the role
+              directly is what that flag means anyway. */
+          user.role === 'student' ? '' : infoRow2('Source', esc(s.source || '—'),
+                                                  'Referred By', esc(s.referredBy || '—'))}
         ${infoRow('Entrance Examination', esc(aca.entranceExam || '—'))}
         ${infoRow2('Entrance Rank', esc(aca.entranceRank || '—'), 'CGPA', esc(String(s.cgpa ?? '—')))}
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
