@@ -51,6 +51,17 @@ const Store = {
     this._fail('Read-only access — your role cannot change this record.');
     return true;
   },
+  /* A full snapshot of the records, fetched with the caller's own token so
+     the server can refuse anybody but the admin. Returns the file as a blob
+     for the page to save, or null if the server would not give it. */
+  async backup() {
+    try {
+      const res = await fetch(`${API}/backup`, { headers: this._headers() });
+      if (!res.ok) { this._check(res); return null; }
+      return await res.blob();
+    } catch (e) { this._fail('Could not reach the server for the backup.'); return null; }
+  },
+
   _headers(json) {
     const h = json ? { 'Content-Type': 'application/json' } : {};
     if (this.token) h['X-Auth-Token'] = this.token;

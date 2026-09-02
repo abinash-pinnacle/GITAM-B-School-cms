@@ -1920,6 +1920,39 @@ function audit_name(string $col, array $row): string
     return '';
 }
 
+/**
+ * A full snapshot of the records, for the administrator to keep.
+ *
+ * Read-only — it opens nothing and writes nothing, so it cannot break what is
+ * running. Every collection, each row as the API hands it out, which means
+ * password hashes and session tokens are NOT in it: a backup is a copy of the
+ * college's records, not of its keys, and a stray copy of a hash is one more
+ * place it can leak from. Logins come back on restore by being set again.
+ *
+ * The admin alone, checked here rather than by the collection guard, because
+ * this is not a collection.
+ */
+function api_backup(): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator can download a backup.'], 403);
+    }
+    $out = [
+        'app'         => 'nmiet-cms',
+        'kind'        => 'backup',
+        'generatedAt' => gmdate('c'),
+        'by'          => (string) (current_user()['name'] ?? current_user()['username'] ?? ''),
+        'collections' => [],
+    ];
+    foreach (array_keys(COLLECTIONS) as $col) {
+        $rows = fetch_all('SELECT * FROM ' . qi($col));
+        $out['collections'][$col] = array_map(fn($r) => row_out($col, $r), $rows);
+    }
+    audit('backup', 'system', 'backup', '', count($out['collections']) . ' collections');
+    send_json($out);
+}
+
 function api_bootstrap(): void
 {
     $finance = may_read_finance();
@@ -2731,6 +2764,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
 
     if ($method === 'GET' && $resource === 'bootstrap') {
         api_bootstrap();
+    }
+    if ($method === 'GET' && $resource === 'backup') {
+        api_backup();
     }
     if ($method === 'GET' && $isCollection && $id === null) {
         api_list($resource);

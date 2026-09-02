@@ -13936,6 +13936,7 @@
             <option value="Active">Active</option><option value="Inactive">Inactive</option></select>
           <button class="btn-outline btn-sm" id="usRoles">🛡 Roles</button>
           <button class="btn-outline btn-sm" id="usAudit">🕘 Audit Log</button>
+          <button class="btn-outline btn-sm" id="usBackup">⬇ Download Backup</button>
           <button class="btn-primary" id="usAdd">+ Create User</button>
         </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
@@ -14014,6 +14015,23 @@
       $('#usAdd').onclick = () => userForm(null, draw);
       $('#usRoles').onclick = () => navigate('roles');
       $('#usAudit').onclick = () => auditModal();
+      /* A file the admin can keep off the server. Read-only on the server side;
+         here it is turned into a download and nothing more. */
+      $('#usBackup').onclick = async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true; const label = btn.textContent; btn.textContent = 'Preparing…';
+        try {
+          const blob = await Store.backup();
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `nmiet-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          toast('Backup downloaded.');
+        } finally { btn.disabled = false; btn.textContent = label; }
+      };
       draw();
     };
     return html;
