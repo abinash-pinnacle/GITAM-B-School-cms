@@ -744,6 +744,13 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         send_json(['error' => 'forbidden',
                    'message' => 'Only the administrator reads the audit log.'], 403);
     }
+    /* Read by the administrator, written by nobody. The server appends to it
+       from what it did; a record of what people did is worth having only if the
+       people it records cannot edit it — the administrator included. */
+    if ($resource === 'auditlog' && $isWrite) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'The audit log is written by the server and cannot be edited.'], 403);
+    }
     if ($isWrite && in_array($resource, ['roles', 'auditlog'], true) && current_role() !== 'admin') {
         send_json(['error' => 'forbidden',
                    'message' => 'Only the administrator manages roles and permissions.'], 403);
@@ -1618,6 +1625,89 @@ function api_apply(): void
     send_json(['ok' => true, 'reference' => $out['id']], 201);
 }
 
+/* Collections whose every change is worth a line. The rest — a timetable
+   slot, a library issue — are ordinary daily traffic and would bury the
+   entries that matter. */
+const AUDITED = ['students', 'users', 'roles', 'faculty', 'accountants', 'centerheads',
+                 'placementofficers', 'coordinators', 'admissions', 'fees', 'payments',
+                 'fixedfees', 'assets', 'settings', 'submissions', 'marks'];
+
+/* Never written to the log, whatever a caller sends. A password hash in an
+   audit trail is a password hash in one more place. */
+const AUDIT_NEVER = ['password', 'token', 'photo'];
+
+/**
+ * One line of the record.
+ *
+ * Deliberately unable to fail the request it is describing: a log that can
+ * refuse a save would be a log people ask to have switched off. If it cannot
+ * be written the server says so in its own error log and the work goes on.
+ */
+function audit(string $action, string $subjectType, string $subjectKey,
+               string $subjectName = '', string $summary = '', array $changes = [],
+               ?array $actor = null): void
+{
+    try {
+        /* Signing in has no caller yet — the token is issued by the line that
+           follows it — so that one line names the account it let in. */
+        $me = $actor ?? current_user();
+        run_sql('INSERT INTO ' . qi('auditlog') . ' (' . qi('id') . ', ' . qi('at') . ', '
+            . qi('actorId') . ', ' . qi('actorName') . ', ' . qi('subjectType') . ', '
+            . qi('subjectKey') . ', ' . qi('subjectName') . ', ' . qi('summary') . ', '
+            . qi('changes') . ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                /* Milliseconds first so the id sorts the way the events
+                   happened, then randomness so two in the same millisecond
+                   cannot collide. */
+                'LOG' . str_pad(dechex((int) round(microtime(true) * 1000)), 12, '0', STR_PAD_LEFT)
+                    . bin2hex(random_bytes(4)),
+                gmdate('c'),
+                (string) ($me['id'] ?? ''),
+                (string) ($me['name'] ?? ($me['username'] ?? 'anonymous')),
+                $subjectType,
+                $subjectKey,
+                $subjectName,
+                $action . ($summary === '' ? '' : ' — ' . $summary),
+                json_encode(array_merge($changes, ['action' => $action, 'ip' => client_ip()])),
+            ]);
+    } catch (Throwable $e) {
+        error_log('[nmiet-api] audit: ' . $e->getMessage());
+    }
+}
+
+/** what actually changed, without the values nobody should keep a copy of */
+function audit_diff(array $before, array $after): array
+{
+    $out = [];
+    foreach ($after as $k => $v) {
+        if (in_array($k, AUDIT_NEVER, true)) {
+            // recorded as having changed, never with what it changed to
+            if ((string) ($before[$k] ?? '') !== (string) $v) {
+                $out[$k] = ['from' => '(hidden)', 'to' => '(hidden)'];
+            }
+            continue;
+        }
+        $was = $before[$k] ?? null;
+        $is = $v;
+        $flat = fn($x) => is_scalar($x) || $x === null ? (string) $x : json_encode($x);
+        if ($flat($was) !== $flat($is)) {
+            $out[$k] = ['from' => mb_substr($flat($was), 0, 120),
+                        'to'   => mb_substr($flat($is), 0, 120)];
+        }
+    }
+    return $out;
+}
+
+/** the name a line should carry for a record, so the log reads without joins */
+function audit_name(string $col, array $row): string
+{
+    foreach (['name', 'title', 'username', 'roll'] as $k) {
+        if (!empty($row[$k]) && is_string($row[$k])) {
+            return $row[$k];
+        }
+    }
+    return '';
+}
+
 function api_bootstrap(): void
 {
     $finance = may_read_finance();
@@ -2106,6 +2196,10 @@ function api_login(): void
     if (!$rows) {
         login_failed($keys[0], LOGIN_MAX_PER_IP);
         login_failed($keys[1], LOGIN_MAX_PER_USER);
+        /* The name that was tried, never the password that was tried with it —
+           people mistype one into the other, and a log holding that is a log
+           holding a password. */
+        audit('login-failed', 'users', '', $name, 'from ' . client_ip());
         send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
     }
     // signing in is what migrates the row; after this it is a hash for good
@@ -2135,6 +2229,9 @@ function api_login(): void
         $token = session_start_for((string) $rows[0]['id']);
     }
     login_succeeded($keys);
+    audit('login', 'users', (string) $rows[0]['id'],
+          (string) ($rows[0]['name'] ?? $rows[0]['username'] ?? ''),
+          'from ' . client_ip(), [], $rows[0]);
     $out = row_out('users', $rows[0]);
     $out['token'] = $token;          // the only response that carries it
     send_json($out);
@@ -2146,9 +2243,13 @@ function api_logout(): void
     /* This device only. Somebody signing out of a lab machine has not asked to
        be signed out of their phone. */
     sessions_table();
+    $me = current_user();
     $token = request_token();
     if ($token !== '') {
         run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+    }
+    if ($me) {
+        audit('logout', 'users', (string) $me['id'], (string) ($me['name'] ?? ''));
     }
     send_json(['ok' => true]);
 }
@@ -2193,6 +2294,8 @@ function api_change_password(): void
         ->execute([hash_password($next), $me['id']]);
     run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('userId') . ' = ?', [$me['id']]);
     $token = session_start_for((string) $me['id']);
+    audit('password-changed', 'users', (string) $me['id'], (string) ($me['name'] ?? ''),
+          'every other session on this account was ended');
     send_json(['ok' => true, 'token' => $token]);
 }
 
@@ -2248,6 +2351,11 @@ function api_create(string $col): void
             db()->rollBack();
             throw $e;
         }
+        if (in_array($col, AUDITED, true)) {
+            // a spreadsheet import is one act, and reads better as one line
+            audit('import', $col, (string) count($rows),
+                  '', count($rows) . ' row(s) imported');
+        }
         send_json($rows, 201);
     }
 
@@ -2287,12 +2395,19 @@ function api_create(string $col): void
         }
         throw $e;
     }
+    if (in_array($col, AUDITED, true)) {
+        audit('create', $col, (string) $d['id'], audit_name($col, $d));
+    }
     send_json(row_out($col, $d), 201);
 }
 
 function api_update(string $col, string $id): void
 {
     $d = body();
+    // read before writing, so the line can say what it changed from
+    $before = in_array($col, AUDITED, true)
+        ? (fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]) ?: [])
+        : [];
     $problem = row_problem($col, $d, $id);
     if ($problem !== null) {
         reject_row($problem);
@@ -2317,12 +2432,26 @@ function api_update(string $col, string $id): void
     }
     $values[] = $id;
     run_sql('UPDATE ' . qi($col) . ' SET ' . implode(', ', $sets) . ' WHERE ' . qi('id') . ' = ?', $values);
+    if (in_array($col, AUDITED, true)) {
+        $moved = audit_diff($before, array_intersect_key($d, array_flip($fields)));
+        if ($moved !== []) {
+            audit('update', $col, $id, audit_name($col, $before ?: $d),
+                  implode(', ', array_keys($moved)), $moved);
+        }
+    }
     send_json(['ok' => true, 'id' => $id]);
 }
 
 function api_delete(string $col, string $id): void
 {
+    // read before removing, so the line can say what was removed
+    $before = in_array($col, AUDITED, true)
+        ? fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id])
+        : null;
     run_sql('DELETE FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    if (in_array($col, AUDITED, true)) {
+        audit('delete', $col, $id, $before ? audit_name($col, $before) : '');
+    }
     send_json(['ok' => true]);
 }
 
