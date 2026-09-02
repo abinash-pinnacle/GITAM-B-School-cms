@@ -401,6 +401,24 @@ td.mono{font-family:"Consolas","Courier New",monospace;font-size:13px;letter-spa
 .lib-event-badge .mon{display:block;font-size:10px;letter-spacing:.5px}
 .lib-event-badge .day{display:block;font-size:16px}
 .lib-event-title{font-size:13.5px;font-weight:600;color:var(--ink)}
+
+/* Upcoming birthdays. One row per person: face, who they are, when it is. The
+   row for today is tinted so it is the one the eye lands on. It wraps on a
+   narrow screen rather than squeezing the name to nothing. */
+.bday-list{display:flex;flex-direction:column;gap:2px}
+.bday-row{display:flex;align-items:center;gap:12px;padding:9px 8px;border-radius:8px;flex-wrap:wrap}
+.bday-row + .bday-row{border-top:1px solid var(--line)}
+.bday-row.is-today{background:#fdf6e3}
+.bday-face{flex:none;display:block}
+.bday-face img,.bday-face span{width:38px !important;height:38px !important;font-size:15px !important}
+.bday-who{flex:1 1 130px;min-width:0}
+.bday-who strong{display:block;font-size:13.5px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bday-who small{display:block;font-size:11.5px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bday-when{flex:none;text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.bday-date{font-size:13px;font-weight:600;color:var(--primary-dark)}
+.bday-when small{font-size:11.5px;color:var(--muted)}
 .lib-event-meta{font-size:11.5px;color:var(--muted)}
 
 .lib-qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -631,6 +649,13 @@ a.install-btn:hover{background:var(--primary-light)}
   .modal-body{padding:16px}
   /* Cancel/Save side by side rather than crowded into the right corner */
   .form-actions > *{flex:1}
+
+  /* Only today's row carries the pill, and only that row is wide enough to wrap
+     on a handset. When it does, the date and the pill read as one line indented
+     under the name, instead of stacking ragged down the right-hand edge. Every
+     other row still fits across and is left alone. */
+  .bday-row.is-today .bday-when{width:100%;flex-direction:row;align-items:center;
+    justify-content:flex-start;gap:8px;padding-left:50px}
 }
 
 /* ============ student file: the profile page and its long form ============ */

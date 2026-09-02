@@ -1070,6 +1070,70 @@
     </svg>`;
   }
 
+  /* ---------- whose birthday is coming ----------
+
+     Everyone on the six staff tables, from the date of birth already on their
+     record. Students are deliberately not here: a college has hundreds and the
+     list would be a wall rather than a reminder.
+
+     Reckoned from today every time the dashboard draws, so it is right whenever
+     somebody looks at it and there is nothing to refresh. The birth year is
+     read to find the day and the month and is then dropped — a birthday is a
+     date, not an age. */
+  const BIRTHDAY_WINDOW = 7;
+
+  function upcomingBirthdays(days = BIRTHDAY_WINDOW) {
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const out = [];
+    STAFF_TABLES.forEach(col => Store.all(col).forEach(f => {
+      const raw = String(f.dob || '').trim();
+      const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return;                       // no date on file, or one we cannot read
+      const month = +m[2] - 1, day = +m[3];
+      /* This year's, or next year's if it has already gone by — which is what
+         makes the last week of December sit next to the first of January. */
+      let next = new Date(todayMid.getFullYear(), month, day);
+      if (next < todayMid) next = new Date(todayMid.getFullYear() + 1, month, day);
+      const left = Math.round((next - todayMid) / 86400000);
+      if (left > days) return;
+      out.push({
+        name: f.name || '—',
+        role: f.designation || roleLabel(f.role) || f.department || 'Employee',
+        photo: f.photo || '',
+        when: next.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        left,
+      });
+    }));
+    return out.sort((a, b) => a.left - b.left || a.name.localeCompare(b.name));
+  }
+
+  /** the panel, so both the reckoning and the markup live in one place */
+  function birthdayPanel() {
+    const rows = upcomingBirthdays();
+    const today = rows.filter(r => r.left === 0).length;
+    return `<div class="panel">
+      <div class="panel-head"><h3>🎂 Upcoming Birthdays</h3>
+        <span style="font-size:12.5px;color:var(--muted)">${
+          today ? plural(today, 'birthday') + ' today' : 'Next ' + BIRTHDAY_WINDOW + ' days'}</span></div>
+      ${rows.length ? `<div class="bday-list">${rows.map(r => `
+        <div class="bday-row${r.left === 0 ? ' is-today' : ''}">
+          <span class="bday-face">${avatarHtml(r.photo, r.name)}</span>
+          <div class="bday-who">
+            <strong>${esc(r.name)}</strong>
+            <small>${esc(r.role)}</small>
+          </div>
+          <div class="bday-when">
+            <span class="bday-date">${esc(r.when)}</span>
+            ${r.left === 0
+              ? `<span class="pill amber">🎂 Birthday Today</span>`
+              : `<small>${r.left === 1 ? 'Tomorrow' : 'in ' + r.left + ' days'}</small>`}
+          </div>
+        </div>`).join('')}</div>`
+        : `<p class="empty">No employee birthdays in the next ${BIRTHDAY_WINDOW} days.</p>`}
+    </div>`;
+  }
+
   // ---- DASHBOARD ----
   function viewDashboard() {
     viewDashboard.after = null;
@@ -1184,6 +1248,9 @@
         }).join('') : '<p class="empty">No upcoming events. Add one from the Events page.</p>'}</div>
       </div>
     </div>`;
+
+    // ---- whose birthday is coming up ----
+    html += birthdayPanel();
 
     // ---- students overview table ----
     html += `<div class="panel"><div class="panel-head"><h3>Students Overview</h3></div>
