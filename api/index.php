@@ -2804,6 +2804,40 @@ try {
            outside without a login. Creates one throwaway row, reads it, deletes
            it, and reports what happened. Named nowhere in the app; harmless. */
         if (isset($_GET['session'])) {
+            /* Cross-request test: `persist` creates a real session the way login
+               does and hands the token back; `verify` reads it the way the next
+               request does, exactly through session_user(). This is what login
+               and bootstrap do, split across two calls, so a live database that
+               drops a session between requests shows itself here. */
+            if ($_GET['session'] === 'persist') {
+                // tie it to a real account so the user lookup in verify succeeds
+                $anyUser = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('users') . ' LIMIT 1');
+                $uid = (string) ($anyUser['id'] ?? 'selftest');
+                $t = session_start_for($uid);
+                send_json(['ok' => true, 'token' => $t, 'uid' => $uid] + $build);
+            }
+            if ($_GET['session'] === 'verify') {
+                $t = (string) ($_GET['t'] ?? '');
+                sessions_table();
+                $raw = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$t]);
+                $now = time();
+                $rep = [
+                    'session_row' => $raw ? 'present' : 'MISSING',
+                    'issued_at'   => $raw['issued_at'] ?? null,
+                    'seen_at'     => $raw['seen_at'] ?? null,
+                    'now'         => $now,
+                    'age'         => $raw ? $now - (int) $raw['issued_at'] : null,
+                    'user_found'  => null,
+                ];
+                if ($raw) {
+                    $u = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?',
+                        [(string) $raw['userId']]);
+                    $rep['user_found'] = $u ? 'yes' : 'NO (userId=' . $raw['userId'] . ')';
+                }
+                $rep['session_user'] = session_user($t) ? 'authorised' : 'null';
+                run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$t]);
+                send_json(['ok' => true, 'verify' => $rep] + $build);
+            }
             $probe = [];
             try {
                 sessions_table();
