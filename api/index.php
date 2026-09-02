@@ -221,6 +221,73 @@ function new_token(): string
     return bin2hex(random_bytes(32));
 }
 
+/* One row per sign-in rather than one string per account, so a person can be
+   signed in on a phone and a desk machine at once and end either without
+   ending the other. */
+function sessions_table(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $t = qi('_sessions');
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('token') . " $kType PRIMARY KEY, "
+        . qi('userId') . " $kType, " . qi('issued_at') . " $iType, "
+        . qi('seen_at') . " $iType)");
+}
+
+function session_start_for(string $userId): string
+{
+    sessions_table();
+    $token = new_token();
+    $now = time();
+    run_sql('INSERT INTO ' . qi('_sessions') . ' (' . qi('token') . ', ' . qi('userId')
+        . ', ' . qi('issued_at') . ', ' . qi('seen_at') . ') VALUES (?, ?, ?, ?)',
+        [$token, $userId, $now, $now]);
+    session_sweep();
+    return $token;
+}
+
+/** what has run out, cleared on the way past — the table cannot grow forever */
+function session_sweep(): void
+{
+    $now = time();
+    run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('issued_at') . ' < ? OR '
+        . qi('seen_at') . ' < ?', [$now - SESSION_MAX_SECONDS, $now - SESSION_IDLE_SECONDS]);
+}
+
+/**
+ * The account a live token belongs to, or null.
+ *
+ * Expiry is checked here rather than swept on a timer, because a sweep that
+ * has not run yet must not let a finished token through in the meantime.
+ */
+function session_user(string $token): ?array
+{
+    sessions_table();
+    $row = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+    if (!$row) {
+        return null;
+    }
+    $now = time();
+    $issued = (int) ($row['issued_at'] ?? 0);
+    $seen = (int) ($row['seen_at'] ?? 0);
+    if ($now - $issued > SESSION_MAX_SECONDS || $now - $seen > SESSION_IDLE_SECONDS) {
+        run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+        return null;
+    }
+    if ($now - $seen >= SESSION_TOUCH_SECONDS) {
+        run_sql('UPDATE ' . qi('_sessions') . ' SET ' . qi('seen_at') . ' = ? WHERE '
+            . qi('token') . ' = ?', [$now, $token]);
+    }
+    $user = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?',
+        [(string) ($row['userId'] ?? '')]);
+    return $user ?: null;
+}
+
 /** the token this request presented, from the header or the query string */
 function request_token(): string
 {
@@ -246,7 +313,7 @@ function current_user(): ?array
        how long the query takes. */
     $token = request_token();
     if ($token !== '') {
-        $row = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+        $row = session_user($token);
         if ($row && (string) ($row['status'] ?? 'Active') !== 'Inactive') {
             return $user = $row;
         }
@@ -2065,9 +2132,7 @@ function api_login(): void
        being deactivated all clear it, which is what makes it revocable. */
     $token = (string) ($rows[0]['token'] ?? '');
     if ($token === '') {
-        $token = new_token();
-        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
-            ->execute([$token, $rows[0]['id']]);
+        $token = session_start_for((string) $rows[0]['id']);
     }
     login_succeeded($keys);
     $out = row_out('users', $rows[0]);
@@ -2078,10 +2143,12 @@ function api_login(): void
 /** Give the token up. Anything still holding it is a 401 from here on. */
 function api_logout(): void
 {
-    $me = current_user();
-    if ($me) {
-        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = NULL WHERE ' . qi('id') . ' = ?')
-            ->execute([$me['id']]);
+    /* This device only. Somebody signing out of a lab machine has not asked to
+       be signed out of their phone. */
+    sessions_table();
+    $token = request_token();
+    if ($token !== '') {
+        run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
     }
     send_json(['ok' => true]);
 }
@@ -2118,9 +2185,14 @@ function api_change_password(): void
 
     /* A new token with the new password: whoever knew the old one is signed
        out, which is the point of changing it after a screen was left unlocked. */
-    $token = new_token();
-    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ?, ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
-        ->execute([hash_password($next), $token, $me['id']]);
+    /* Changing a password is what somebody does when they think a key is
+       loose, so every other session on the account ends here — the new one is
+       issued after, which is why the browser doing this is not logged out. */
+    sessions_table();
+    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
+        ->execute([hash_password($next), $me['id']]);
+    run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('userId') . ' = ?', [$me['id']]);
+    $token = session_start_for((string) $me['id']);
     send_json(['ok' => true, 'token' => $token]);
 }
 

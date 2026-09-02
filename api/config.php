@@ -398,6 +398,18 @@ const LOGIN_LOCK_SECONDS   = 900;      // 15 minutes
    guessing, and out of reach of people simply mistyping.
    The account limit is the lower of the two now, because it is the precise
    signal: it names what is actually under attack. */
+/* How long a sign-in lasts. The first is the ceiling: twelve hours from
+   signing in, a token is finished whatever it has been doing, so one taken
+   from a machine has an end even if it is used constantly. The second is the
+   one that catches the ordinary case — a browser left open on a shared desk
+   in the lab, forgotten rather than logged out. */
+const SESSION_MAX_SECONDS  = 12 * 3600;
+const SESSION_IDLE_SECONDS = 60 * 60;
+/* Every request would otherwise write a row to say the session is still alive.
+   A minute's resolution is plenty for an hour's timeout and costs one write a
+   minute instead of one a click. */
+const SESSION_TOUCH_SECONDS = 60;
+
 const LOGIN_MAX_PER_IP     = 20;
 const LOGIN_MAX_PER_USER   = 15;
 

@@ -16012,6 +16012,22 @@
   async function init() {
     $('#year').textContent = new Date().getFullYear();
     $('#appYear').textContent = new Date().getFullYear();
+    /* A session that has run out is not an error to be toasted at somebody in
+       the middle of a form — it is the end of the session, and the honest thing
+       is to say so and ask them to sign in again. */
+    Store.onExpired = () => {
+      if (!user) return;
+      user = null;
+      Store.setReadOnly(false);
+      document.body.classList.remove('read-only');
+      stopDashboardPolling();
+      closeModal();
+      $('#appScreen').classList.add('hidden');
+      $('#loginScreen').classList.remove('hidden');
+      $('#loginForm').reset();
+      $('#loginError').textContent =
+        'Your session has ended. Please sign in again.';
+    };
     $('#loginForm').onsubmit = doLogin;
     $('#logoutBtn').onclick = logout;
     $('#pwdBtn').onclick = changePasswordModal;
