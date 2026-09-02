@@ -380,7 +380,7 @@
       : '<td></td>';
     return '<tr><td>' + q[1] + '</td>' + stream
       + '<td><input name="' + q[0] + 'Institute" maxlength="120"></td>'
-      + '<td><input name="' + q[0] + 'Year" inputmode="numeric" maxlength="4"></td>'
+      + '<td><input name="' + q[0] + 'Year" inputmode="numeric" maxlength="4" placeholder="YYYY"></td>'
       + '<td><input name="' + q[0] + 'Marks" maxlength="10" placeholder="e.g. 82.4"></td></tr>';
   }).join('');
 
@@ -633,6 +633,28 @@
     if ((d.univRegNo || '') !== '' && !/^\d{10}$/.test(d.univRegNo)) {
       showStep(0); show('err', 'University Regd. No. must be exactly 10 digits, or left blank.');
       var ur = document.querySelector('[name="univRegNo"]'); if (ur) ur.focus();
+      return;
+    }
+
+    /* Four digits or nothing. The box refuses letters and stops at four, so
+       what gets this far is a year somebody was interrupted halfway through
+       typing — and it would be filed as the year they passed. */
+    var yearBad = null;
+    QUALS.forEach(function (q) {
+      if (yearBad) return;
+      var v = (d[q[0] + 'Year'] || '').trim();
+      if (v === '') return;
+      var latest = new Date().getFullYear() + 1;
+      if (!/^\d{4}$/.test(v)) {
+        yearBad = [q, q[1] + ' passout year must be a 4-digit year, like 2020.'];
+      } else if (+v < 1950 || +v > latest) {
+        yearBad = [q, q[1] + ' passout year should be between 1950 and ' + latest + '.'];
+      }
+    });
+    if (yearBad) {
+      var yb = document.querySelector('[name="' + yearBad[0][0] + 'Year"]');
+      if (yb) { showStep(paneOf(yb)); yb.focus(); }
+      show('err', yearBad[1]);
       return;
     }
 

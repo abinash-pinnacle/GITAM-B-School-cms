@@ -1749,6 +1749,9 @@
   const _perm = (s) => (stuPart(s, 'addressInfo') || {}).permanent || {};
   const _g = (s, rel) => guardianOf(s, rel) || {};
 
+  /* Nobody applying for an MBA passed their tenth before this, and a year
+     below it is a typo rather than a long life. */
+  const QUAL_YEAR_FLOOR = 1950;
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
   /* What the row is in — a board for the 10th, a stream for the 12th and +3, a
      branch for the Diploma and the B.Tech, a trade for the ITI. A level with no
@@ -3452,7 +3455,8 @@
             <td><strong>${esc(level)}</strong></td>
             ${streamCell(level, q.stream)}
             <td><input data-q="institute" value="${esc(q.institute || '')}"></td>
-            <td><input data-q="year" inputmode="numeric" maxlength="4" value="${esc(q.year || '')}"></td>
+            <td><input data-q="year" inputmode="numeric" maxlength="4" placeholder="YYYY"
+                       value="${esc(q.year || '')}"></td>
             <td><input data-q="marks" value="${esc(q.marks || '')}"></td></tr>`;
         }).join('')}</tbody></table></div>
       </div>
@@ -3690,6 +3694,27 @@
         return { level: tr.dataset.qual, stream: box('stream'), institute: box('institute'),
                  year: box('year'), marks: box('marks') };
       }).filter(q => q.stream || q.institute || q.year || q.marks);
+
+      /* Four digits or nothing. The box already refuses letters and stops at
+         four, so what gets through is a year somebody was interrupted halfway
+         through typing — and "202" reads as 202 AD on every report that prints
+         it. The upper bound leaves room for somebody sitting their exam this
+         year; the lower one is only there to catch a digit typed twice. */
+      for (const tr of f.querySelectorAll('[data-qual]')) {
+        const box = tr.querySelector('[data-q="year"]');
+        const v = box ? (box.value || '').trim() : '';
+        if (!v) continue;
+        const level = tr.dataset.qual;
+        if (!/^\d{4}$/.test(v)) {
+          return badField(f, box,
+            `${level} passout year must be a 4-digit year, like 2020.`);
+        }
+        const latest = new Date().getFullYear() + 1;
+        if (+v < QUAL_YEAR_FLOOR || +v > latest) {
+          return badField(f, box,
+            `${level} passout year should be between ${QUAL_YEAR_FLOOR} and ${latest}.`);
+        }
+      }
 
       // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...f.querySelectorAll('[data-guardian]')].map(card => {

@@ -1191,6 +1191,10 @@ const APPLY_QUALS = [
     'qp3' => '+3', 'qbca' => 'BCA', 'qbba' => 'BBA', 'qbtech' => 'B.Tech',
     'qother' => 'Other',
 ];
+/* Nobody applying for an MBA passed their tenth before this, so a year below
+   it is a digit typed wrongly rather than a long life. Matches QUAL_YEAR_FLOOR
+   in js/app.js. */
+const QUAL_YEAR_FLOOR = 1950;
 /** the three blocks the admission form keeps, and what each one is asked */
 const APPLY_GUARDIANS = ['father' => 'Father', 'mother' => 'Mother', 'guardian' => 'Local Guardian'];
 const APPLY_GUARDIAN_FIELDS = ['Name', 'Occupation', 'Mobile', 'Phone', 'Income',
@@ -1349,6 +1353,23 @@ function api_apply(): void
     if ($ureg !== '' && !preg_match('/^\d{10}$/', $ureg)) {
         send_json(['error' => 'bad-univreg',
                    'message' => 'University Regd. No. must be exactly 10 digits, or left blank.'], 422);
+    }
+
+    /* A passout year is four digits or it is nothing. The form says so too;
+       this is here because the form is not the only way to reach this
+       endpoint, and a half-typed year would be filed as the year passed. */
+    $latestYear = (int) date('Y') + 1;
+    foreach (APPLY_QUALS as $q => $label) {
+        $year = apply_clean($d[$q . 'Year'] ?? '', 4);
+        if ($year === '') {
+            continue;
+        }
+        if (!preg_match('/^\d{4}$/', $year)
+            || (int) $year < QUAL_YEAR_FLOOR || (int) $year > $latestYear) {
+            send_json(['error' => 'bad-qual-year',
+                       'message' => $label . ' passout year must be a 4-digit year between '
+                                    . QUAL_YEAR_FLOOR . ' and ' . $latestYear . '.'], 422);
+        }
     }
 
     attempts_table();
