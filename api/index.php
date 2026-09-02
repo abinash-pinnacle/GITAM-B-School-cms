@@ -662,6 +662,10 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     if ($isWrite && isset(COLLECTIONS[$resource])) {
         guard_role_write($resource, $method, $id);
     }
+    if (!$isWrite && isset(COLLECTIONS[$resource]) && !role_may_read($resource)) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Your role cannot read this.'], 403);
+    }
     if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true)) {
         guard_module_write($resource, $method);
     }
@@ -1560,6 +1564,10 @@ function api_bootstrap(): void
            what its own account may do, and it holds no data about anybody —
            only which boxes are ticked for which role. The audit log does name
            people, so it goes to the admin alone. */
+        if (!role_may_read($col)) {
+            $out[$col] = [];
+            continue;
+        }
         if ($col === 'roles' || $col === 'auditlog') {
             $rows = ($col === 'roles' || $isAdmin) ? fetch_all('SELECT * FROM ' . qi($col)) : [];
             $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
@@ -1920,13 +1928,71 @@ function reject_row(string $problem, ?int $index = null): void
  * records gets exactly theirs — the filter lives here so it applies to
  * /api/{collection} and to the bootstrap payload alike.
  */
+/** may this role read this collection at all? */
+function role_may_read(string $col): bool
+{
+    $allowed = ROLE_READABLE[current_role()] ?? [];
+    return in_array('*', $allowed, true) || in_array($col, $allowed, true);
+}
+
+/**
+ * Which rows of a collection this caller is actually allowed to see, and how
+ * much of each one.
+ *
+ * The collection gate above answers "may you open this drawer"; this answers
+ * "which files in it are yours". Without it a student granted the roll — which
+ * they need, to read their own record — is granted everybody's.
+ */
 function scope_rows(string $col, array $rows): array
 {
-    if (current_role() !== 'student' || !in_array($col, PLACEMENT_STUDENT_OWN, true)) {
+    $me = current_user();
+    $role = current_role();
+
+    /* The login table is never a directory. Everybody's session is restored by
+       looking their own account up here, so it stays readable — as one row. */
+    if ($col === 'users' && !in_array($role, ['admin', 'admission'], true)) {
+        $mine = (string) ($me['id'] ?? '');
+        return array_values(array_filter($rows, fn($r) => (string) ($r['id'] ?? '') === $mine));
+    }
+
+    if ($role !== 'student') {
         return $rows;
     }
-    $sid = current_user()['refId'] ?? null;
-    return array_values(array_filter($rows, fn($r) => ($r['studentId'] ?? null) === $sid));
+    $sid = (string) ($me['refId'] ?? '');
+
+    if (in_array($col, PLACEMENT_STUDENT_OWN, true)) {
+        return array_values(array_filter($rows, fn($r) => (string) ($r['studentId'] ?? '') === $sid));
+    }
+    if (isset(STUDENT_OWN_ROWS[$col])) {
+        $key = STUDENT_OWN_ROWS[$col];
+        return array_values(array_filter($rows, fn($r) => (string) ($r[$key] ?? '') === $sid));
+    }
+    /* A register is one row for a whole class, so the row cannot be filtered —
+       what is filtered is the register itself, down to the one line about the
+       student reading it. */
+    if ($col === 'attendance') {
+        return array_values(array_map(function (array $r) use ($sid) {
+            $recs = $r['records'] ?? null;
+            if (is_string($recs)) {
+                $recs = json_decode($recs, true);
+            }
+            if (is_array($recs)) {
+                $r['records'] = json_encode(array_values(array_filter(
+                    $recs,
+                    fn($e) => is_array($e) && (string) ($e['studentId'] ?? '') === $sid
+                )));
+            }
+            return $r;
+        }, $rows));
+    }
+    // an employee is a name and a designation to a student, not a personal file
+    if (in_array($col, STAFF_TABLES, true)) {
+        return array_values(array_map(
+            fn(array $r) => array_intersect_key($r, array_flip(STAFF_PUBLIC_FIELDS)),
+            $rows
+        ));
+    }
+    return $rows;
 }
 
 function api_list(string $col): void
