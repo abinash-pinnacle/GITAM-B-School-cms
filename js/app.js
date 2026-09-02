@@ -1682,6 +1682,33 @@
   const _perm = (s) => (stuPart(s, 'addressInfo') || {}).permanent || {};
   const _g = (s, rel) => guardianOf(s, rel) || {};
 
+  const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
+  /* What the row is in — a board for the 10th, a stream for the 12th and +3, a
+     branch for the Diploma and the B.Tech, a trade for the ITI. A level with no
+     settled list gets no dropdown: an empty one asks a question it cannot
+     answer. */
+  const QUAL_STREAMS = {
+    '10th': ['BSE', 'CBSE', 'ICSE', 'NIOS'],
+    '12th': ['Science', 'Commerce', 'Arts'],
+    'ITI': ['Electrician', 'Fitter', 'Mechanic'],
+    'Diploma': ['Mechanical Engineering', 'Civil Engineering', 'Electrical Engineering',
+      'Computer Engineering', 'Electronics & Telecommunication Engineering',
+      'Information Technology', 'Automobile Engineering', 'Chemical Engineering'],
+    '+3': ['Science', 'Commerce', 'Arts'],
+    'B.Tech': ['Computer Science and Engineering (CSE)', 'Mechanical Engineering (ME)',
+      'Civil Engineering (CE)', 'Electrical Engineering (EE)',
+      'Electronics and Communication Engineering (ECE)', 'Chemical Engineering',
+      'Information Technology (IT)', 'Electrical and Electronics Engineering (EEE)'],
+  };
+  /* One filter per qualification that has a stream to choose from. BCA, BBA and
+     Other have no list, so there is nothing to ask about them. */
+  const _qual = (s, level) => {
+    const list = (stuPart(s, 'academicInfo') || {}).qualifications;
+    return (Array.isArray(list) ? list : []).find(q => q && q.level === level) || {};
+  };
+  const QUAL_STREAM_FILTERS = Object.keys(QUAL_STREAMS).map(level =>
+    ['Qualifications', `q_${level}_stream`, `${level} Stream`, 1, (s) => _qual(s, level).stream]);
+
   const ADV_FIELDS = [
     // ---- Identity ----
     ['Identity', 'roll', 'Student ID', 0, (s) => s.roll],
@@ -1764,7 +1791,8 @@
     ['Address', 'permDistrict', 'Permanent District', 1, (s) => _perm(s).district],
     ['Address', 'permCity', 'Permanent City', 1, (s) => _perm(s).city],
     ['Address', 'permPincode', 'Permanent Pincode', 0, (s) => _perm(s).pincode],
-  ].map(([group, key, label, sel, read]) => ({ group, key, label, sel: !!sel, read }));
+  ].concat(QUAL_STREAM_FILTERS)
+   .map(([group, key, label, sel, read]) => ({ group, key, label, sel: !!sel, read }));
 
   const ADV_GROUPS = [...new Set(ADV_FIELDS.map(f => f.group))];
   /** how to read a filterable value off a student, by key */
@@ -2826,24 +2854,6 @@
   const SOURCES = ['College', 'Office', 'Others'];
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SEBC', 'SC', 'ST', 'EWS', 'TFW',
                                'Physically Handicapped', 'Management', 'NRI'];
-  const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
-  /* What the row is in — a board for the 10th, a stream for the 12th and +3, a
-     branch for the Diploma and the B.Tech, a trade for the ITI. A level with no
-     settled list gets no dropdown: an empty one asks a question it cannot
-     answer. */
-  const QUAL_STREAMS = {
-    '10th': ['BSE', 'CBSE', 'ICSE', 'NIOS'],
-    '12th': ['Science', 'Commerce', 'Arts'],
-    'ITI': ['Electrician', 'Fitter', 'Mechanic'],
-    'Diploma': ['Mechanical Engineering', 'Civil Engineering', 'Electrical Engineering',
-      'Computer Engineering', 'Electronics & Telecommunication Engineering',
-      'Information Technology', 'Automobile Engineering', 'Chemical Engineering'],
-    '+3': ['Science', 'Commerce', 'Arts'],
-    'B.Tech': ['Computer Science and Engineering (CSE)', 'Mechanical Engineering (ME)',
-      'Civil Engineering (CE)', 'Electrical Engineering (EE)',
-      'Electronics and Communication Engineering (ECE)', 'Chemical Engineering',
-      'Information Technology (IT)', 'Electrical and Electronics Engineering (EEE)'],
-  };
   const streamsFor = (level) => QUAL_STREAMS[level] || [];
 
   /** the stream cell for one qualification row, or an empty cell where there is no list */
