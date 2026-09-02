@@ -1250,6 +1250,49 @@ function apply_clean($v, int $max = 255): string
 }
 
 /**
+ * The pending form already waiting for this person, or null.
+ *
+ * Any one of the four identifiers is enough. A form filled in twice used to
+ * queue a second row unless the second attempt repeated the same registration
+ * number — so somebody who came back and added their registration number, or
+ * gave their email instead, was reviewed twice as two people. They are one
+ * person however they identify themselves.
+ *
+ * Only pending rows: a form already approved or rejected is history, and
+ * somebody applying again after a rejection deserves a row of their own.
+ */
+function pending_submission_for(string $roll, string $ureg, string $phone, string $email): ?array
+{
+    foreach ([['roll', $roll], ['data->univRegNo', $ureg], ['phone', $phone], ['email', $email]] as [$col, $val]) {
+        $val = trim($val);
+        if ($val === '') {
+            continue;
+        }
+        if ($col === 'data->univRegNo') {
+            /* The university number is inside the submitted blob, not a column
+               of its own, so it is matched by reading the pending rows. There
+               are never many: the queue is capped and this only runs when the
+               applicant gave one. */
+            $rows = fetch_all('SELECT * FROM ' . qi('submissions')
+                . ' WHERE ' . qi('status') . " = 'Pending'");
+            foreach ($rows as $r) {
+                $d = json_decode((string) ($r['data'] ?? ''), true);
+                if (is_array($d) && strcasecmp(trim((string) ($d['univRegNo'] ?? '')), $val) === 0) {
+                    return $r;
+                }
+            }
+            continue;
+        }
+        $hit = fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE LOWER(' . qi($col)
+            . ') = LOWER(?) AND ' . qi('status') . " = 'Pending'", [$val]);
+        if ($hit) {
+            return $hit;
+        }
+    }
+    return null;
+}
+
+/**
  * A student filling in the public form. No token, so everything about the row
  * that matters — its status, its timestamps, which table it lands in — is
  * decided here.
@@ -1361,12 +1404,7 @@ function api_apply(): void
        Matched on the registration number when there is one and on the phone
        number when there is not — which is why the form insists on a phone.
        Only while it is still pending: a row already dealt with is history. */
-    $prior = $roll !== ''
-        ? fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE LOWER(' . qi('roll')
-            . ') = LOWER(?) AND ' . qi('status') . " = 'Pending'", [$roll])
-        : fetch_one('SELECT * FROM ' . qi('submissions') . ' WHERE ' . qi('phone')
-            . ' = ? AND (' . qi('roll') . " = '' OR " . qi('roll') . ' IS NULL) AND '
-            . qi('status') . " = 'Pending'", [$phone]);
+    $prior = pending_submission_for($roll, $ureg, $phone, $email);
 
     $out = [
         'id'          => $prior ? $prior['id'] : next_id('submissions'),

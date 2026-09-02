@@ -13284,7 +13284,16 @@
         return Store.all('submissions').filter(r =>
           (!st || String(r.status || 'Pending') === st) &&
           (!q || [r.roll, r.name, r.phone, r.email].some(v => String(v || '').toLowerCase().includes(q))))
-          .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+          /* By name, because an office working down two hundred forms wants
+             them in the order names go in — and approving from the top then
+             issues the ids in that order too. A form with no name yet sorts
+             last rather than first. */
+          .sort((a, b) => {
+            const an = String(a.name || '').trim(), bn = String(b.name || '').trim();
+            if (!an !== !bn) return an ? -1 : 1;
+            return an.localeCompare(bn, undefined, { sensitivity: 'base', numeric: true })
+              || String(a.submittedAt || '').localeCompare(String(b.submittedAt || ''));
+          });
       };
       const draw = () => {
         const all = Store.all('submissions');
