@@ -17,9 +17,6 @@ const Store = {
      longer takes the id as proof of anything. */
   userId: sessionStorage.getItem('nmiet_user') || null,
   token: sessionStorage.getItem('nmiet_token') || null,
-  /* Set by the app: what to do when the server says this session is over. */
-  onExpired: null,
-
   setUser(id, token) {
     this.userId = id || null;
     if (id) sessionStorage.setItem('nmiet_user', id);
@@ -353,15 +350,6 @@ const Store = {
   },
   // the server rejects writes from a role that may not make them
   _check(res) {
-    /* The session ran out, or was ended from another device. Saying "save
-       failed" here would leave somebody clicking at a page whose every request
-       is going to be refused; the app hands them back to the sign-in screen
-       instead, and says why. */
-    if (res.status === 401) {
-      this.setUser(null, null);
-      if (this.onExpired) this.onExpired();
-      return;
-    }
     if (res.status === 403) { this._fail('Not permitted — your role cannot change this record.'); return; }
     if (res.ok) return;
     /* A refusal usually says why — a duplicate registration number, a phone

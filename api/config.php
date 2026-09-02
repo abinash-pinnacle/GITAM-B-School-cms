@@ -398,18 +398,6 @@ const LOGIN_LOCK_SECONDS   = 900;      // 15 minutes
    guessing, and out of reach of people simply mistyping.
    The account limit is the lower of the two now, because it is the precise
    signal: it names what is actually under attack. */
-/* How long a sign-in lasts. The first is the ceiling: twelve hours from
-   signing in, a token is finished whatever it has been doing, so one taken
-   from a machine has an end even if it is used constantly. The second is the
-   one that catches the ordinary case — a browser left open on a shared desk
-   in the lab, forgotten rather than logged out. */
-const SESSION_MAX_SECONDS  = 12 * 3600;
-const SESSION_IDLE_SECONDS = 60 * 60;
-/* Every request would otherwise write a row to say the session is still alive.
-   A minute's resolution is plenty for an hour's timeout and costs one write a
-   minute instead of one a click. */
-const SESSION_TOUCH_SECONDS = 60;
-
 const LOGIN_MAX_PER_IP     = 20;
 const LOGIN_MAX_PER_USER   = 15;
 
@@ -497,120 +485,6 @@ const MODULES = [
                       'views' => ['accounts', 'usersettings', 'roles'],
                       'write' => ['users', 'settings', 'roles', 'auditlog']],
 ];
-
-/* ---------------- what each role may write ----------------
-
-   Deny by default. Until now the gate worked the other way round: it listed
-   what a role must NOT do, so every collection nobody had thought to name was
-   writable by anybody holding a token. A student could rename a lecturer, edit
-   a marksheet, delete an admission form, and set the administrator's password
-   and sign in as the administrator.
-
-   So each role is given the collections its own screens write, and a
-   collection missing from its list is refused — whatever the request looks
-   like, and whatever the browser thinks it is allowed to draw. A table added
-   next year is closed until somebody decides whose it is.
-
-   The rules further down can narrow any of this; they can no longer be the
-   only thing standing in the way. */
-const ROLE_WRITABLE = [
-    'admin'              => ['*'],           // the administrator holds everything
-    'accountant'         => ['fees', 'fixedfees', 'payments', 'assets',
-                             'accountants', 'centerheads', 'requisitions'],
-    // the centre head monitors and approves; the read-only rule below still applies
-    'center_head'        => ['requisitions'],
-    'placement_officer'  => ['companies', 'drives', 'applications', 'interviews',
-                             'offers', 'placementevents'],
-    'course_coordinator' => ['attendance'],
-    // the desk that enrols people: the student, their login, and the form it came from
-    'admission'          => ['students', 'users', 'submissions'],
-    'faculty'            => ['attendance', 'marks', 'requisitions'],
-    'librarian'          => ['books', 'issues', 'requisitions'],
-    // a student applies to a drive and nothing else; the placement rule below
-    // narrows even that to a POST
-    'student'            => ['applications'],
-];
-
-/* The one record somebody may change without being given the collection it is
-   in: their own staff row, which is what the Profile page saves. Matched on
-   the account's refId, so it is their row or nobody's — this is the difference
-   between editing your own telephone number and editing everybody's. */
-const ROLE_WRITABLE_OWN = [
-    'accountant'         => ['accountants'],
-    'center_head'        => ['centerheads'],
-    'placement_officer'  => ['placementofficers'],
-    'course_coordinator' => ['coordinators'],
-    'admission'          => ['admissions'],
-    'faculty'            => ['faculty'],
-    'librarian'          => ['faculty'],
-];
-
-/* ---------------- what each role may read ----------------
-
-   The other half of the same rule. A signed-in student could ask the API for
-   every student on the roll — telephone, Aadhaar, address, guardians, health —
-   for every employee, for everybody's fees, for every admission application,
-   and for the list of login names, the administrator's among them. The screens
-   never offered any of it; the API answered anyway.
-
-   Two collections are deliberately left to everyone. `roles` holds ticked
-   boxes and no personal data, and the browser needs it to know what its own
-   account may do. `users` is scoped rather than refused: the session is
-   restored by looking the signed-in account up in it, so taking it away would
-   log people out — instead everybody but the two roles that manage accounts
-   sees exactly one row, their own. */
-const ROLE_READABLE = [
-    'admin'              => ['*'],
-    'accountant'         => ['users', 'roles', 'students', 'faculty', 'accountants',
-                             'centerheads', 'coordinators', 'admissions', 'courses',
-                             'attendance', 'marks', 'fees', 'fixedfees', 'payments',
-                             'assets', 'requisitions', 'timetable', 'books', 'issues',
-                             'events', 'settings'],
-    // the centre head monitors the college; that is the whole job
-    'center_head'        => ['users', 'roles', 'submissions', 'students', 'faculty',
-                             'accountants', 'centerheads', 'placementofficers',
-                             'coordinators', 'admissions', 'courses', 'syllabus',
-                             'attendance', 'marks', 'fees', 'fixedfees', 'payments',
-                             'assets', 'requisitions', 'timetable', 'books', 'issues',
-                             'events', 'companies', 'drives', 'applications',
-                             'interviews', 'offers', 'placementevents', 'settings'],
-    'placement_officer'  => ['users', 'roles', 'students', 'placementofficers', 'courses',
-                             'syllabus', 'marks', 'events', 'companies', 'drives',
-                             'applications', 'interviews', 'offers', 'placementevents',
-                             'settings'],
-    'course_coordinator' => ['users', 'roles', 'students', 'faculty', 'coordinators',
-                             'courses', 'syllabus', 'attendance', 'marks', 'timetable',
-                             'events', 'settings'],
-    'admission'          => ['users', 'roles', 'submissions', 'students', 'admissions',
-                             'courses', 'syllabus', 'events', 'settings'],
-    'faculty'            => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
-                             'attendance', 'marks', 'requisitions', 'timetable', 'books',
-                             'issues', 'events', 'settings'],
-    'librarian'          => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
-                             'requisitions', 'timetable', 'books', 'issues', 'events',
-                             'settings'],
-    // everything a student sees of themselves; the row rules below decide whose
-    'student'            => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
-                             'attendance', 'marks', 'fees', 'timetable', 'books', 'issues',
-                             'events', 'companies', 'drives', 'applications', 'interviews',
-                             'offers', 'placementevents', 'settings'],
-];
-
-/* Which column ties a row to the student reading it. Their own record, their
-   own fees, their own marks, their own library issues — and nobody else's, so
-   the roll cannot be walked one id at a time. */
-const STUDENT_OWN_ROWS = [
-    'students' => 'id',
-    'fees'     => 'studentId',
-    'marks'    => 'studentId',
-    'issues'   => 'studentId',
-];
-
-/* What a student may see of an employee. A timetable prints who takes the
-   class and a profile page prints who the mentor is; neither needs the
-   lecturer's telephone number, home address, Aadhaar or date of birth. */
-const STAFF_PUBLIC_FIELDS = ['id', 'empId', 'name', 'designation', 'department',
-                             'photo', 'role', 'specialisation', 'qualification'];
 
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */
 const READ_ONLY_ROLES = ['center_head'];
