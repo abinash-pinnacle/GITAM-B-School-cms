@@ -377,10 +377,22 @@
       + '</div>';
   }).join('');
 
-  // digits only, where a number is what is being asked for
+  var EMAIL_OK = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+
   document.addEventListener('input', function (e) {
-    if (e.target.getAttribute && e.target.getAttribute('inputmode') === 'numeric') {
-      e.target.value = e.target.value.replace(/\D/g, '');
+    var el = e.target;
+    if (!el || !el.getAttribute) return;
+    // digits only, where a number is what is being asked for
+    if (el.getAttribute('inputmode') === 'numeric') {
+      el.value = el.value.replace(/\D/g, '');
+      return;
+    }
+    /* The browser checks an email box before any handler runs, in its own
+       words — and it accepts "student@gmail", which we do not. Give the box
+       our verdict and our sentence to say, so the page complains in one voice. */
+    if (el.type === 'email' && el.setCustomValidity) {
+      var v = (el.value || '').trim();
+      el.setCustomValidity(v === '' || EMAIL_OK.test(v) ? '' : 'Please enter a valid email address.');
     }
   });
 
