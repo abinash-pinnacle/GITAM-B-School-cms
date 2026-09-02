@@ -13936,6 +13936,7 @@
             <option value="Active">Active</option><option value="Inactive">Inactive</option></select>
           <button class="btn-outline btn-sm" id="usRoles">🛡 Roles</button>
           <button class="btn-outline btn-sm" id="usAudit">🕘 Audit Log</button>
+          <button class="btn-outline btn-sm" id="usTrash">🗑 Trash</button>
           <button class="btn-outline btn-sm" id="usBackup">⬇ Download Backup</button>
           <button class="btn-primary" id="usAdd">+ Create User</button>
         </div></div>
@@ -14015,6 +14016,7 @@
       $('#usAdd').onclick = () => userForm(null, draw);
       $('#usRoles').onclick = () => navigate('roles');
       $('#usAudit').onclick = () => auditModal();
+      $('#usTrash').onclick = () => trashModal();
       /* A file the admin can keep off the server. Read-only on the server side;
          here it is turned into a download and nothing more. */
       $('#usBackup').onclick = async (e) => {
@@ -14272,6 +14274,55 @@
     return fields.map(([k, v]) => `<div><b>${esc(k)}</b> `
       + `<span style="color:var(--muted)">${esc(v.from === '' ? '—' : v.from)}</span> → `
       + `<span style="color:var(--ink)">${esc(v.to === '' ? '—' : v.to)}</span></div>`).join('');
+  }
+
+  /* Deleted records that can still be put back. A delete of a student, an
+     employee, a fee, a login and the rest goes here instead of being erased;
+     this is where the admin restores one, or removes it for good. */
+  const TRASH_KIND = {
+    students: 'student', faculty: 'employee', accountants: 'employee',
+    centerheads: 'employee', placementofficers: 'employee', coordinators: 'employee',
+    admissions: 'employee', users: 'login account', courses: 'course',
+    fees: 'fee record', marks: 'marks', submissions: 'admission form',
+  };
+  async function trashModal() {
+    const rows = await Store.trashList();
+    if (rows === null) return;
+    const when = (t) => { try { return new Date(t * 1000).toLocaleString('en-IN'); } catch (e) { return ''; } };
+    openModal('Trash', `
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">
+        Deleted records, newest first. Restore puts one back where it was;
+        Delete forever cannot be undone. ${rows.length ? '' : 'The trash is empty.'}</p>
+      ${rows.length ? `<div class="tbl-wrap"><table><thead><tr>
+        <th>What</th><th>Type</th><th>Deleted by</th><th>When</th><th></th>
+      </tr></thead><tbody id="trBody">${rows.map(r => `<tr data-tr="${esc(r.id)}">
+        <td>${esc(r.name || r.rowId)}</td>
+        <td><small style="color:var(--muted)">${esc(TRASH_KIND[r.col] || r.col)}</small></td>
+        <td>${esc(r.deletedBy || '—')}</td>
+        <td style="white-space:nowrap">${esc(when(r.deletedAt))}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button class="btn-outline btn-sm" data-restore="${esc(r.id)}">↺ Restore</button>
+          <button class="btn-del btn-sm" data-purge="${esc(r.id)}">Delete forever</button>
+        </td></tr>`).join('')}</tbody></table></div>`
+        : ''}
+      <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
+    $('#cx').onclick = closeModal;
+    const rebind = () => {
+      document.querySelectorAll('[data-restore]').forEach(b => b.onclick = async () => {
+        if (await Store.trashRestore(b.dataset.restore)) {
+          await Store.load(); toast('Restored.'); trashModal(); render();
+        }
+      });
+      document.querySelectorAll('[data-purge]').forEach(b => b.onclick = () => {
+        confirmDelete('Delete this permanently?',
+          'The record will be removed for good and cannot be restored.',
+          'Delete forever', async () => {
+            if (await Store.trashPurge(b.dataset.purge)) { toast('Deleted permanently.'); }
+            trashModal();
+          });
+      });
+    };
+    rebind();
   }
 
   /* =========================== COMPANIES =========================== */

@@ -1840,6 +1840,30 @@ function api_apply(): void
 /* Collections whose every change is worth a line. The rest — a timetable
    slot, a library issue — are ordinary daily traffic and would bury the
    entries that matter. */
+/* The records worth being able to undo a deletion of: people, money, the
+   forms they arrived on. A deleted one of these is moved to the trash instead
+   of being erased, and the administrator can put it back. High-churn tables
+   whose deletions are routine (a timetable slot, a day of attendance) are left
+   out; trashing every one of those would bury the deletions that matter. */
+const SOFT_DELETE = ['students', 'faculty', 'accountants', 'centerheads',
+                     'placementofficers', 'coordinators', 'admissions', 'users',
+                     'courses', 'fees', 'marks', 'submissions'];
+
+function trash_table(): void
+{
+    static $done = false;
+    if ($done) { return; }
+    $done = true;
+    $t = qi('_trash');
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    $txt = driver() === 'mysql' ? 'LONGTEXT' : 'TEXT';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('id') . " $kType PRIMARY KEY, "
+        . qi('col') . " $kType, " . qi('rowId') . " $kType, " . qi('data') . " $txt, "
+        . qi('deletedBy') . " $kType, " . qi('deletedByName') . " $kType, "
+        . qi('deletedAt') . " $iType)");
+}
+
 const AUDITED = ['students', 'users', 'roles', 'faculty', 'accountants', 'centerheads',
                  'placementofficers', 'coordinators', 'admissions', 'fees', 'payments',
                  'fixedfees', 'assets', 'settings', 'submissions', 'marks'];
@@ -2729,13 +2753,99 @@ function api_update(string $col, string $id): void
 
 function api_delete(string $col, string $id): void
 {
-    // read before removing, so the line can say what was removed
-    $before = in_array($col, AUDITED, true)
+    // read before removing, so the trash and the log both know what was removed
+    $soft = in_array($col, SOFT_DELETE, true);
+    $before = ($soft || in_array($col, AUDITED, true))
         ? fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id])
         : null;
+
+    if ($soft && $before) {
+        /* The whole row is kept, exactly as it was, so a restore is faithful.
+           Password hashes are kept with it on purpose: a login put back without
+           one is a login nobody can sign in to. The trash is admin-only, which
+           is what keeps that hash as safe as it was in the table it left. */
+        trash_table();
+        $me = current_user();
+        run_sql('INSERT INTO ' . qi('_trash') . ' (' . qi('id') . ', ' . qi('col') . ', '
+            . qi('rowId') . ', ' . qi('data') . ', ' . qi('deletedBy') . ', '
+            . qi('deletedByName') . ', ' . qi('deletedAt') . ') VALUES (?, ?, ?, ?, ?, ?, ?)', [
+                'TRSH' . dechex((int) round(microtime(true) * 1000)) . bin2hex(random_bytes(4)),
+                $col, $id, json_encode($before),
+                (string) ($me['id'] ?? ''), (string) ($me['name'] ?? $me['username'] ?? ''), time(),
+            ]);
+    }
     run_sql('DELETE FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]);
-    if (in_array($col, AUDITED, true)) {
+    if ($soft || in_array($col, AUDITED, true)) {
         audit('delete', $col, $id, $before ? audit_name($col, $before) : '');
+    }
+    send_json(['ok' => true]);
+}
+
+/** the trash, newest first: the administrator alone */
+function api_trash_list(): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden', 'message' => 'Only the administrator sees the trash.'], 403);
+    }
+    trash_table();
+    $rows = fetch_all('SELECT ' . qi('id') . ', ' . qi('col') . ', ' . qi('rowId') . ', '
+        . qi('data') . ', ' . qi('deletedByName') . ', ' . qi('deletedAt')
+        . ' FROM ' . qi('_trash') . ' ORDER BY ' . qi('deletedAt') . ' DESC');
+    $out = array_map(function ($r) {
+        $data = json_decode((string) ($r['data'] ?? ''), true) ?: [];
+        return [
+            'id'        => $r['id'],
+            'col'       => $r['col'],
+            'rowId'     => $r['rowId'],
+            'name'      => $data['name'] ?? $data['title'] ?? $data['username'] ?? $data['roll'] ?? $r['rowId'],
+            'deletedBy' => $r['deletedByName'],
+            'deletedAt' => (int) $r['deletedAt'],
+        ];
+    }, $rows);
+    send_json($out);
+}
+
+/** put a trashed row back where it came from, if its id is still free */
+function api_trash_restore(string $trashId): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden', 'message' => 'Only the administrator can restore.'], 403);
+    }
+    trash_table();
+    $t = fetch_one('SELECT * FROM ' . qi('_trash') . ' WHERE ' . qi('id') . ' = ?', [$trashId]);
+    if (!$t) {
+        send_json(['error' => 'not-found', 'message' => 'That item is no longer in the trash.'], 404);
+    }
+    $col = (string) $t['col'];
+    $rowId = (string) $t['rowId'];
+    $data = json_decode((string) $t['data'], true);
+    if (!is_array($data) || !isset(COLLECTIONS[$col])) {
+        send_json(['error' => 'bad-data', 'message' => 'That item cannot be restored.'], 422);
+    }
+    if (fetch_one('SELECT ' . qi('id') . ' FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$rowId])) {
+        send_json(['error' => 'exists',
+                   'message' => 'A record with that id already exists, so it was not restored.'], 409);
+    }
+    // written back through the same path a normal write uses, so a JSON blob
+    // column is serialised the way that table expects
+    upsert($col, $data);
+    run_sql('DELETE FROM ' . qi('_trash') . ' WHERE ' . qi('id') . ' = ?', [$trashId]);
+    audit('restore', $col, $rowId, audit_name($col, $data));
+    send_json(['ok' => true, 'col' => $col, 'id' => $rowId]);
+}
+
+/** empty one item from the trash for good: the permanent deletion */
+function api_trash_purge(string $trashId): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the administrator can permanently delete.'], 403);
+    }
+    trash_table();
+    $t = fetch_one('SELECT * FROM ' . qi('_trash') . ' WHERE ' . qi('id') . ' = ?', [$trashId]);
+    if ($t) {
+        run_sql('DELETE FROM ' . qi('_trash') . ' WHERE ' . qi('id') . ' = ?', [$trashId]);
+        audit('purge', (string) $t['col'], (string) $t['rowId'], '');
     }
     send_json(['ok' => true]);
 }
@@ -2767,6 +2877,15 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'GET' && $resource === 'backup') {
         api_backup();
+    }
+    if ($method === 'GET' && $resource === 'trash' && $id === null) {
+        api_trash_list();
+    }
+    if ($method === 'POST' && $resource === 'trash' && $id !== null) {
+        api_trash_restore($id);
+    }
+    if ($method === 'DELETE' && $resource === 'trash' && $id !== null) {
+        api_trash_purge($id);
     }
     if ($method === 'GET' && $isCollection && $id === null) {
         api_list($resource);

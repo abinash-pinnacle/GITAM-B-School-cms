@@ -54,6 +54,29 @@ const Store = {
   /* A full snapshot of the records, fetched with the caller's own token so
      the server can refuse anybody but the admin. Returns the file as a blob
      for the page to save, or null if the server would not give it. */
+  /* The trash — deleted records the admin can still put back. All three are
+     admin-only on the server; the page never shows them to anybody else. */
+  async trashList() {
+    try {
+      const res = await fetch(`${API}/trash`, { headers: this._headers() });
+      if (!res.ok) { this._check(res); return null; }
+      return await res.json();
+    } catch (e) { this._fail(); return null; }
+  },
+  async trashRestore(id) {
+    const res = await fetch(`${API}/trash/${encodeURIComponent(id)}`,
+      { method: 'POST', headers: this._headers() });
+    const d = await res.json().catch(() => null);
+    if (!res.ok) { this._fail(d && d.message); return false; }
+    return true;
+  },
+  async trashPurge(id) {
+    const res = await fetch(`${API}/trash/${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers: this._headers() });
+    if (!res.ok) { this._check(res); return false; }
+    return true;
+  },
+
   async backup() {
     try {
       const res = await fetch(`${API}/backup`, { headers: this._headers() });
