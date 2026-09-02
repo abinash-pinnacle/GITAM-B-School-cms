@@ -25,7 +25,7 @@ COPY . .
 RUN mkdir -p /data && chown -R www-data:www-data /data /var/www/html
 VOLUME ["/data"]
 
-# Apache listens on $PORT (platforms such as Render set this for us)
+# Apache listens on $PORT, which a container host is free to set for us
 RUN sed -i 's/^Listen 80$/Listen ${PORT}/' /etc/apache2/ports.conf \
     && sed -i 's/:80>/:${PORT}>/' /etc/apache2/sites-available/000-default.conf
 
