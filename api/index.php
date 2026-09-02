@@ -1328,12 +1328,16 @@ function api_apply(): void
         send_json(['error' => 'bad-phone',
                    'message' => 'Please enter a valid 10-digit WhatsApp number.'], 422);
     }
-    $email = apply_clean($d['email'] ?? '', 120);
+    /* Written back into $d, not just tested: what is stored has to be the
+       blank as well, or "NA" is filed as the address and refused again on the
+       day the office approves the row. */
     foreach (['email', 'domainEmail'] as $f) {
-        if (!email_ok(apply_clean($d[$f] ?? '', 120))) {
+        $d[$f] = blank_if_not_applicable(apply_clean($d[$f] ?? '', 120));
+        if (!email_ok($d[$f])) {
             send_json(['error' => 'bad-email', 'message' => BAD_EMAIL], 422);
         }
     }
+    $email = $d['email'];
     /* An emergency contact that is the applicant's own number is not an
        emergency contact, and the office cannot ring back to ask. */
     $emergency = preg_replace('/\D/', '', apply_clean($d['emergencyPhone'] ?? '', 20));
@@ -1658,6 +1662,18 @@ function mobile_ok(string $v): bool
 function email_ok(string $v): bool
 {
     return $v === '' || (bool) preg_match(EMAIL_RE, $v);
+}
+
+/* How people write "I do not have one" in a box they were told they could
+   leave blank. None of it is an address, so an optional one holding it is
+   read as the blank it means rather than refusing the whole form. Matches
+   NOT_APPLICABLE in js/app.js and form.html. */
+const NOT_APPLICABLE_RE = '/^(n\.?\s*\/?\s*a\.?|not\s*applicable|nil|none|no|-{1,3}|\.)$/i';
+
+function blank_if_not_applicable(string $v): string
+{
+    $t = trim($v);
+    return preg_match(NOT_APPLICABLE_RE, $t) ? '' : $t;
 }
 
 /** a value out of one of the record's JSON blobs, whichever shape it arrived in */

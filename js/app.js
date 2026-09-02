@@ -2879,6 +2879,14 @@
     const e = String(v || '').trim();
     return e === '' || EMAIL_RE.test(e);
   }
+  /* How people write "I do not have one" in a box they may leave blank. It is
+     not an address, so it is stored as the blank it means rather than refused.
+     Matches NOT_APPLICABLE in form.html. */
+  const NOT_APPLICABLE = /^(n\.?\s*\/?\s*a\.?|not\s*applicable|nil|none|no|-{1,3}|\.)$/i;
+  function blankIfNotApplicable(v) {
+    const e = String(v || '').trim();
+    return NOT_APPLICABLE.test(e) ? '' : e;
+  }
 
   /* Digits only, and no more than the box allows — while typing and on paste
      alike. One listener on the document rather than one per box, because
@@ -3634,6 +3642,7 @@
          the screen and turns a valid address into an invalid one. */
       ['email', 'domainEmail', 'phone', 'whatsapp', 'h_emergencyPhone']
         .forEach(k => { if (typeof d[k] === 'string') d[k] = d[k].trim(); });
+      ['email', 'domainEmail'].forEach(k => { d[k] = blankIfNotApplicable(d[k]); });
 
       /* Whichever of the two numbers is at fault gets the cursor. Told only
          that they cannot match, somebody changes the wrong one. */
