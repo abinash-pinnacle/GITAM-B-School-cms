@@ -156,7 +156,7 @@ function attempts_table(): void
  */
 function client_ip(): string
 {
-    foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'] as $h) {
+    foreach (FORWARDED_IP_HEADERS as $h) {
         $v = trim((string) ($_SERVER[$h] ?? ''));
         if ($v !== '') {
             $first = trim(explode(',', $v)[0]);
@@ -166,6 +166,31 @@ function client_ip(): string
         }
     }
     return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+}
+
+const FORWARDED_IP_HEADERS = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'];
+
+/**
+ * Does the address we have actually name one caller?
+ *
+ * Only when a proxy told us. Without that header the socket address is
+ * whatever sits in front of the application — a CDN, in this deployment — and
+ * every visitor in the world shares it. Locking it locks all of them, which is
+ * not a theory: seventeen deliberate wrong passwords sent from one machine
+ * locked the administrator out of the live site.
+ *
+ * A college would have managed it without any help. One public address, one
+ * Monday morning, twenty people mistyping the password they changed on Friday.
+ */
+function client_ip_is_one_caller(): bool
+{
+    foreach (FORWARDED_IP_HEADERS as $h) {
+        $v = trim((string) ($_SERVER[$h] ?? ''));
+        if ($v !== '' && filter_var(trim(explode(',', $v)[0]), FILTER_VALIDATE_IP)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /** how long this key must wait, in seconds — 0 when it may try now */
@@ -2305,7 +2330,14 @@ function api_login(): void
 
     /* Checked before the password is looked at, so a locked-out attacker
        cannot even learn whether the account exists. */
-    $keys = ['ip:' . client_ip(), 'user:' . $name];
+    /* The account is always counted; the address only when it names somebody.
+       Both are cleared by getting in, so an honest person who fumbles their
+       password twice and then remembers it starts from nothing again. */
+    $keys = ['user:' . $name];
+    $ipKey = client_ip_is_one_caller() ? 'ip:' . client_ip() : null;
+    if ($ipKey !== null) {
+        $keys[] = $ipKey;
+    }
     foreach ($keys as $k) {
         $wait = login_wait($k);
         if ($wait > 0) {
@@ -2323,13 +2355,21 @@ function api_login(): void
         'SELECT * FROM ' . qi('users') . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)',
         [$d['username'] ?? '']
     );
+    // whether anybody holds this name at all, which is a different question
+    // from whether the password was right
+    $known = $rows !== [];
     $rows = array_values(array_filter(
         $rows,
         fn($r) => password_matches($given, (string) ($r['password'] ?? ''))
     ));
     if (!$rows) {
-        login_failed($keys[0], LOGIN_MAX_PER_IP);
-        login_failed($keys[1], LOGIN_MAX_PER_USER);
+        login_failed('user:' . $name, LOGIN_MAX_PER_USER);
+        /* The address is counted only for a name nobody holds. Somebody working
+           through a list of guesses trips it quickly; somebody getting their own
+           password wrong never touches it, however many times they do it. */
+        if ($ipKey !== null && !$known) {
+            login_failed($ipKey, LOGIN_MAX_PER_IP);
+        }
         /* The name that was tried, never the password that was tried with it —
            people mistype one into the other, and a log holding that is a log
            holding a password. */
