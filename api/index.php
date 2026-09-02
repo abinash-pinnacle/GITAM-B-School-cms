@@ -2724,12 +2724,19 @@ try {
     // outage is not something a restart fixes. /api/health?db=1 is the
     // deliberate deep check: it reports whether the database is reachable.
     if ($method === 'GET' && $resource === 'health') {
+        /* The fingerprint of this very file. Deploys have twice now put a new
+           front end up with an older back end behind it, and the only symptom
+           was a session that signed in and could read nothing — with no way to
+           tell from outside which of the two was actually running. Now there
+           is: compare this against the same hash of the file being deployed.
+           It reveals nothing; the file it hashes cannot be read over HTTP. */
+        $build = ['build' => substr(hash_file('sha256', __FILE__) ?: '', 0, 12)];
         if (!isset($_GET['db'])) {
-            send_json(['ok' => true]);
+            send_json(['ok' => true] + $build);
         }
         try {
             db()->query('SELECT 1');
-            send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()]);
+            send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()] + $build);
         } catch (Throwable $e) {
             error_log('[nmiet-api] health db: ' . $e->getMessage());
             send_json(['ok' => false, 'db' => 'error'] + debug_detail($e), 503);
