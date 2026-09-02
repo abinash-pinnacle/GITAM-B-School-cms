@@ -661,6 +661,15 @@ a.install-btn:hover{background:var(--primary-light)}
   padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 .info-tbl td{font-size:13.5px;vertical-align:top}
 
+/* The qualification grid. A select is as wide as its longest option, and the
+   longest branch name here is forty-two characters — left to itself it sets the
+   column width and pushes the table out of the panel, taking the first two
+   columns off the left edge with it. Fixed layout means the widths given are the
+   widths used, and everything inside fits them. */
+.qual-tbl{table-layout:fixed}
+.qual-tbl th,.qual-tbl td{padding:9px 8px}
+.qual-tbl input,.qual-tbl select{width:100%;min-width:0}
+
 /* a guardian or a document inside the form */
 .sub-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;
   background:var(--bg)}

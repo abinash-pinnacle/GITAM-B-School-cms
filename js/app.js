@@ -3293,10 +3293,10 @@
           ${fText('aca_entranceRank', 'Entrance Rank', aca.entranceRank, 'inputmode="numeric"')}
         </div>
         <h4 class="ro-sub">Previous Qualifications</h4>
-        <div class="tbl-wrap"><table><thead><tr>
-          <th style="width:12%">Qualification</th><th style="width:22%">Stream</th>
-          <th>Institute Name</th>
-          <th style="width:14%">Passout Year</th><th style="width:12%">% Marks</th>
+        <div class="tbl-wrap"><table class="qual-tbl"><thead><tr>
+          <th style="width:12%">Qualification</th><th style="width:27%">Stream</th>
+          <th style="width:36%">Institute Name</th>
+          <th style="width:13%">Passout Year</th><th style="width:12%">% Marks</th>
         </tr></thead><tbody>${QUAL_LEVELS.map(level => {
           const q = qualOf(level);
           return `<tr data-qual="${esc(level)}">

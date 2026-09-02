@@ -79,7 +79,8 @@
              padding: 9px 8px; font-weight: 600; }
   .qual td { padding: 6px 6px; border-top: 1px solid var(--line); }
   .qual td:first-child { font-weight: 600; white-space: nowrap; }
-  .qual input { padding: 8px 10px; font-size: 13px; }
+  .qual { table-layout: fixed; }
+  .qual input, .qual select { padding: 8px 10px; font-size: 13px; width: 100%; min-width: 0; }
   .qual-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
 
   .nav { margin-top: 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -262,9 +263,9 @@
         <p class="sub">Fill in only the rows that apply to you.</p>
         <div class="qual-wrap">
           <table class="qual">
-            <thead><tr><th>Qualification</th><th style="width:210px">Stream</th>
-              <th>Institute Name</th>
-              <th style="width:110px">Passout Year</th><th style="width:110px">% Marks</th></tr></thead>
+            <thead><tr><th style="width:90px">Qualification</th><th style="width:190px">Stream</th>
+              <th style="min-width:160px">Institute Name</th>
+              <th style="width:88px">Passout Year</th><th style="width:78px">% Marks</th></tr></thead>
             <tbody id="qualRows"></tbody>
           </table>
         </div>
