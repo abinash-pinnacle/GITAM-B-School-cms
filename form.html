@@ -122,9 +122,9 @@
   <div class="card" id="formCard">
     <h2>Student Registration</h2>
     <p class="sub">
-      Fill this in once and the office will review it. Only your <b>name</b> and
-      <b>mobile number</b> are required — everything else helps, but you can leave it blank
-      and the office will fill it in.
+      Fill this in once and the office will review it. Only your <b>name</b>,
+      <b>mobile number</b> and a <b>passport size photo</b> are required — everything else
+      helps, but you can leave it blank and the office will fill it in.
     </p>
     <p class="sub">
       <b>Already enrolled?</b> Put your University Regd. No. in and your existing record is
@@ -163,6 +163,11 @@
             <input name="email" type="email" maxlength="120" placeholder="name@example.com"></div>
           <div class="field"><label>College Email ID</label>
             <input name="domainEmail" type="email" maxlength="120"></div>
+          <div class="field full"><label>Passport size photo <span class="req">*</span></label>
+            <input type="file" id="photoFile" accept="image/*">
+            <input type="hidden" name="photo" id="photoValue">
+            <small class="hint">A recent passport size photograph. It goes on your ID card.</small>
+            <div id="photoPreview" style="margin-top:8px"></div></div>
         </div>
       </div>
 
@@ -257,7 +262,8 @@
         <p class="sub">Fill in only the rows that apply to you.</p>
         <div class="qual-wrap">
           <table class="qual">
-            <thead><tr><th>Qualification</th><th>Institute Name</th>
+            <thead><tr><th>Qualification</th><th style="width:210px">Stream</th>
+              <th>Institute Name</th>
               <th style="width:110px">Passout Year</th><th style="width:110px">% Marks</th></tr></thead>
             <tbody id="qualRows"></tbody>
           </table>
@@ -349,8 +355,29 @@
   var QUALS = [['q10', '10th'], ['q12', '12th'], ['qiti', 'ITI'], ['qdip', 'Diploma'],
                ['qp3', '+3'], ['qbca', 'BCA'], ['qbba', 'BBA'], ['qbtech', 'B.Tech'],
                ['qother', 'Other']];
+  /* What each row is in. A level with no settled list gets an empty cell rather
+     than a dropdown with nothing to choose from. */
+  var STREAMS = {
+    "10th": ["BSE", "CBSE", "ICSE", "NIOS"],
+    "12th": ["Science", "Commerce", "Arts"],
+    "ITI": ["Electrician", "Fitter", "Mechanic"],
+    "Diploma": ["Mechanical Engineering", "Civil Engineering", "Electrical Engineering",
+      "Computer Engineering", "Electronics & Telecommunication Engineering",
+      "Information Technology", "Automobile Engineering", "Chemical Engineering"],
+    "+3": ["Science", "Commerce", "Arts"],
+    "B.Tech": ["Computer Science and Engineering (CSE)", "Mechanical Engineering (ME)",
+      "Civil Engineering (CE)", "Electrical Engineering (EE)",
+      "Electronics and Communication Engineering (ECE)", "Chemical Engineering",
+      "Information Technology (IT)", "Electrical and Electronics Engineering (EEE)"],
+  };
+
   document.getElementById('qualRows').innerHTML = QUALS.map(function (q) {
-    return '<tr><td>' + q[1] + '</td>'
+    var list = STREAMS[q[1]] || [];
+    var stream = list.length
+      ? '<td><select name="' + q[0] + 'Stream"><option value="">— Select —</option>'
+        + list.map(function (v) { return '<option>' + v + '</option>'; }).join('') + '</select></td>'
+      : '<td></td>';
+    return '<tr><td>' + q[1] + '</td>' + stream
       + '<td><input name="' + q[0] + 'Institute" maxlength="120"></td>'
       + '<td><input name="' + q[0] + 'Year" inputmode="numeric" maxlength="4"></td>'
       + '<td><input name="' + q[0] + 'Marks" maxlength="10" placeholder="e.g. 82.4"></td></tr>';
@@ -375,6 +402,36 @@
           : '')
       + '</div>';
   }).join('');
+
+  /* Scaled to 400px and re-encoded before it is sent: a phone camera produces
+     several megabytes and an ID card needs a few tens of kilobytes. */
+  document.getElementById('photoFile').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    var preview = document.getElementById('photoPreview');
+    var hidden = document.getElementById('photoValue');
+    hidden.value = ''; preview.innerHTML = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { show('err', 'Please choose an image file.'); e.target.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 400, w = img.width, h = img.height;
+        if (w > h && w > max) { h = Math.round(h * max / w); w = max; }
+        else if (h >= w && h > max) { w = Math.round(w * max / h); h = max; }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        hidden.value = c.toDataURL('image/jpeg', 0.82);
+        preview.innerHTML = '<img src="' + hidden.value + '" alt="" style="width:84px;height:84px;'
+          + 'object-fit:cover;border-radius:8px;border:1px solid var(--line)">';
+        show('', '');
+      };
+      img.onerror = function () { show('err', 'Could not read that image — please try another file.'); };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 
   var EMAIL_OK = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 
@@ -528,6 +585,11 @@
     if (!(d.firstName || '').trim()) {
       showStep(0); show('err', 'Please enter your first name.');
       var fn = document.querySelector('[name="firstName"]'); if (fn) fn.focus();
+      return;
+    }
+    if ((d.photo || '') === '') {
+      showStep(0); show('err', 'Please upload a passport size photo.');
+      var pf = document.getElementById('photoFile'); if (pf) pf.focus();
       return;
     }
     if (!/^[6-9]\d{9}$/.test((d.phone || '').trim())) {

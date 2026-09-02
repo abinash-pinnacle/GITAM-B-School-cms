@@ -1225,7 +1225,7 @@ function apply_fields(): array
         'emergencyName', 'emergencyPhone',
     ];
     foreach (array_keys(APPLY_QUALS) as $q) {
-        foreach (['Institute', 'Year', 'Marks'] as $part) {
+        foreach (['Stream', 'Institute', 'Year', 'Marks'] as $part) {
             $f[] = $q . $part;
         }
     }
@@ -1380,6 +1380,19 @@ function api_apply(): void
         if ($v !== '') {
             $data[$f] = $v;
         }
+    }
+    /* The photograph is a data URL — tens of kilobytes where every other answer
+       is a line of text — so it is taken whole rather than clipped at 255, and
+       capped instead. The page scales it to 400px before sending; anything past
+       half a megabyte did not come from that page and is refused rather than
+       stored. */
+    $photo = trim((string) ($d['photo'] ?? ''));
+    if ($photo !== '') {
+        if (strlen($photo) > 512000 || !preg_match('~^data:image/(jpeg|png|webp);base64,~', $photo)) {
+            send_json(['error' => 'bad-photo',
+                       'message' => 'That photo could not be read. Please choose another.'], 422);
+        }
+        $data['photo'] = $photo;
     }
     if ($roll !== '') {
         $data['roll'] = $roll;

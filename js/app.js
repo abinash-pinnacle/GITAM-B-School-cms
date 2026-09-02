@@ -2280,10 +2280,11 @@
     if (tab === 'academic') {
       const quals = Array.isArray(aca.qualifications) ? aca.qualifications : [];
       const qualRows = quals.length ? quals.map(q => `<tr>
-          <td><strong>${esc(q.level || '—')}</strong></td><td>${esc(q.institute || '—')}</td>
+          <td><strong>${esc(q.level || '—')}</strong></td><td>${esc(q.stream || '—')}</td>
+          <td>${esc(q.institute || '—')}</td>
           <td>${esc(q.year || '—')}</td><td style="text-align:right">${esc(q.marks || '—')}</td>
         </tr>`).join('')
-        : `<tr><td colspan="4" class="empty">No previous qualifications on record.</td></tr>`;
+        : `<tr><td colspan="5" class="empty">No previous qualifications on record.</td></tr>`;
       return `<h4 class="ro-sub">Academic Details</h4>` + infoTable(`
         ${infoRow2('Course', esc(s.course || '—'), 'Batch', esc(s.batch || '—'))}
         ${infoRow2('Specialisation I', esc(specOf(s) || '—'), 'Specialisation II', esc(s.specialisation2 || '—'))}
@@ -2303,7 +2304,7 @@
         ${infoRow2('Active Backlogs', esc(String(s.backlogs ?? 0)), 'Status', esc(s.status || 'Active'))}`)
         + `<h4 class="ro-sub">Previous Qualifications</h4>
         <div class="tbl-wrap"><table><thead><tr>
-          <th>Qualification</th><th>Institute Name</th><th>Passout Year</th>
+          <th>Qualification</th><th>Stream</th><th>Institute Name</th><th>Passout Year</th>
           <th style="text-align:right">% Marks</th></tr></thead><tbody>${qualRows}</tbody></table></div>`;
     }
 
@@ -2549,6 +2550,7 @@
 
     const qualColumns = [];
     QUAL_LEVELS.forEach(level => {
+      qualColumns.push(only(`${level} — Stream`, `q_${level}_stream`, 22));
       qualColumns.push(only(`${level} — Institute`, `q_${level}_institute`, 24));
       qualColumns.push(only(`${level} — Year`, `q_${level}_year`, 10));
       qualColumns.push(only(`${level} — %`, `q_${level}_marks`, 10));
@@ -2692,7 +2694,8 @@
         });
         QUAL_LEVELS.forEach(level => {
           const q = quals.find(x => x && x.level === level) || {};
-          flat[`q_${level}_institute`] = q.institute || '';
+          flat[`q_${level}_stream`] = q.stream || '';
+      flat[`q_${level}_institute`] = q.institute || '';
           flat[`q_${level}_year`] = q.year || '';
           flat[`q_${level}_marks`] = q.marks || '';
         });
@@ -2824,6 +2827,32 @@
   const ADMISSION_CATEGORIES = ['General', 'OBC', 'SEBC', 'SC', 'ST', 'EWS', 'TFW',
                                'Physically Handicapped', 'Management', 'NRI'];
   const QUAL_LEVELS = ['10th', '12th', 'ITI', 'Diploma', '+3', 'BCA', 'BBA', 'B.Tech', 'Other'];
+  /* What the row is in — a board for the 10th, a stream for the 12th and +3, a
+     branch for the Diploma and the B.Tech, a trade for the ITI. A level with no
+     settled list gets no dropdown: an empty one asks a question it cannot
+     answer. */
+  const QUAL_STREAMS = {
+    '10th': ['BSE', 'CBSE', 'ICSE', 'NIOS'],
+    '12th': ['Science', 'Commerce', 'Arts'],
+    'ITI': ['Electrician', 'Fitter', 'Mechanic'],
+    'Diploma': ['Mechanical Engineering', 'Civil Engineering', 'Electrical Engineering',
+      'Computer Engineering', 'Electronics & Telecommunication Engineering',
+      'Information Technology', 'Automobile Engineering', 'Chemical Engineering'],
+    '+3': ['Science', 'Commerce', 'Arts'],
+    'B.Tech': ['Computer Science and Engineering (CSE)', 'Mechanical Engineering (ME)',
+      'Civil Engineering (CE)', 'Electrical Engineering (EE)',
+      'Electronics and Communication Engineering (ECE)', 'Chemical Engineering',
+      'Information Technology (IT)', 'Electrical and Electronics Engineering (EEE)'],
+  };
+  const streamsFor = (level) => QUAL_STREAMS[level] || [];
+
+  /** the stream cell for one qualification row, or an empty cell where there is no list */
+  function streamCell(level, chosen) {
+    const list = streamsFor(level);
+    if (!list.length) return '<td></td>';
+    return `<td><select data-q="stream">${
+      optionsWith(list, chosen, '— Select —')}</select></td>`;
+  }
 
   /* ---------- student ids ----------
      YY + branch code + a running number, issued by the server. These are only
@@ -3265,12 +3294,14 @@
         </div>
         <h4 class="ro-sub">Previous Qualifications</h4>
         <div class="tbl-wrap"><table><thead><tr>
-          <th style="width:16%">Qualification</th><th>Institute Name</th>
-          <th style="width:18%">Passout Year</th><th style="width:16%">% Marks</th>
+          <th style="width:12%">Qualification</th><th style="width:22%">Stream</th>
+          <th>Institute Name</th>
+          <th style="width:14%">Passout Year</th><th style="width:12%">% Marks</th>
         </tr></thead><tbody>${QUAL_LEVELS.map(level => {
           const q = qualOf(level);
           return `<tr data-qual="${esc(level)}">
             <td><strong>${esc(level)}</strong></td>
+            ${streamCell(level, q.stream)}
             <td><input data-q="institute" value="${esc(q.institute || '')}"></td>
             <td><input data-q="year" inputmode="numeric" maxlength="4" value="${esc(q.year || '')}"></td>
             <td><input data-q="marks" value="${esc(q.marks || '')}"></td></tr>`;
@@ -3500,12 +3531,13 @@
       const permanent = take('perm_');
       Object.keys(d).forEach(k => { if (k.startsWith('g_') || k.startsWith('d_')) delete d[k]; });
 
-      academicInfo.qualifications = [...f.querySelectorAll('[data-qual]')].map(tr => ({
-        level: tr.dataset.qual,
-        institute: (tr.querySelector('[data-q="institute"]').value || '').trim(),
-        year: (tr.querySelector('[data-q="year"]').value || '').trim(),
-        marks: (tr.querySelector('[data-q="marks"]').value || '').trim(),
-      })).filter(q => q.institute || q.year || q.marks);
+      academicInfo.qualifications = [...f.querySelectorAll('[data-qual]')].map(tr => {
+        // a row without a stream list has no box for it, so it reads as blank
+        const box = (n) => { const el = tr.querySelector(`[data-q="${n}"]`);
+          return el ? (el.value || '').trim() : ''; };
+        return { level: tr.dataset.qual, stream: box('stream'), institute: box('institute'),
+                 year: box('year'), marks: box('marks') };
+      }).filter(q => q.stream || q.institute || q.year || q.marks);
 
       // the relation is the block's own name, so nobody has to say it twice
       const guardianRows = [...f.querySelectorAll('[data-guardian]')].map(card => {
@@ -3822,6 +3854,7 @@
         key: `q_${level}_${as}`, header: `${level} — ${label}`, into: `qual:${level}`, as,
         aliases: was ? aliases.map(a => `${was} ${a}`) : [],
       });
+      col('stream', 'Stream', ['Stream', 'Board', 'Branch']);
       col('institute', 'Institute', ['School', 'Institute', 'College']);
       col('year', 'Year', ['Year', 'Passing Year']);
       col('marks', '%', ['Marks', 'Percentage', '%']);
@@ -3978,7 +4011,8 @@
         voterId:'', pan:'', drivingLicense:'', passport:'',
         hostel:'No', transport:'Yes', nss:'No',
         languages:'Odia, Hindi, English', hobbies:'Cricket, Reading',
-        'q_10th_institute':'Saraswati Vidya Mandir', 'q_10th_year':'2019', 'q_10th_marks':'88.4',
+        'q_10th_stream':'BSE', 'q_10th_institute':'Saraswati Vidya Mandir',
+        'q_10th_year':'2019', 'q_10th_marks':'88.4',
         'q_12th_institute':'Kendriya Vidyalaya', 'q_12th_year':'2021', 'q_12th_marks':'79.2',
         'q_+3_institute':'Ravenshaw University', 'q_+3_year':'2024', 'q_+3_marks':'72.5',
         entranceExam:'CAT', entranceRank:'4521',
@@ -13400,6 +13434,8 @@
           catch (e) { return r.submittedAt || '—'; } })())}
         ${r.reviewedBy ? ` · reviewed by ${esc(r.reviewedBy)}` : ''}</p>
       ${r.reviewNote ? `<p style="font-size:13px;color:var(--red);margin:0 0 12px">${esc(r.reviewNote)}</p>` : ''}
+      ${d.photo ? `<div style="margin:0 0 14px"><img src="${esc(d.photo)}" alt=""
+          style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"></div>` : ''}
       ${twin ? `<p style="font-size:13px;background:var(--bg);border-left:3px solid var(--amber, #f5a623);
           padding:10px 12px;margin:0 0 14px;line-height:1.7;border-radius:0 8px 8px 0">
           <b>Already on the roll?</b> ${esc(twin.name || '—')}
@@ -13428,6 +13464,7 @@
       ${block('Facilities Requested', [['Hostel', d.hostel], ['Transport', d.transport],
         ['NSS', d.nss]])}
       ${block('Previous Qualifications', SUB_QUALS.reduce((rows, [k, label]) => rows.concat([
+        [label + ' — Stream', d[k + 'Stream']],
         [label + ' — Institute', d[k + 'Institute']],
         [label + ' — Year', d[k + 'Year']],
         [label + ' — %', d[k + 'Marks']]]), []))}
@@ -13478,6 +13515,8 @@
       academicYear: academicYearOf(d.admissionDate),
       dob: d.dob || '', gender: d.gender || '', bloodGroup: d.bloodGroup || '',
       aadhaar: d.aadhaar || '', univRegNo: d.univRegNo || '', status: 'Active',
+      // the photograph the student uploaded goes on to the record, and the ID card
+      photo: d.photo || '',
       personal: {
         title: d.title || '', admissionCategory: d.admissionCategory || '',
         religion: d.religion || '', nationality: d.nationality || '',
@@ -13507,9 +13546,9 @@
       academicInfo: {
         entranceExam: d.entranceExam || '', entranceRank: d.entranceRank || '',
         qualifications: SUB_QUALS.map(([k, level]) => ({
-          level, institute: d[k + 'Institute'] || '', year: d[k + 'Year'] || '',
-          marks: d[k + 'Marks'] || '',
-        })).filter(q => q.institute || q.year || q.marks),
+          level, stream: d[k + 'Stream'] || '', institute: d[k + 'Institute'] || '',
+          year: d[k + 'Year'] || '', marks: d[k + 'Marks'] || '',
+        })).filter(q => q.stream || q.institute || q.year || q.marks),
       },
       health: {
         height: d.height || '', weight: d.weight || '',
