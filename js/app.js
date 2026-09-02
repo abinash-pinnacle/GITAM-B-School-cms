@@ -13311,12 +13311,12 @@
     const summary = changes.slice(0, 3).map(c =>
       `${c.label}: ${c.on.map(a => a + ' ON').concat(c.off.map(a => a + ' OFF')).join(', ')}`)
       .join(' · ') + (changes.length > 3 ? ` · +${changes.length - 3} more` : '');
-    Store.add('auditlog', {
-      at: new Date().toISOString(),
-      actorId: user.id, actorName: displayName(user),
-      subjectType: kind, subjectKey: String(key), subjectName: label,
-      summary, changes,
-    });
+    /* Not written from here any more. The server records this change itself,
+       from the change it made, because a log the browser writes is a log that
+       can be skipped by not calling it and forged by calling it with somebody
+       else's name in it. Kept as the place that knows how to say the change in
+       words, for the confirmation the screen shows. */
+    return summary;
   }
 
   /* =========================================================
@@ -14161,32 +14161,57 @@
     $('#cx').onclick = closeModal;
   }
 
-  /* Who changed whose access, newest first. Read-only by design — the rows are
-     never updated or deleted anywhere in the app. */
+  /* Who did what, newest first.
+
+     It used to hold permission changes alone, and only those the one screen
+     that wrote them remembered to record. The server keeps it now — every
+     sign-in, every failed sign-in, every record created, changed or removed —
+     so this reads it and never writes it. The API refuses a write to it from
+     anybody, the administrator included. */
+  const AUDIT_SUBJECT = {
+    students: 'student', users: 'login account', roles: 'role', faculty: 'employee',
+    accountants: 'employee', centerheads: 'employee', placementofficers: 'employee',
+    coordinators: 'employee', admissions: 'employee', fees: 'fee record',
+    payments: 'payment', fixedfees: 'fee head', assets: 'asset',
+    settings: 'setting', submissions: 'admission form', marks: 'marks',
+  };
   function auditModal() {
     const rows = Store.all('auditlog').slice()
       .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
       .slice(0, 200);
     const when = (iso) => { try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso; } };
-    openModal('Permission Audit Log', `
+    openModal('Activity Log', `
       <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">
-        Every permission change, newest first. ${rows.length >= 200 ? 'Showing the latest 200.' : ''}</p>
+        Kept by the server and not editable from here — sign-ins, refused sign-ins,
+        and every record created, changed or removed. Newest first.
+        ${rows.length >= 200 ? 'Showing the latest 200.' : ''}</p>
       ${rows.length ? `<div class="tbl-wrap"><table><thead><tr>
         <th>When</th><th>Who</th><th>Changed</th><th>What moved</th>
       </tr></thead><tbody>${rows.map(r => `<tr>
         <td style="white-space:nowrap">${esc(when(r.at))}</td>
         <td>${esc(r.actorName || '—')}</td>
         <td>${esc(r.subjectName || r.subjectKey || '—')}
-          <br><small style="color:var(--muted)">${esc(r.subjectType === 'role' ? 'role' : 'user')}</small></td>
-        <td style="white-space:normal;font-size:12.5px">${(Array.isArray(r.changes) ? r.changes : [])
-          .map(c => `<div><b>${esc(c.label)}</b> ${
-            (c.on || []).map(a => `<span style="color:var(--green)">${esc(a)} ON</span>`)
-              .concat((c.off || []).map(a => `<span style="color:var(--red)">${esc(a)} OFF</span>`))
-              .join(', ')}</div>`).join('') || esc(r.summary || '—')}</td>
+          <br><small style="color:var(--muted)">${
+            esc(AUDIT_SUBJECT[r.subjectType] || r.subjectType || '—')}</small></td>
+        <td style="white-space:normal;font-size:12.5px">${auditWhatMoved(r)}</td>
       </tr>`).join('')}</tbody></table></div>`
         : `<p class="empty" style="padding:18px 2px">Nothing has been changed yet.</p>`}
       <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
     $('#cx').onclick = closeModal;
+  }
+
+  /* What a line of the log actually says, in the shape the server wrote it:
+     a map of field to before-and-after for a change, and the summary alone for
+     a sign-in or a deletion, which have no fields to show. */
+  function auditWhatMoved(r) {
+    const c = r.changes;
+    const fields = (c && typeof c === 'object' && !Array.isArray(c))
+      ? Object.entries(c).filter(([k, v]) => v && typeof v === 'object' && 'from' in v)
+      : [];
+    if (!fields.length) return esc(r.summary || '—');
+    return fields.map(([k, v]) => `<div><b>${esc(k)}</b> `
+      + `<span style="color:var(--muted)">${esc(v.from === '' ? '—' : v.from)}</span> → `
+      + `<span style="color:var(--ink)">${esc(v.to === '' ? '—' : v.to)}</span></div>`).join('');
   }
 
   /* =========================== COMPANIES =========================== */
@@ -16012,6 +16037,22 @@
   async function init() {
     $('#year').textContent = new Date().getFullYear();
     $('#appYear').textContent = new Date().getFullYear();
+    /* A session that has run out is not an error to be toasted at somebody in
+       the middle of a form — it is the end of the session, and the honest thing
+       is to say so and ask them to sign in again. */
+    Store.onExpired = () => {
+      if (!user) return;
+      user = null;
+      Store.setReadOnly(false);
+      document.body.classList.remove('read-only');
+      stopDashboardPolling();
+      closeModal();
+      $('#appScreen').classList.add('hidden');
+      $('#loginScreen').classList.remove('hidden');
+      $('#loginForm').reset();
+      $('#loginError').textContent =
+        'Your session has ended. Please sign in again.';
+    };
     $('#loginForm').onsubmit = doLogin;
     $('#logoutBtn').onclick = logout;
     $('#pwdBtn').onclick = changePasswordModal;

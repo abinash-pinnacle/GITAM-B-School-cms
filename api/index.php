@@ -221,6 +221,85 @@ function new_token(): string
     return bin2hex(random_bytes(32));
 }
 
+/* How long a sign-in lasts. The first is the ceiling: twelve hours from
+   signing in, a token is finished whatever it has been doing, so one taken
+   from a machine has an end even if it is used constantly. The second is the
+   one that catches the ordinary case — a browser left open on a shared desk
+   in the lab, forgotten rather than logged out. */
+const SESSION_MAX_SECONDS  = 12 * 3600;
+const SESSION_IDLE_SECONDS = 60 * 60;
+/* Every request would otherwise write a row to say the session is still alive.
+   A minute's resolution is plenty for an hour's timeout and costs one write a
+   minute instead of one a click. */
+const SESSION_TOUCH_SECONDS = 60;
+
+/* One row per sign-in rather than one string per account, so a person can be
+   signed in on a phone and a desk machine at once and end either without
+   ending the other. */
+function sessions_table(): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $t = qi('_sessions');
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('token') . " $kType PRIMARY KEY, "
+        . qi('userId') . " $kType, " . qi('issued_at') . " $iType, "
+        . qi('seen_at') . " $iType)");
+}
+
+function session_start_for(string $userId): string
+{
+    sessions_table();
+    $token = new_token();
+    $now = time();
+    run_sql('INSERT INTO ' . qi('_sessions') . ' (' . qi('token') . ', ' . qi('userId')
+        . ', ' . qi('issued_at') . ', ' . qi('seen_at') . ') VALUES (?, ?, ?, ?)',
+        [$token, $userId, $now, $now]);
+    session_sweep();
+    return $token;
+}
+
+/** what has run out, cleared on the way past — the table cannot grow forever */
+function session_sweep(): void
+{
+    $now = time();
+    run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('issued_at') . ' < ? OR '
+        . qi('seen_at') . ' < ?', [$now - SESSION_MAX_SECONDS, $now - SESSION_IDLE_SECONDS]);
+}
+
+/**
+ * The account a live token belongs to, or null.
+ *
+ * Expiry is checked here rather than swept on a timer, because a sweep that
+ * has not run yet must not let a finished token through in the meantime.
+ */
+function session_user(string $token): ?array
+{
+    sessions_table();
+    $row = fetch_one('SELECT * FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+    if (!$row) {
+        return null;
+    }
+    $now = time();
+    $issued = (int) ($row['issued_at'] ?? 0);
+    $seen = (int) ($row['seen_at'] ?? 0);
+    if ($now - $issued > SESSION_MAX_SECONDS || $now - $seen > SESSION_IDLE_SECONDS) {
+        run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+        return null;
+    }
+    if ($now - $seen >= SESSION_TOUCH_SECONDS) {
+        run_sql('UPDATE ' . qi('_sessions') . ' SET ' . qi('seen_at') . ' = ? WHERE '
+            . qi('token') . ' = ?', [$now, $token]);
+    }
+    $user = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?',
+        [(string) ($row['userId'] ?? '')]);
+    return $user ?: null;
+}
+
 /** the token this request presented, from the header or the query string */
 function request_token(): string
 {
@@ -246,7 +325,7 @@ function current_user(): ?array
        how long the query takes. */
     $token = request_token();
     if ($token !== '') {
-        $row = fetch_one('SELECT * FROM ' . qi('users') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+        $row = session_user($token);
         if ($row && (string) ($row['status'] ?? 'Active') !== 'Inactive') {
             return $user = $row;
         }
@@ -614,7 +693,160 @@ function guard_module_write(string $resource, string $method): void
  *  4. placement collections belong to the placement cell, and the placement
  *     officer in turn may not step outside them.
  */
-function guard_request(string $resource, string $method): void
+/* ---------------- who may touch what ----------------
+
+   These live beside the gate that reads them, and not in config.php, because
+   the two have to arrive together. They did not once: a deploy put this file
+   up while the other was still the previous one, the gate asked for a rule
+   that was not there yet, and every session got as far as signing in and no
+   further. A rule and the code that enforces it are one thing, so they ship
+   as one file.
+
+   ---- what each role may write ----
+
+   Deny by default. The gate used to work the other way round: it listed what
+   a role must NOT do, so every collection nobody had thought to name was
+   writable by anybody holding a token. A student could rename a lecturer, edit
+   a marksheet, delete an admission form, and set the administrator's password
+   and sign in as the administrator.
+
+   Each role is given the collections its own screens write, and a collection
+   missing from its list is refused — whatever the request looks like, and
+   whatever the browser thinks it may draw. A table added next year is closed
+   until somebody decides whose it is. The rules further down can narrow any of
+   this; they can no longer be the only thing standing in the way. */
+const ROLE_WRITABLE = [
+    'admin'              => ['*'],           // the administrator holds everything
+    'accountant'         => ['fees', 'fixedfees', 'payments', 'assets',
+                             'accountants', 'centerheads', 'requisitions'],
+    // the centre head monitors and approves; the read-only rule below still applies
+    'center_head'        => ['requisitions'],
+    'placement_officer'  => ['companies', 'drives', 'applications', 'interviews',
+                             'offers', 'placementevents'],
+    'course_coordinator' => ['attendance'],
+    // the desk that enrols people: the student, their login, and the form it came from
+    'admission'          => ['students', 'users', 'submissions'],
+    'faculty'            => ['attendance', 'marks', 'requisitions'],
+    'librarian'          => ['books', 'issues', 'requisitions'],
+    // a student applies to a drive and nothing else; the placement rule below
+    // narrows even that to a POST
+    'student'            => ['applications'],
+];
+
+/* The one record somebody may change without being given the collection it is
+   in: their own staff row, which is what the Profile page saves. Matched on
+   the account's refId, so it is their row or nobody's — this is the difference
+   between editing your own telephone number and editing everybody's. */
+const ROLE_WRITABLE_OWN = [
+    'accountant'         => ['accountants'],
+    'center_head'        => ['centerheads'],
+    'placement_officer'  => ['placementofficers'],
+    'course_coordinator' => ['coordinators'],
+    'admission'          => ['admissions'],
+    'faculty'            => ['faculty'],
+    'librarian'          => ['faculty'],
+];
+
+/* ---- what each role may read ----
+
+   The other half of the same rule, and the wider hole of the two. A signed-in
+   student could ask the API for every student on the roll — telephone,
+   Aadhaar, address, guardians, health — for every employee's personal file,
+   for everybody's fees, for every admission form, and for the list of login
+   names with the administrator's at the top. None of it was on their screens;
+   the screens were the only thing not offering it.
+
+   Two collections are deliberately left to everyone. `roles` holds ticked
+   boxes and no personal data, and the browser needs it to know what its own
+   account may do. `users` is scoped rather than refused: the session is
+   restored by looking the signed-in account up in it, so taking it away would
+   log people out — instead everybody but the two roles that manage accounts
+   sees exactly one row, their own. */
+const ROLE_READABLE = [
+    'admin'              => ['*'],
+    'accountant'         => ['users', 'roles', 'students', 'faculty', 'accountants',
+                             'centerheads', 'coordinators', 'admissions', 'courses',
+                             'attendance', 'marks', 'fees', 'fixedfees', 'payments',
+                             'assets', 'requisitions', 'timetable', 'books', 'issues',
+                             'events', 'settings'],
+    // the centre head monitors the college; that is the whole job
+    'center_head'        => ['users', 'roles', 'submissions', 'students', 'faculty',
+                             'accountants', 'centerheads', 'placementofficers',
+                             'coordinators', 'admissions', 'courses', 'syllabus',
+                             'attendance', 'marks', 'fees', 'fixedfees', 'payments',
+                             'assets', 'requisitions', 'timetable', 'books', 'issues',
+                             'events', 'companies', 'drives', 'applications',
+                             'interviews', 'offers', 'placementevents', 'settings'],
+    'placement_officer'  => ['users', 'roles', 'students', 'placementofficers', 'courses',
+                             'syllabus', 'marks', 'events', 'companies', 'drives',
+                             'applications', 'interviews', 'offers', 'placementevents',
+                             'settings'],
+    'course_coordinator' => ['users', 'roles', 'students', 'faculty', 'coordinators',
+                             'courses', 'syllabus', 'attendance', 'marks', 'timetable',
+                             'events', 'settings'],
+    'admission'          => ['users', 'roles', 'submissions', 'students', 'admissions',
+                             'courses', 'syllabus', 'events', 'settings'],
+    'faculty'            => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
+                             'attendance', 'marks', 'requisitions', 'timetable', 'books',
+                             'issues', 'events', 'settings'],
+    'librarian'          => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
+                             'requisitions', 'timetable', 'books', 'issues', 'events',
+                             'settings'],
+    // everything a student sees of themselves; the row rules below decide whose
+    'student'            => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
+                             'attendance', 'marks', 'fees', 'timetable', 'books', 'issues',
+                             'events', 'companies', 'drives', 'applications', 'interviews',
+                             'offers', 'placementevents', 'settings'],
+];
+
+/* Which column ties a row to the student reading it. Their own record, their
+   own fees, their own marks, their own library issues — and nobody else's, so
+   the roll cannot be walked one id at a time. */
+const STUDENT_OWN_ROWS = [
+    'students' => 'id',
+    'fees'     => 'studentId',
+    'marks'    => 'studentId',
+    'issues'   => 'studentId',
+];
+
+/* What a student may see of an employee. A timetable prints who takes the
+   class and a profile page prints who the mentor is; neither needs the
+   lecturer's telephone number, home address, Aadhaar or date of birth. */
+const STAFF_PUBLIC_FIELDS = ['id', 'empId', 'name', 'designation', 'department',
+                             'photo', 'role', 'specialisation', 'qualification'];
+
+/**
+ * The default-deny gate: may this role write this collection at all?
+ *
+ * Asked before any of the rules that follow, because those rules name the
+ * things a role must not do — and anything nobody named used to fall through
+ * them. This asks the opposite question, so a collection that has been granted
+ * to nobody is refused rather than allowed.
+ *
+ * `$id` is the record in the path, which is what lets somebody edit their own
+ * staff row on the Profile page without being handed the whole table.
+ */
+function guard_role_write(string $resource, string $method, ?string $id): void
+{
+    $role = current_role();
+    $allowed = ROLE_WRITABLE[$role] ?? [];
+    if (in_array('*', $allowed, true) || in_array($resource, $allowed, true)) {
+        return;
+    }
+    /* Their own row, and only by id: a PUT naming somebody else's is not
+       "editing your profile", and a POST or DELETE is not either. */
+    if ($method === 'PUT' && $id !== null
+        && in_array($resource, ROLE_WRITABLE_OWN[$role] ?? [], true)
+        && $id === (string) (current_user()['refId'] ?? '')) {
+        return;
+    }
+    send_json([
+        'error'   => 'forbidden',
+        'message' => 'Your role cannot change this record.',
+    ], 403);
+}
+
+function guard_request(string $resource, string $method, ?string $id = null): void
 {
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 
@@ -626,6 +858,15 @@ function guard_request(string $resource, string $method): void
         send_json(['error' => 'unauthorised', 'message' => 'Please sign in.'], 401);
     }
 
+    /* Collections first, and by grant rather than by exception. Only then the
+       older rules, which narrow what this has already allowed. */
+    if ($isWrite && isset(COLLECTIONS[$resource])) {
+        guard_role_write($resource, $method, $id);
+    }
+    if (!$isWrite && isset(COLLECTIONS[$resource]) && !role_may_read($resource)) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Your role cannot read this.'], 403);
+    }
     if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true)) {
         guard_module_write($resource, $method);
     }
@@ -636,6 +877,13 @@ function guard_request(string $resource, string $method): void
     if ($resource === 'auditlog' && current_role() !== 'admin') {
         send_json(['error' => 'forbidden',
                    'message' => 'Only the administrator reads the audit log.'], 403);
+    }
+    /* Read by the administrator, written by nobody. The server appends to it
+       from what it did; a record of what people did is worth having only if the
+       people it records cannot edit it — the administrator included. */
+    if ($resource === 'auditlog' && $isWrite) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'The audit log is written by the server and cannot be edited.'], 403);
     }
     if ($isWrite && in_array($resource, ['roles', 'auditlog'], true) && current_role() !== 'admin') {
         send_json(['error' => 'forbidden',
@@ -1511,6 +1759,89 @@ function api_apply(): void
     send_json(['ok' => true, 'reference' => $out['id']], 201);
 }
 
+/* Collections whose every change is worth a line. The rest — a timetable
+   slot, a library issue — are ordinary daily traffic and would bury the
+   entries that matter. */
+const AUDITED = ['students', 'users', 'roles', 'faculty', 'accountants', 'centerheads',
+                 'placementofficers', 'coordinators', 'admissions', 'fees', 'payments',
+                 'fixedfees', 'assets', 'settings', 'submissions', 'marks'];
+
+/* Never written to the log, whatever a caller sends. A password hash in an
+   audit trail is a password hash in one more place. */
+const AUDIT_NEVER = ['password', 'token', 'photo'];
+
+/**
+ * One line of the record.
+ *
+ * Deliberately unable to fail the request it is describing: a log that can
+ * refuse a save would be a log people ask to have switched off. If it cannot
+ * be written the server says so in its own error log and the work goes on.
+ */
+function audit(string $action, string $subjectType, string $subjectKey,
+               string $subjectName = '', string $summary = '', array $changes = [],
+               ?array $actor = null): void
+{
+    try {
+        /* Signing in has no caller yet — the token is issued by the line that
+           follows it — so that one line names the account it let in. */
+        $me = $actor ?? current_user();
+        run_sql('INSERT INTO ' . qi('auditlog') . ' (' . qi('id') . ', ' . qi('at') . ', '
+            . qi('actorId') . ', ' . qi('actorName') . ', ' . qi('subjectType') . ', '
+            . qi('subjectKey') . ', ' . qi('subjectName') . ', ' . qi('summary') . ', '
+            . qi('changes') . ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                /* Milliseconds first so the id sorts the way the events
+                   happened, then randomness so two in the same millisecond
+                   cannot collide. */
+                'LOG' . str_pad(dechex((int) round(microtime(true) * 1000)), 12, '0', STR_PAD_LEFT)
+                    . bin2hex(random_bytes(4)),
+                gmdate('c'),
+                (string) ($me['id'] ?? ''),
+                (string) ($me['name'] ?? ($me['username'] ?? 'anonymous')),
+                $subjectType,
+                $subjectKey,
+                $subjectName,
+                $action . ($summary === '' ? '' : ' — ' . $summary),
+                json_encode(array_merge($changes, ['action' => $action, 'ip' => client_ip()])),
+            ]);
+    } catch (Throwable $e) {
+        error_log('[nmiet-api] audit: ' . $e->getMessage());
+    }
+}
+
+/** what actually changed, without the values nobody should keep a copy of */
+function audit_diff(array $before, array $after): array
+{
+    $out = [];
+    foreach ($after as $k => $v) {
+        if (in_array($k, AUDIT_NEVER, true)) {
+            // recorded as having changed, never with what it changed to
+            if ((string) ($before[$k] ?? '') !== (string) $v) {
+                $out[$k] = ['from' => '(hidden)', 'to' => '(hidden)'];
+            }
+            continue;
+        }
+        $was = $before[$k] ?? null;
+        $is = $v;
+        $flat = fn($x) => is_scalar($x) || $x === null ? (string) $x : json_encode($x);
+        if ($flat($was) !== $flat($is)) {
+            $out[$k] = ['from' => mb_substr($flat($was), 0, 120),
+                        'to'   => mb_substr($flat($is), 0, 120)];
+        }
+    }
+    return $out;
+}
+
+/** the name a line should carry for a record, so the log reads without joins */
+function audit_name(string $col, array $row): string
+{
+    foreach (['name', 'title', 'username', 'roll'] as $k) {
+        if (!empty($row[$k]) && is_string($row[$k])) {
+            return $row[$k];
+        }
+    }
+    return '';
+}
+
 function api_bootstrap(): void
 {
     $finance = may_read_finance();
@@ -1524,6 +1855,10 @@ function api_bootstrap(): void
            what its own account may do, and it holds no data about anybody —
            only which boxes are ticked for which role. The audit log does name
            people, so it goes to the admin alone. */
+        if (!role_may_read($col)) {
+            $out[$col] = [];
+            continue;
+        }
         if ($col === 'roles' || $col === 'auditlog') {
             $rows = ($col === 'roles' || $isAdmin) ? fetch_all('SELECT * FROM ' . qi($col)) : [];
             $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
@@ -1884,13 +2219,71 @@ function reject_row(string $problem, ?int $index = null): void
  * records gets exactly theirs — the filter lives here so it applies to
  * /api/{collection} and to the bootstrap payload alike.
  */
+/** may this role read this collection at all? */
+function role_may_read(string $col): bool
+{
+    $allowed = ROLE_READABLE[current_role()] ?? [];
+    return in_array('*', $allowed, true) || in_array($col, $allowed, true);
+}
+
+/**
+ * Which rows of a collection this caller is actually allowed to see, and how
+ * much of each one.
+ *
+ * The collection gate above answers "may you open this drawer"; this answers
+ * "which files in it are yours". Without it a student granted the roll — which
+ * they need, to read their own record — is granted everybody's.
+ */
 function scope_rows(string $col, array $rows): array
 {
-    if (current_role() !== 'student' || !in_array($col, PLACEMENT_STUDENT_OWN, true)) {
+    $me = current_user();
+    $role = current_role();
+
+    /* The login table is never a directory. Everybody's session is restored by
+       looking their own account up here, so it stays readable — as one row. */
+    if ($col === 'users' && !in_array($role, ['admin', 'admission'], true)) {
+        $mine = (string) ($me['id'] ?? '');
+        return array_values(array_filter($rows, fn($r) => (string) ($r['id'] ?? '') === $mine));
+    }
+
+    if ($role !== 'student') {
         return $rows;
     }
-    $sid = current_user()['refId'] ?? null;
-    return array_values(array_filter($rows, fn($r) => ($r['studentId'] ?? null) === $sid));
+    $sid = (string) ($me['refId'] ?? '');
+
+    if (in_array($col, PLACEMENT_STUDENT_OWN, true)) {
+        return array_values(array_filter($rows, fn($r) => (string) ($r['studentId'] ?? '') === $sid));
+    }
+    if (isset(STUDENT_OWN_ROWS[$col])) {
+        $key = STUDENT_OWN_ROWS[$col];
+        return array_values(array_filter($rows, fn($r) => (string) ($r[$key] ?? '') === $sid));
+    }
+    /* A register is one row for a whole class, so the row cannot be filtered —
+       what is filtered is the register itself, down to the one line about the
+       student reading it. */
+    if ($col === 'attendance') {
+        return array_values(array_map(function (array $r) use ($sid) {
+            $recs = $r['records'] ?? null;
+            if (is_string($recs)) {
+                $recs = json_decode($recs, true);
+            }
+            if (is_array($recs)) {
+                $r['records'] = json_encode(array_values(array_filter(
+                    $recs,
+                    fn($e) => is_array($e) && (string) ($e['studentId'] ?? '') === $sid
+                )));
+            }
+            return $r;
+        }, $rows));
+    }
+    // an employee is a name and a designation to a student, not a personal file
+    if (in_array($col, STAFF_TABLES, true)) {
+        return array_values(array_map(
+            fn(array $r) => array_intersect_key($r, array_flip(STAFF_PUBLIC_FIELDS)),
+            $rows
+        ));
+    }
+    return $rows;
 }
 
 function api_list(string $col): void
@@ -1937,6 +2330,10 @@ function api_login(): void
     if (!$rows) {
         login_failed($keys[0], LOGIN_MAX_PER_IP);
         login_failed($keys[1], LOGIN_MAX_PER_USER);
+        /* The name that was tried, never the password that was tried with it —
+           people mistype one into the other, and a log holding that is a log
+           holding a password. */
+        audit('login-failed', 'users', '', $name, 'from ' . client_ip());
         send_json(['error' => 'invalid', 'message' => 'Invalid username or password.'], 401);
     }
     // signing in is what migrates the row; after this it is a hash for good
@@ -1963,11 +2360,12 @@ function api_login(): void
        being deactivated all clear it, which is what makes it revocable. */
     $token = (string) ($rows[0]['token'] ?? '');
     if ($token === '') {
-        $token = new_token();
-        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
-            ->execute([$token, $rows[0]['id']]);
+        $token = session_start_for((string) $rows[0]['id']);
     }
     login_succeeded($keys);
+    audit('login', 'users', (string) $rows[0]['id'],
+          (string) ($rows[0]['name'] ?? $rows[0]['username'] ?? ''),
+          'from ' . client_ip(), [], $rows[0]);
     $out = row_out('users', $rows[0]);
     $out['token'] = $token;          // the only response that carries it
     send_json($out);
@@ -1976,10 +2374,16 @@ function api_login(): void
 /** Give the token up. Anything still holding it is a 401 from here on. */
 function api_logout(): void
 {
+    /* This device only. Somebody signing out of a lab machine has not asked to
+       be signed out of their phone. */
+    sessions_table();
     $me = current_user();
+    $token = request_token();
+    if ($token !== '') {
+        run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('token') . ' = ?', [$token]);
+    }
     if ($me) {
-        db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('token') . ' = NULL WHERE ' . qi('id') . ' = ?')
-            ->execute([$me['id']]);
+        audit('logout', 'users', (string) $me['id'], (string) ($me['name'] ?? ''));
     }
     send_json(['ok' => true]);
 }
@@ -2016,9 +2420,16 @@ function api_change_password(): void
 
     /* A new token with the new password: whoever knew the old one is signed
        out, which is the point of changing it after a screen was left unlocked. */
-    $token = new_token();
-    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ?, ' . qi('token') . ' = ? WHERE ' . qi('id') . ' = ?')
-        ->execute([hash_password($next), $token, $me['id']]);
+    /* Changing a password is what somebody does when they think a key is
+       loose, so every other session on the account ends here — the new one is
+       issued after, which is why the browser doing this is not logged out. */
+    sessions_table();
+    db()->prepare('UPDATE ' . qi('users') . ' SET ' . qi('password') . ' = ? WHERE ' . qi('id') . ' = ?')
+        ->execute([hash_password($next), $me['id']]);
+    run_sql('DELETE FROM ' . qi('_sessions') . ' WHERE ' . qi('userId') . ' = ?', [$me['id']]);
+    $token = session_start_for((string) $me['id']);
+    audit('password-changed', 'users', (string) $me['id'], (string) ($me['name'] ?? ''),
+          'every other session on this account was ended');
     send_json(['ok' => true, 'token' => $token]);
 }
 
@@ -2074,6 +2485,11 @@ function api_create(string $col): void
             db()->rollBack();
             throw $e;
         }
+        if (in_array($col, AUDITED, true)) {
+            // a spreadsheet import is one act, and reads better as one line
+            audit('import', $col, (string) count($rows),
+                  '', count($rows) . ' row(s) imported');
+        }
         send_json($rows, 201);
     }
 
@@ -2113,12 +2529,19 @@ function api_create(string $col): void
         }
         throw $e;
     }
+    if (in_array($col, AUDITED, true)) {
+        audit('create', $col, (string) $d['id'], audit_name($col, $d));
+    }
     send_json(row_out($col, $d), 201);
 }
 
 function api_update(string $col, string $id): void
 {
     $d = body();
+    // read before writing, so the line can say what it changed from
+    $before = in_array($col, AUDITED, true)
+        ? (fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]) ?: [])
+        : [];
     $problem = row_problem($col, $d, $id);
     if ($problem !== null) {
         reject_row($problem);
@@ -2143,12 +2566,26 @@ function api_update(string $col, string $id): void
     }
     $values[] = $id;
     run_sql('UPDATE ' . qi($col) . ' SET ' . implode(', ', $sets) . ' WHERE ' . qi('id') . ' = ?', $values);
+    if (in_array($col, AUDITED, true)) {
+        $moved = audit_diff($before, array_intersect_key($d, array_flip($fields)));
+        if ($moved !== []) {
+            audit('update', $col, $id, audit_name($col, $before ?: $d),
+                  implode(', ', array_keys($moved)), $moved);
+        }
+    }
     send_json(['ok' => true, 'id' => $id]);
 }
 
 function api_delete(string $col, string $id): void
 {
+    // read before removing, so the line can say what was removed
+    $before = in_array($col, AUDITED, true)
+        ? fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id])
+        : null;
     run_sql('DELETE FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    if (in_array($col, AUDITED, true)) {
+        audit('delete', $col, $id, $before ? audit_name($col, $before) : '');
+    }
     send_json(['ok' => true]);
 }
 
@@ -2172,7 +2609,7 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
        that follows fails with "there is no active transaction". Once per
        process; the function guards itself after that. */
     seq_table();
-    guard_request($resource, $method);
+    guard_request($resource, $method, $id);
 
     if ($method === 'GET' && $resource === 'bootstrap') {
         api_bootstrap();
