@@ -293,6 +293,65 @@ function login_succeeded(array $keys): void
         . qi('first_at') . ' < ?', [time(), time() - LOGIN_WINDOW_SECONDS]);
 }
 
+/* A ceiling on how fast one signed-in account can CHANGE things.
+   Deliberately loud about what it is not: it counts writes only, so opening a
+   page is never slowed; it is keyed by the account's token, not its address,
+   so a whole college behind one address is never one client; and it is a
+   short wait, not a lockout. The number is far above what a person clicking
+   Save can reach and a bulk import is one request, so ordinary work never sees
+   it — it is here for a script hammering the API, not for anybody working. */
+const RATE_WRITE_PER_MIN = 300;
+
+function rate_table(): void
+{
+    static $done = false;
+    if ($done) { return; }
+    $done = true;
+    $t = qi('_rate');
+    $kType = driver() === 'mysql' ? 'VARCHAR(190)' : 'TEXT';
+    $iType = driver() === 'pgsql' ? 'BIGINT' : 'INTEGER';
+    db()->exec("CREATE TABLE IF NOT EXISTS $t (" . qi('k') . " $kType PRIMARY KEY, "
+        . qi('cnt') . " $iType, " . qi('win') . " $iType)");
+}
+
+/**
+ * One write, counted against the caller's token in a one-minute window.
+ * Refuses with a wait, never a lock, and only ever meters a mutation — a read
+ * does not reach here. Called only for authenticated, non-open writes, so the
+ * token is always present by the time it runs.
+ */
+function rate_check(): void
+{
+    $token = request_token();
+    if ($token === '') { return; }
+    rate_table();
+    $now = time();
+    $row = fetch_one('SELECT * FROM ' . qi('_rate') . ' WHERE ' . qi('k') . ' = ?', [$token]);
+    if (!$row || $now - (int) ($row['win'] ?? 0) >= 60) {
+        // a fresh window; and sweep what has aged out so the table stays small
+        if ($row) {
+            run_sql('UPDATE ' . qi('_rate') . ' SET ' . qi('cnt') . ' = 1, ' . qi('win')
+                . ' = ? WHERE ' . qi('k') . ' = ?', [$now, $token]);
+        } else {
+            run_sql('INSERT INTO ' . qi('_rate') . ' (' . qi('k') . ', ' . qi('cnt') . ', '
+                . qi('win') . ') VALUES (?, 1, ?)', [$token, $now]);
+        }
+        run_sql('DELETE FROM ' . qi('_rate') . ' WHERE ' . qi('win') . ' < ?', [$now - 3600]);
+        return;
+    }
+    $cnt = (int) ($row['cnt'] ?? 0) + 1;
+    if ($cnt > RATE_WRITE_PER_MIN) {
+        $wait = max(1, 60 - ($now - (int) $row['win']));
+        send_json([
+            'error'      => 'rate-limited',
+            'retryAfter' => $wait,
+            'message'    => 'Too many changes too quickly. Please wait a few seconds and try again.',
+        ], 429);
+    }
+    run_sql('UPDATE ' . qi('_rate') . ' SET ' . qi('cnt') . ' = ? WHERE ' . qi('k') . ' = ?',
+        [$cnt, $token]);
+}
+
 /** 32 random bytes, hex — unguessable, and belonging to one account */
 function new_token(): string
 {
@@ -934,6 +993,14 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        readable by anyone who asked for it. */
     if (!in_array($resource, OPEN_ENDPOINTS, true) && current_user() === null) {
         send_json(['error' => 'unauthorised', 'message' => 'Please sign in.'], 401);
+    }
+
+    /* A flood ceiling, on writes alone. Reads never reach it, so no page is
+       ever slowed; login and the public form keep their own separate limits.
+       This is the one that stops a script changing the database as fast as the
+       network allows. */
+    if ($isWrite && !in_array($resource, OPEN_ENDPOINTS, true)) {
+        rate_check();
     }
 
     /* Collections first, and by grant rather than by exception. Only then the
