@@ -65,14 +65,24 @@ const Store = {
      that triggered it. The message this used to end at said "try again in a
      moment", so it tries again in a moment. */
   async load() {
+    /* Four tries over about fourteen seconds, not two over two.
+
+       The host deploys by copying files up one at a time, so for a few seconds
+       after every push the site is half of one version and half of the next
+       and answers badly. Giving up after a single retry two seconds later
+       landed somebody on "the app could not load its data" for something that
+       had already fixed itself by the time they read it. Waiting longer each
+       time rides out the copy without hammering a server that is genuinely
+       down: 2s, then 4s, then 8s, and only then does it give up. */
+    const BACKOFF = [2000, 4000, 8000];
     for (let attempt = 0; ; attempt++) {
-      const again = attempt === 0;
+      const again = attempt < BACKOFF.length;
       let res;
       try {
         res = await fetch(`${API}/bootstrap`, { headers: this._headers() });
       } catch (e) {
         if (!again) throw e;              // the network, not the server
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, BACKOFF[attempt]));
         continue;
       }
       /* The token was revoked, expired with a password change, or belongs to an
@@ -100,7 +110,7 @@ const Store = {
         err.status = res.status;
         throw err;
       }
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, BACKOFF[attempt]));
     }
   },
 
