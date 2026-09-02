@@ -304,8 +304,16 @@
       // Sign-in itself can succeed and the load right after it still fail, so
       // this must not claim the server is unreachable — and telling a college
       // office to run a dev server was never useful advice.
-      $('#loginError').textContent =
-        'Signed in, but the app could not load its data. Please try again in a moment.';
+      /* Say which of the three it was. A message that fits every cause fits
+         none of them, and this screen is the only place the person can see. */
+      const status = err && err.status;
+      $('#loginError').textContent = status === 401
+        ? 'Signed in, but the session was not accepted. Please sign in again.'
+        : status
+          ? `Signed in, but the app could not load its data (error ${status}`
+            + `${err.message && !/^bootstrap failed/.test(err.message) ? ' — ' + err.message : ''}).`
+            + ' Please tell the administrator.'
+          : 'Signed in, but the app could not reach the server. Please check the connection and try again.';
     } finally {
       btn.disabled = false; btn.textContent = 'Sign In';
     }

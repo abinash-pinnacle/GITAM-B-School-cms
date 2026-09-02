@@ -87,7 +87,19 @@ const Store = {
         this.data = await res.json();
         return this.data;
       }
-      if (!again) throw new Error('bootstrap failed');
+      /* Carry why. "Could not load its data" sent two evenings running to
+         somebody who could then only guess whether it was their session, the
+         server, or a deploy half-finished — and it had been a different
+         answer each time. The status is what separates them. */
+      if (!again) {
+        const why = await res.text().then(
+          (t) => { try { return (JSON.parse(t) || {}).message || ''; } catch (e) { return ''; } },
+          () => ''
+        );
+        const err = new Error(why || ('bootstrap failed (' + res.status + ')'));
+        err.status = res.status;
+        throw err;
+      }
       await new Promise(r => setTimeout(r, 2000));
     }
   },
