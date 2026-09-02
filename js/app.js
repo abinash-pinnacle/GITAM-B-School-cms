@@ -2264,16 +2264,16 @@
 
     if (tab === 'personal') {
       return `<h4 class="ro-sub">Personal Details</h4>` + infoTable(`
-        <tr><th style="width:22%">Admission Category</th><td colspan="3" style="background:var(--warn-soft, #fdf6e3)">${
-          esc(per.admissionCategory || '—')}</td></tr>
-        ${infoRow2('Title', esc(per.title || '—'), 'Gender', esc(s.gender || '—'))}
+        ${infoRow2('Admission Category', esc(per.admissionCategory || '—'),
+                   'Title', esc(per.title || '—'))}
+        ${infoRow2('Gender', esc(s.gender || '—'), 'Date of Birth', esc(s.dob || '—'))}
         ${infoRow2('First Name', esc(s.firstName || '—'), 'Last Name', esc(s.lastName || '—'))}
-        ${infoRow2('Middle Name', esc(s.middleName || '—'), 'Date of Birth', esc(s.dob || '—'))}
-        ${infoRow2('Nationality', esc(per.nationality || '—'), 'Religion', esc(per.religion || '—'))}
-        ${infoRow2('Blood Group', esc(s.bloodGroup || '—'), 'Birthplace', esc(per.birthplace || '—'))}
-        ${infoRow2('Identification Mark', esc(per.identificationMark || '—'), 'Biometric Scan', esc(per.thumbId || '—'))}
-        ${infoRow2('Hostel', esc(per.hostel || '—'), 'Transport', esc(per.transport || '—'))}
-        ${infoRow('NSS', esc(per.nss || '—'))}
+        ${infoRow2('Middle Name', esc(s.middleName || '—'), 'Nationality', esc(per.nationality || '—'))}
+        ${infoRow2('Religion', esc(per.religion || '—'), 'Blood Group', esc(s.bloodGroup || '—'))}
+        ${infoRow2('Birthplace', esc(per.birthplace || '—'),
+                   'Identification Mark', esc(per.identificationMark || '—'))}
+        ${infoRow2('Biometric Scan', esc(per.thumbId || '—'), 'Hostel', esc(per.hostel || '—'))}
+        ${infoRow2('Transport', esc(per.transport || '—'), 'NSS', esc(per.nss || '—'))}
         ${infoRow2('Languages Known', esc(per.languages || '—'), 'Hobbies', esc(per.hobbies || '—'))}`);
     }
 
@@ -4966,10 +4966,9 @@
 
     if (tab === 'personal') {
       return `<h4 class="ro-sub">Personal Details</h4>` + infoTable(`
-        ${infoRow('Title', esc(per.title || '—'))}
-        ${infoRow2('First Name', esc(per.firstName || (f.name || '').split(' ')[0] || '—'),
-                   'Last Name', esc(per.lastName || '—'))}
-        ${infoRow('Middle Name', esc(per.middleName || '—'))}
+        ${infoRow2('Title', esc(per.title || '—'),
+                   'First Name', esc(per.firstName || (f.name || '').split(' ')[0] || '—'))}
+        ${infoRow2('Middle Name', esc(per.middleName || '—'), 'Last Name', esc(per.lastName || '—'))}
         ${infoRow2('Joining Date', esc(f.joiningDate || '—'), 'Date of Birth', esc(f.dob || '—'))}
         ${infoRow2('Gender', esc(f.gender || '—'), 'Birth Place', esc(per.birthplace || '—'))}
         ${infoRow2('Department', esc(f.department || '—'), 'Designation', esc(f.designation || '—'))}
@@ -4977,8 +4976,8 @@
         ${infoRow2('Blood Group', esc(f.bloodGroup || '—'), 'Marital Status', esc(f.maritalStatus || '—'))}
         ${infoRow2('Caste', esc(per.caste || '—'), 'Nationality', esc(per.nationality || '—'))}
         ${infoRow2('Religion', esc(per.religion || '—'), 'Thumb', esc(per.thumb || '—'))}
-        ${infoRow('Transport', esc(per.transport || '—'))}
-        ${infoRow2('Breakfast', esc(per.breakfast || '—'), 'Dinner', esc(per.dinner || '—'))}`);
+        ${infoRow2('Transport', esc(per.transport || '—'), 'Breakfast', esc(per.breakfast || '—'))}
+        ${infoRow('Dinner', esc(per.dinner || '—'))}`);
     }
 
     if (tab === 'guardians') {

@@ -651,8 +651,14 @@ a.install-btn:hover{background:var(--primary-light)}
 .stu-main{padding:18px;min-width:0}
 
 /* label/value tables — the shape every tab uses */
-.info-tbl th{background:var(--primary-light);color:var(--primary-dark);font-weight:600;
-  font-size:13px;text-align:left;vertical-align:top}
+/* The label used to sit on a pale blue block with no padding of its own, which
+   read as a border running down the middle of every row — and broke the line
+   wherever a row carried one pair instead of two. It is weight and colour now,
+   and it takes the same padding and rule as the value beside it, so every row
+   lines up whether it holds one field or two. */
+.info-tbl th{background:transparent;color:var(--primary-dark);font-weight:600;
+  font-size:13px;text-align:left;vertical-align:top;
+  padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 .info-tbl td{font-size:13.5px;vertical-align:top}
 
 /* a guardian or a document inside the form */
