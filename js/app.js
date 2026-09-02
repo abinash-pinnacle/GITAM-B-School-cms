@@ -3119,9 +3119,11 @@
     const quals = Array.isArray(aca.qualifications) ? aca.qualifications : [];
     const qualOf = (level) => quals.find(q => q.level === level) || {};
 
+    /* Documents follows Academic: the originals come across the counter with
+       the marksheets, so the two tabs that record that moment sit together. */
     const TABS = [['basic', 'Basic'], ['personal', 'Personal'], ['academic', 'Academic'],
-                  ['guardians', 'Guardians'], ['address', 'Address'],
-                  ['health', 'Health'], ['docs', 'Documents']];
+                  ['docs', 'Documents'], ['guardians', 'Guardians'],
+                  ['address', 'Address'], ['health', 'Health']];
 
     const addressBlock = (prefix, a) => `<div class="form-grid" data-address>
       ${fArea(prefix + '_address', 'Address', a.address)}
@@ -5223,9 +5225,12 @@
     const cur = addr.current || {};
     const perm = addr.permanent || {};
 
-    const TABS = [['basic', 'Basic'], ['personal', 'Personal'], ['guardians', 'Guardians'],
-                  ['address', 'Address'], ['other', 'Other Info'],
-                  ['health', 'Health'], ['docs', 'Documents']];
+    /* Other Info is the rest of who they are, so it follows Personal; the
+       originals they handed over follow that; the family, the address and the
+       health record come after, in the order the student form has them. */
+    const TABS = [['basic', 'Basic'], ['personal', 'Personal'], ['other', 'Other Info'],
+                  ['docs', 'Documents'], ['guardians', 'Guardians'],
+                  ['address', 'Address'], ['health', 'Health']];
 
     const addressBlock = (prefix, a) => `<div class="form-grid" data-address>
       ${fArea(prefix + '_address', 'Address', a.address)}
