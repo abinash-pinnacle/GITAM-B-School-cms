@@ -614,7 +614,38 @@ function guard_module_write(string $resource, string $method): void
  *  4. placement collections belong to the placement cell, and the placement
  *     officer in turn may not step outside them.
  */
-function guard_request(string $resource, string $method): void
+/**
+ * The default-deny gate: may this role write this collection at all?
+ *
+ * Asked before any of the rules that follow, because those rules name the
+ * things a role must not do — and anything nobody named used to fall through
+ * them. This asks the opposite question, so a collection that has been granted
+ * to nobody is refused rather than allowed.
+ *
+ * `$id` is the record in the path, which is what lets somebody edit their own
+ * staff row on the Profile page without being handed the whole table.
+ */
+function guard_role_write(string $resource, string $method, ?string $id): void
+{
+    $role = current_role();
+    $allowed = ROLE_WRITABLE[$role] ?? [];
+    if (in_array('*', $allowed, true) || in_array($resource, $allowed, true)) {
+        return;
+    }
+    /* Their own row, and only by id: a PUT naming somebody else's is not
+       "editing your profile", and a POST or DELETE is not either. */
+    if ($method === 'PUT' && $id !== null
+        && in_array($resource, ROLE_WRITABLE_OWN[$role] ?? [], true)
+        && $id === (string) (current_user()['refId'] ?? '')) {
+        return;
+    }
+    send_json([
+        'error'   => 'forbidden',
+        'message' => 'Your role cannot change this record.',
+    ], 403);
+}
+
+function guard_request(string $resource, string $method, ?string $id = null): void
 {
     $isWrite = !in_array($method, ['GET', 'HEAD', 'OPTIONS'], true);
 
@@ -626,6 +657,11 @@ function guard_request(string $resource, string $method): void
         send_json(['error' => 'unauthorised', 'message' => 'Please sign in.'], 401);
     }
 
+    /* Collections first, and by grant rather than by exception. Only then the
+       older rules, which narrow what this has already allowed. */
+    if ($isWrite && isset(COLLECTIONS[$resource])) {
+        guard_role_write($resource, $method, $id);
+    }
     if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true)) {
         guard_module_write($resource, $method);
     }
@@ -2172,7 +2208,7 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
        that follows fails with "there is no active transaction". Once per
        process; the function guards itself after that. */
     seq_table();
-    guard_request($resource, $method);
+    guard_request($resource, $method, $id);
 
     if ($method === 'GET' && $resource === 'bootstrap') {
         api_bootstrap();

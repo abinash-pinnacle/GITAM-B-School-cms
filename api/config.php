@@ -486,6 +486,53 @@ const MODULES = [
                       'write' => ['users', 'settings', 'roles', 'auditlog']],
 ];
 
+/* ---------------- what each role may write ----------------
+
+   Deny by default. Until now the gate worked the other way round: it listed
+   what a role must NOT do, so every collection nobody had thought to name was
+   writable by anybody holding a token. A student could rename a lecturer, edit
+   a marksheet, delete an admission form, and set the administrator's password
+   and sign in as the administrator.
+
+   So each role is given the collections its own screens write, and a
+   collection missing from its list is refused — whatever the request looks
+   like, and whatever the browser thinks it is allowed to draw. A table added
+   next year is closed until somebody decides whose it is.
+
+   The rules further down can narrow any of this; they can no longer be the
+   only thing standing in the way. */
+const ROLE_WRITABLE = [
+    'admin'              => ['*'],           // the administrator holds everything
+    'accountant'         => ['fees', 'fixedfees', 'payments', 'assets',
+                             'accountants', 'centerheads', 'requisitions'],
+    // the centre head monitors and approves; the read-only rule below still applies
+    'center_head'        => ['requisitions'],
+    'placement_officer'  => ['companies', 'drives', 'applications', 'interviews',
+                             'offers', 'placementevents'],
+    'course_coordinator' => ['attendance'],
+    // the desk that enrols people: the student, their login, and the form it came from
+    'admission'          => ['students', 'users', 'submissions'],
+    'faculty'            => ['attendance', 'marks', 'requisitions'],
+    'librarian'          => ['books', 'issues', 'requisitions'],
+    // a student applies to a drive and nothing else; the placement rule below
+    // narrows even that to a POST
+    'student'            => ['applications'],
+];
+
+/* The one record somebody may change without being given the collection it is
+   in: their own staff row, which is what the Profile page saves. Matched on
+   the account's refId, so it is their row or nobody's — this is the difference
+   between editing your own telephone number and editing everybody's. */
+const ROLE_WRITABLE_OWN = [
+    'accountant'         => ['accountants'],
+    'center_head'        => ['centerheads'],
+    'placement_officer'  => ['placementofficers'],
+    'course_coordinator' => ['coordinators'],
+    'admission'          => ['admissions'],
+    'faculty'            => ['faculty'],
+    'librarian'          => ['faculty'],
+];
+
 /** roles that may read anything they can see but may never write — 403 on POST/PUT/DELETE */
 const READ_ONLY_ROLES = ['center_head'];
 
