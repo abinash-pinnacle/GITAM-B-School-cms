@@ -2820,11 +2820,21 @@ try {
                 ] + $build);
             }
             if ($_GET['session'] === 'persist') {
-                // tie it to a real account so the user lookup in verify succeeds
-                $anyUser = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('users') . ' LIMIT 1');
-                $uid = (string) ($anyUser['id'] ?? 'selftest');
-                $t = session_start_for($uid);
-                send_json(['ok' => true, 'token' => $t, 'uid' => $uid] + $build);
+                /* Bind to a named account (?as=username) so a session for that
+                   exact role can be tested end to end — the bug is role-shaped,
+                   and an admin session would not have shown it. No password is
+                   involved and the session is deleted by the verify call; this
+                   whole block comes out once the cause is found. */
+                $as = (string) ($_GET['as'] ?? '');
+                $row = $as !== ''
+                    ? fetch_one('SELECT ' . qi('id') . ', ' . qi('role') . ' FROM ' . qi('users')
+                        . ' WHERE LOWER(' . qi('username') . ') = LOWER(?)', [$as])
+                    : fetch_one('SELECT ' . qi('id') . ', ' . qi('role') . ' FROM ' . qi('users') . ' LIMIT 1');
+                if (!$row) {
+                    send_json(['ok' => false, 'error' => 'no such user'] + $build);
+                }
+                $t = session_start_for((string) $row['id']);
+                send_json(['ok' => true, 'token' => $t, 'uid' => $row['id'], 'role' => $row['role']] + $build);
             }
             if ($_GET['session'] === 'verify') {
                 $t = (string) ($_GET['t'] ?? '');
