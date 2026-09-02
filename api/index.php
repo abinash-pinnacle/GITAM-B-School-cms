@@ -2809,6 +2809,16 @@ try {
                request does, exactly through session_user(). This is what login
                and bootstrap do, split across two calls, so a live database that
                drops a session between requests shows itself here. */
+            if ($_GET['session'] === 'header') {
+                // does the X-Auth-Token request header survive the trip to here?
+                send_json([
+                    'ok' => true,
+                    'request_token_saw' => request_token(),
+                    'HTTP_X_AUTH_TOKEN'  => $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '(absent)',
+                    'all_x_headers' => array_values(array_filter(array_keys($_SERVER),
+                        fn($k) => str_starts_with($k, 'HTTP_X'))),
+                ] + $build);
+            }
             if ($_GET['session'] === 'persist') {
                 // tie it to a real account so the user lookup in verify succeeds
                 $anyUser = fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('users') . ' LIMIT 1');
