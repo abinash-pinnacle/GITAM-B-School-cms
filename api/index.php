@@ -1406,6 +1406,27 @@ function api_apply(): void
        Only while it is still pending: a row already dealt with is history. */
     $prior = pending_submission_for($roll, $ureg, $phone, $email);
 
+    /* The second form fills gaps in the first, it does not empty them. A later
+       answer wins; a blank means "not answered this time", not "delete it".
+       Without this, a partial second attempt wiped the identifiers the queue
+       matches people by, and their third attempt was queued as a stranger. */
+    if ($prior) {
+        $was = json_decode((string) ($prior['data'] ?? ''), true);
+        if (is_array($was)) {
+            foreach ($was as $k => $v) {
+                if (!isset($data[$k]) || trim((string) $data[$k]) === '') {
+                    $data[$k] = $v;
+                }
+            }
+        }
+        $keep = fn(string $now, string $before) => $now !== '' ? $now : trim((string) $before);
+        $roll  = $keep($roll, $prior['roll'] ?? '');
+        $email = $keep($email, $prior['email'] ?? '');
+        $name  = $keep($name, $prior['name'] ?? '');
+        $data['roll'] = $roll;
+        $data['email'] = $email;
+    }
+
     $out = [
         'id'          => $prior ? $prior['id'] : next_id('submissions'),
         'roll'        => $roll,
