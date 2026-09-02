@@ -40,4 +40,35 @@
     <FilesMatch "\.(html|js|css|webmanifest)$">
         Header set Cache-Control "no-store, no-cache, must-revalidate"
     </FilesMatch>
+
+    # ---- security headers ----
+    # Applied to every response ("always", so error pages carry them too).
+    # Deliberately conservative: no content Content-Security-Policy, because a
+    # strict one would have to enumerate every inline script, style and font the
+    # app uses and one omission is a blank page. What is here cannot break a
+    # page that renders today — it only forbids things the app never does.
+
+    # The page is never meant to sit inside a frame on another site; both lines
+    # say so, the modern one and the one older browsers read. This is the
+    # clickjacking defence.
+    Header always set Content-Security-Policy "frame-ancestors 'self'"
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # A response labelled text/css is CSS; the browser may not second-guess a
+    # declared type and run it as something else.
+    Header always set X-Content-Type-Options "nosniff"
+
+    # A link clicked out to the attendance portal carries the origin, not the
+    # full path a student was looking at.
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Features the CMS does not use are switched off, so a script that tried
+    # would be refused by the browser rather than prompting somebody.
+    Header always set Permissions-Policy "geolocation=(), microphone=(), payment=()"
+
+    # The site already redirects http to https; this tells the browser to stop
+    # trying http at all for six months. No includeSubDomains and no preload on
+    # purpose — those are hard to walk back if a subdomain is ever served over
+    # plain http, and this is reversible.
+    Header always set Strict-Transport-Security "max-age=15552000"
 </IfModule>
