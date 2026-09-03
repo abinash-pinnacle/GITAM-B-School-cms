@@ -13612,10 +13612,16 @@
           const st = r.status || 'Pending';
           return `<tr>
             <td class="mono">${esc(r.roll || '—')}</td>
-            <td>${esc(r.name || '—')}${r.email ? `<br><small style="color:var(--muted)">${esc(r.email)}</small>` : ''}</td>
+            <td><div style="max-width:135px">
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.name||'')}">${esc(r.name || '—')}</div>
+              ${r.email ? `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11.5px" title="${esc(r.email)}">${esc(r.email)}</div>` : ''}
+            </div></td>
             <td><span class="pill ${r.kind === 'update' ? 'blue' : 'green'}">${
               r.kind === 'update' ? 'Existing student' : 'New admission'}</span></td>
-            <td>${esc(r.course || '—')}${r.branchName ? `<br><small style="color:var(--muted)">${esc(r.branchName)}</small>` : ''}</td>
+            <td><div style="max-width:140px">
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.course || '—')}</div>
+              ${r.branchName ? `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11.5px" title="${esc(r.branchName)}">${esc(r.branchName)}</div>` : ''}
+            </div></td>
             <td>${esc(r.phone || '—')}</td>
             <td style="white-space:nowrap;font-size:12.5px">${when(r.submittedAt)}</td>
             <td><span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span></td>

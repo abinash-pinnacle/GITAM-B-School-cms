@@ -278,7 +278,7 @@ thead th{text-align:left;padding:12px 14px;background:var(--primary-light);color
 thead th:first-child{border-radius:8px 0 0 8px} thead th:last-child{border-radius:0 8px 8px 0}
 tbody td{padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 tbody tr:hover{background:#fafcff}
-.row-actions{display:flex;gap:7px}
+.row-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .empty{text-align:center;color:var(--muted);padding:34px;font-size:14px}
 .pill{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block}
 .pill.green{background:#e4f6ec;color:var(--green)} .pill.red{background:#fde8ea;color:var(--red)}
