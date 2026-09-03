@@ -359,28 +359,69 @@
     Store.logout();
     Store.setReadOnly(false);
     document.body.classList.remove('read-only');
-    stopDashboardPolling();
+    stopLivePolling();
     $('#appScreen').classList.add('hidden');
     $('#loginScreen').classList.remove('hidden');
     $('#loginForm').reset();
     $('#loginError').textContent = '';
   }
 
-  // ---- live dashboard refresh: re-pull from server every 15s while the
-  // dashboard is the open view, so numbers/charts update without a reload ----
-  let dashboardPollTimer = null;
-  function startDashboardPolling() {
-    stopDashboardPolling();
-    dashboardPollTimer = setInterval(async () => {
-      if (!user || currentView !== 'dashboard') { stopDashboardPolling(); return; }
+  /* ---- live refresh, on every page ----
+     The cache is re-pulled from the server on a timer so a change made
+     elsewhere — a student filling the public form, another clerk adding a
+     record — appears without anyone reloading. It used to run on the dashboard
+     alone, which is why every other page went stale until a refresh.
+
+     Two things keep it from being a nuisance. It redraws only when the data
+     has actually changed, compared by a light fingerprint, so an idle page is
+     left alone. And it holds off entirely while a dialog is open or a field is
+     focused — that is somebody in the middle of typing or about to click, and
+     a redraw would throw their work away. */
+  let livePollTimer = null;
+  let liveSig = null;
+
+  /** a cheap fingerprint of the cache: catches an add, a delete, and an edit
+      to the fields a list actually shows, without stringifying everything */
+  function dataSignature() {
+    let out = '';
+    for (const col in Store.data) {
+      const rows = Store.data[col] || [];
+      let h = rows.length;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i] || {};
+        const surface = (r.id || '') + '|' + (r.name || r.title || '') + '|'
+          + (r.status || '') + '|' + (r.roll || r.phone || r.code || '') + '|'
+          + (r.paid || '') + '|' + (r.reviewedAt || r.updatedAt || '');
+        for (let k = 0; k < surface.length; k++) {
+          h = (h * 31 + surface.charCodeAt(k)) >>> 0;
+        }
+      }
+      out += col + ':' + rows.length + ':' + h + ';';
+    }
+    return out;
+  }
+
+  function startLivePolling() {
+    stopLivePolling();
+    liveSig = dataSignature();
+    livePollTimer = setInterval(async () => {
+      if (!user) { stopLivePolling(); return; }
+      const busy = document.querySelector('.modal-overlay:not(.hidden)')
+        || (document.activeElement
+            && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName));
+      if (busy) return;                       // the user is mid-action — leave them be
       try {
         await Store.load();
-        if (user && currentView === 'dashboard') render();
-      } catch (e) { /* server hiccup — try again next tick */ }
-    }, 15000);
+        const sig = dataSignature();
+        if (sig !== liveSig && user) {
+          liveSig = sig;
+          render();
+        }
+      } catch (e) { /* a server hiccup — try again next tick */ }
+    }, 12000);
   }
-  function stopDashboardPolling() {
-    if (dashboardPollTimer) { clearInterval(dashboardPollTimer); dashboardPollTimer = null; }
+  function stopLivePolling() {
+    if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
   }
 
   /* ========================================================= */
@@ -633,7 +674,7 @@
     buildNav();
     $('.sidebar').classList.remove('open');
     render();
-    if (key === 'dashboard') startDashboardPolling(); else stopDashboardPolling();
+    // the live poll runs on every page now, so nothing to start or stop here
   }
 
   // sidebar close/open: desktop -> collapse to icon rail (remembered); mobile -> slide in/out
@@ -980,6 +1021,8 @@
     v.classList.toggle('view-frozen', moduleViewOnly(view));
     if (typeof fn.after === 'function') fn.after();
     gateControls(v, view);
+    // whatever was just drawn is the new baseline the live poll compares against
+    if (typeof dataSignature === 'function') liveSig = dataSignature();
   }
 
   /* ========================================================= */
@@ -16141,7 +16184,7 @@
     currentView = 'dashboard';
     buildNav();
     render();
-    startDashboardPolling();
+    startLivePolling();
   }
 
   /* Everybody signed in can change their own password — the office should not
@@ -16189,7 +16232,7 @@
       user = null;
       Store.setReadOnly(false);
       document.body.classList.remove('read-only');
-      stopDashboardPolling();
+      stopLivePolling();
       closeModal();
       $('#appScreen').classList.add('hidden');
       $('#loginScreen').classList.remove('hidden');
