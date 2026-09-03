@@ -6996,6 +6996,7 @@
       html += `<select class="filter-sel" id="ttBranch">${branchOptions('MBA')}</select>
         <select class="filter-sel" id="ttSem">${SEMESTERS.map(n=>`<option value="${n}" ${n===2?'selected':''}>Sem ${n}</option>`).join('')}</select>
         <input class="filter-sel" id="ttSec" value="A" style="width:60px">
+        <select class="filter-sel" id="ttSpec"><option value="">All Branches</option>${listOptions('branchName')}</select>
         ${isAdmin ? `<button class="btn-primary" id="addSlot">+ Add Slot</button>`
           : `<select class="filter-sel" id="ttView">
                <option value="class">Class Timetable</option>
@@ -7032,8 +7033,12 @@
         const b = $('#ttBranch').value;
         const sem = +$('#ttSem').value;
         const sec = $('#ttSec').value;
+        const spec = $('#ttSpec') ? $('#ttSpec').value : '';
         const mode = $('#ttView') ? $('#ttView').value : 'class';
-        const all = Store.all('timetable');
+        // an empty branch means "all of them"; a chosen one narrows to slots
+        // marked with it
+        const matchSpec = (t) => !spec || String(t.branchName || '') === spec;
+        const all = Store.all('timetable').filter(matchSpec);
         // the center head can widen the same grid from one class to a whole
         // section, room block or department without changing a single record
         if (mode === 'faculty') {
@@ -7080,6 +7085,7 @@
       };
       if (canPickClass) {
         $('#ttBranch').onchange = draw; $('#ttSem').onchange = draw; $('#ttSec').oninput = draw;
+        if ($('#ttSpec')) $('#ttSpec').onchange = draw;
         if (isAdmin) $('#addSlot').onclick = () => slotForm(draw);
         else {
           $('#ttView').onchange = draw;
