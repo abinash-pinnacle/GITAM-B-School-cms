@@ -308,12 +308,17 @@ td.mono{font-family:"Consolas","Courier New",monospace;font-size:13px;letter-spa
 .pager button[disabled]{opacity:.4;cursor:not-allowed}
 
 /* ===== FORMS (modal) ===== */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.form-grid.one{grid-template-columns:1fr}
-.field{display:flex;flex-direction:column;gap:5px}
+/* minmax(0,1fr), not 1fr: a plain 1fr column will not shrink below its widest
+   child, so a <select> carrying a long option — "Logistics and Supply Chain
+   Management" — pushed the grid wider than the modal and the right-hand fields
+   ran off the edge. minmax(0,…) lets the column shrink and the control ellipsis
+   its own text instead. */
+.form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.form-grid.one{grid-template-columns:minmax(0,1fr)}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
 .field.full{grid-column:1/-1}
 .field label{font-size:13px;font-weight:500;color:var(--ink)}
-.field input,.field select,.field textarea{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}
+.field input,.field select,.field textarea{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe;width:100%;min-width:0}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--primary);background:#fff}
 .field input:not(:placeholder-shown):invalid{border-color:#d33;background:#fff5f5}
 /* The box a refusal is about. Red enough to find on a long tab without being
