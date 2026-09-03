@@ -666,11 +666,14 @@
       k === view || (k === NAV_GROUP && url === view));
   }
 
+  const VIEW_KEY = 'nmiet_view';
   function navigate(key) {
     // the sidebar stays in the DOM after logout (the app screen is just hidden),
     // so ignore a stray click that arrives once the session is gone
     if (!user) return;
     currentView = key;
+    // remembered so a refresh lands back on this page rather than the dashboard
+    try { sessionStorage.setItem(VIEW_KEY, key); } catch (e) { /* private mode */ }
     buildNav();
     $('.sidebar').classList.remove('open');
     render();
@@ -16181,10 +16184,23 @@
     // a read-only session is flagged on <body> so the whole app can style itself
     document.body.classList.toggle('read-only', roleReadOnly());
     applyReadOnly();
-    currentView = 'dashboard';
+    currentView = restoreView();
     buildNav();
     render();
     startLivePolling();
+  }
+
+  /* Where to land after a reload. The page the reader was on, if they may still
+     open it — but never a profile, which is reached by clicking a particular
+     student or lecturer and has nothing to show once that choice is gone; the
+     reader is returned to the list they opened it from instead. */
+  function restoreView() {
+    let saved = null;
+    try { saved = sessionStorage.getItem(VIEW_KEY); } catch (e) { /* private mode */ }
+    if (!saved) return 'dashboard';
+    if (saved === 'stuprofile') saved = 'students';
+    if (saved === 'facprofile') saved = 'faculty';
+    return canView(saved) ? saved : 'dashboard';
   }
 
   /* Everybody signed in can change their own password — the office should not
