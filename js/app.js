@@ -3093,9 +3093,13 @@
   /* Whether an id was issued by the current scheme: four digits of year and
      branch, then the number. A ten-digit number from the old scheme is not
      derived from anything, so there is nothing for it to disagree with. */
+  /* YYYY(4) + branch(2) + a running number of three digits or more: nine to
+     eleven digits. Mirrors STUDENT_ID_PREFIX_WIDTH / STUDENT_SEQ_WIDTH on the
+     server, which is the one that actually issues them. */
+  const STU_ID_PREFIX = 6;
   function isIssuedId(roll) {
     const v = String(roll || '').trim();
-    return /^\d+$/.test(v) && v.length >= 6 && v.length <= 8;
+    return /^\d+$/.test(v) && v.length >= STU_ID_PREFIX + 3 && v.length <= STU_ID_PREFIX + 5;
   }
   /* What the id says about the admission, against what the record now says.
      Returns null when they agree or when the question does not apply. */
@@ -3104,15 +3108,17 @@
     if (!isIssuedId(roll)) return null;
     const wantYY = admissionYY(student.admissionDate || student.academicYear || '');
     const wantCode = branchCode(student.branchName);
-    const hasYY = roll.slice(0, 2), hasCode = roll.slice(2, 4);
+    const hasYY = roll.slice(0, 4), hasCode = roll.slice(4, 6);
     if (hasYY === wantYY && hasCode === wantCode) return null;
     return { hasYY, hasCode, wantYY, wantCode };
   }
 
   /** the two digits of the admission year, from a date or a session */
+  /* The four-digit admission year. Named YY for history; it is the whole year
+     now, to match the id the server issues. */
   function admissionYY(value) {
     const m = String(value || '').match(/(\d{4})/);
-    return m ? m[1].slice(-2) : String(new Date().getFullYear()).slice(-2);
+    return m ? m[1] : String(new Date().getFullYear());
   }
   /* A club is the specialisation's own society — Marketing has the Marketing
      Club — so the list is built from the specialisations rather than typed
@@ -3595,7 +3601,7 @@
         if (mine !== asked) return;            // a later change has overtaken this
         if (j && j.id) { rollBox.value = j.id; seq = j.next || 0; return; }
         // the server could not say — show what the rule would produce
-        rollBox.value = yy + branchCode(branch) + String(seq || 1).padStart(2, '0');
+        rollBox.value = yy + branchCode(branch) + String(seq || 1).padStart(3, '0');
       };
       if (dateBox) dateBox.addEventListener('change', refreshRoll);
       if (branchBox) branchBox.addEventListener('change', refreshRoll);
@@ -13565,7 +13571,17 @@
 
     viewSubmissions.after = () => {
       let page = 1;
-      const when = (iso) => { try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso || '—'; } };
+      /* Short and two lines: "3 Sep 2026 / 5:16 am". The full string with
+         seconds ran the Submitted column past a laptop's width and pushed the
+         Actions off the edge. */
+      const when = (iso) => {
+        try {
+          const d = new Date(iso);
+          const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+          const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+          return `${day}<br><small style="color:var(--muted)">${time}</small>`;
+        } catch (e) { return iso || '—'; }
+      };
       const rowsFor = () => {
         const q = ($('#sbQ').value || '').trim().toLowerCase();
         const st = $('#sbStatus').value;
@@ -13601,7 +13617,7 @@
               r.kind === 'update' ? 'Existing student' : 'New admission'}</span></td>
             <td>${esc(r.course || '—')}${r.branchName ? `<br><small style="color:var(--muted)">${esc(r.branchName)}</small>` : ''}</td>
             <td>${esc(r.phone || '—')}</td>
-            <td style="white-space:nowrap;font-size:12.5px">${esc(when(r.submittedAt))}</td>
+            <td style="white-space:nowrap;font-size:12.5px">${when(r.submittedAt)}</td>
             <td><span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span></td>
             <td><div class="row-actions">
               <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
@@ -13898,7 +13914,7 @@
        the college gives out these numbers by a rule and not by hand. */
     const yy = admissionYY(d.admissionDate || '');
     Store.nextStudentId(yy, d.branchName || '').then(peek => {
-      const willBe = (peek && peek.id) || (yy + branchCode(d.branchName) + '01');
+      const willBe = (peek && peek.id) || (yy + branchCode(d.branchName) + '001');
       confirmAction('Admit Student',
         `Admit <b>${esc(who)}</b> as a student?<br>
          Their Student ID will be <b class="mono">${esc(willBe)}</b> — from the admission year

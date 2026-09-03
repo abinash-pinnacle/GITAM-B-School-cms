@@ -321,9 +321,9 @@ const INT_FIELDS = ['year', 'semester', 'credits', 'internal', 'external', 'tota
                     'backlogs', 'openings', 'maxBacklogs', 'round'];
 
 /* ---------------- student ids ----------------
-   YY + branch code + running number, e.g. 250101. What an install starts with;
-   the live map is a `branchCodes` setting, so a branch added next year needs a
-   line in that setting and not a deploy. */
+   YYYY + branch code + a three-digit running number, e.g. 202601001. The live
+   map is a `branchCodes` setting, so a branch added next year needs a line in
+   that setting and not a deploy. */
 const BRANCH_CODES = [
     'General Management'                     => '01',
     'Logistics and Supply Chain Management'  => '02',
@@ -331,10 +331,16 @@ const BRANCH_CODES = [
 ];
 /** a branch nobody has given a code to, so the id is still well-formed */
 const BRANCH_CODE_FALLBACK = '00';
-/* Two digits, as specified — 01 through 99. Past that the number widens rather
-   than wrapping, because a hundredth admission has to be given something and
-   an id that collides is worse than one that is a digit longer. */
-const STUDENT_SEQ_WIDTH = 2;
+/* The width of each part of a student id. YYYY(4) + branch(2) is the prefix a
+   running number follows; the number is three digits, 001 through 999, and
+   past that it widens rather than wrapping, because a thousandth admission has
+   to be given something and an id that collides is worse than one a digit
+   longer. Every length and offset below is derived from these, so the shape is
+   changed here and nowhere else. */
+const STUDENT_YEAR_WIDTH = 4;
+const STUDENT_BRANCH_WIDTH = 2;
+const STUDENT_ID_PREFIX_WIDTH = STUDENT_YEAR_WIDTH + STUDENT_BRANCH_WIDTH;
+const STUDENT_SEQ_WIDTH = 3;
 
 const ID_PREFIX = [
     'students' => 'S', 'faculty' => 'F', 'courses' => 'C', 'attendance' => 'A',

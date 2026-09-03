@@ -1245,16 +1245,16 @@ function branch_code(string $branch): string
     return BRANCH_CODE_FALLBACK;
 }
 
-/** the last two digits of an admission year, from a year or a date */
+/** the four-digit admission year, from a full year, a date, or a two-digit year */
 function admission_yy(string $value): string
 {
     if (preg_match('/(\d{4})/', $value, $m)) {
-        return substr($m[1], -2);
+        return $m[1];
     }
     if (preg_match('/^\d{2}$/', trim($value))) {
-        return trim($value);
+        return '20' . trim($value);       // "26" is 2026, the only century this runs in
     }
-    return date('y');
+    return date('Y');
 }
 
 /**
@@ -1278,10 +1278,11 @@ function seed_student_seq(string $yy): int
     foreach ($rows as $r) {
         $roll = trim((string) ($r['roll'] ?? ''));
         $len = strlen($roll);
-        if (!ctype_digit($roll) || $len < 4 + STUDENT_SEQ_WIDTH || $len > 8) {
+        if (!ctype_digit($roll) || $len < STUDENT_ID_PREFIX_WIDTH + STUDENT_SEQ_WIDTH
+            || $len > STUDENT_ID_PREFIX_WIDTH + 5) {
             continue;
         }
-        $n = (int) substr($roll, 4);
+        $n = (int) substr($roll, STUDENT_ID_PREFIX_WIDTH);
         if ($n > $max && $n <= 99999) {
             $max = $n;
         }
@@ -1495,8 +1496,9 @@ function students_in_year(string $yy): int
     foreach ($rows as $r) {
         $roll = trim((string) ($r['roll'] ?? ''));
         $len = strlen($roll);
-        // an id of the current scheme, not a ten-digit one from the old
-        if (ctype_digit($roll) && $len >= 4 + STUDENT_SEQ_WIDTH && $len <= 8) {
+        // an id of the current scheme, not one from the old
+        if (ctype_digit($roll) && $len >= STUDENT_ID_PREFIX_WIDTH + STUDENT_SEQ_WIDTH
+            && $len <= STUDENT_ID_PREFIX_WIDTH + 5) {
             $n++;
         }
     }
@@ -2368,7 +2370,8 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
                what an id from the old scheme is, and the issued shape of four
                digits plus a running number. A student moved from one scheme to
                the other must not be refused for being the wrong length. */
-            $issuedShape = strlen($roll) >= 4 + STUDENT_SEQ_WIDTH && strlen($roll) <= 8;
+            $issuedShape = strlen($roll) >= STUDENT_ID_PREFIX_WIDTH + STUDENT_SEQ_WIDTH
+                && strlen($roll) <= STUDENT_ID_PREFIX_WIDTH + 5;
             if ($len > 0 && strlen($roll) !== $len && !$issuedShape) {
                 return "A Student ID is $len digits, or an issued one.";
             }
