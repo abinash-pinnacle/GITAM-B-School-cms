@@ -235,7 +235,7 @@ const COLLECTIONS = [
                        'requesterRole', 'department', 'requestDate', 'neededBy',
                        'reviewedBy', 'reviewedOn', 'reviewRemarks', 'linkedId'],
     // period is legacy — startTime/endTime drive the grid, room is the venue
-    'timetable'  => ['id', 'branch', 'semester', 'section', 'day', 'period', 'courseId', 'startTime', 'endTime', 'room'],
+    'timetable'  => ['id', 'branch', 'branchName', 'semester', 'section', 'day', 'period', 'courseId', 'startTime', 'endTime', 'room'],
     'books'      => ['id', 'title', 'author', 'isbn', 'category', 'total', 'available'],
     'issues'     => ['id', 'bookId', 'studentId', 'issueDate', 'dueDate', 'returnDate'],
     'events'     => ['id', 'title', 'date', 'description', 'createdBy'],

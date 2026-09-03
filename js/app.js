@@ -6950,6 +6950,7 @@
     return `<div class="tt-cell${isLab ? ' lab' : ''}">
       <b title="${c ? esc(c.name) : ''}">${c ? esc(c.shortName || shortSubject(c.name)) : '?'}</b>
       <small>${sem} Sem ${esc(t.branch)} · Sec ${esc(t.section || 'ALL')}</small>
+      ${t.branchName ? `<small>🎓 ${esc(t.branchName)}</small>` : ''}
       <small>👨‍🏫 ${c ? esc(facultyName(c.facultyId)) : '—'}</small>
       <small>🏫 Room No.${esc(t.room || '—')}</small>
       ${showDelete ? `<button class="btn-sm btn-del" data-del="${t.id}" style="margin-top:4px">✕</button>` : ''}
@@ -7132,6 +7133,8 @@
     const selCourse = opts.presetCourse || draft.courseId || '';
     openModal('Add Timetable Slot', `<form id="f"><div class="form-grid">
       <div class="field"><label>Course</label><select name="branch" id="slotBranch">${branchOptions(selBranch, true)}</select></div>
+      <div class="field"><label>Branch / Specialisation</label>
+        <select name="branchName" id="slotSpec"><option value="">— None —</option>${listOptions('branchName', draft.branchName || '', true)}</select></div>
       <div class="field"><label>Semester</label><input name="semester" type="number" min="1" max="4" value="${draft.semester||2}"></div>
       <div class="field"><label>Section</label><input name="section" value="${esc(draft.section||'A')}"></div>
       <div class="field"><label>Day</label><select name="day" id="slotDay">${DAYS.map(d=>`<option ${d===selDay?'selected':''}>${d}</option>`).join('')}${listExtraOpts()}</select></div>
@@ -7143,6 +7146,7 @@
       <button type="submit" class="btn-primary">Add</button></div></form>`);
     $('#cx').onclick = closeModal;
     bindBranchSelect($('#slotBranch'));
+    bindCustomList($('#slotSpec'), 'branchName');
     bindListAddNew($('#slotDay'), DAYS, 'New day (e.g. Sun):', (v) => DAYS.map(d=>`<option ${d===v?'selected':''}>${d}</option>`).join('') + listExtraOpts());
     bindEntityAddNew($('#slotCourse'), () => {
       const d = formData($('#f')); delete d.courseId;
