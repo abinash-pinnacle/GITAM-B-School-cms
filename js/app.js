@@ -4956,7 +4956,7 @@
           <button class="btn-outline btn-sm" id="facPrint">📄 Download PDF</button>
           <button class="btn-primary btn-sm" id="facXls">⬇ Download Excel</button>`}
       </div></div>
-      <div class="tbl-wrap"><table><thead><tr>
+      <div class="tbl-wrap"><table class="emp-tbl"><thead><tr>
         <th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
       </tr></thead><tbody id="facBody"></tbody></table></div><div id="facPager"></div></div>`;
     viewFaculty.after = () => {
@@ -4989,16 +4989,17 @@
           <td>${esc(f.empId || '—')}</td>
           <td><button class="linkish" data-profile="${f.id}">${esc(f.name || '—')}</button></td>
           <td><span class="pill ${ROLE_PILL[f.role] || 'blue'}">${esc(roleLabel(f.role))}</span></td>
-          <td>${esc(f.department || '—')}</td>
-          <td>${esc(f.designation || '—')}</td>
-          <td>${esc((own && reportingToName(f)) || '—')}</td>
-          <td>${esc(f.email || '—')}</td><td>${esc(f.phone || '—')}</td>
-          <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-profile="${f.id}" title="Full employee profile">👁 View</button>
-            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚 Classes</button>` : ''}
-            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪 ID</button>
-            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}">Edit</button>
-            <button class="btn-sm btn-del" data-del="${key}">Delete</button>` : ''}</div></td></tr>`;
+          <td><div style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.department||'')}">${esc(f.department || '—')}</div></td>
+          <td><div style="max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.designation||'')}">${esc(f.designation || '—')}</div></td>
+          <td><div style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((own && reportingToName(f)) || '—')}</div></td>
+          <td><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.email||'')}">${esc(f.email || '—')}</div></td>
+          <td style="white-space:nowrap">${esc(f.phone || '—')}</td>
+          <td><div class="row-actions" style="flex-wrap:nowrap">
+            <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile">👁</button>
+            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚</button>` : ''}
+            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪</button>
+            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}" title="Edit">✏️</button>
+            <button class="btn-sm btn-del" data-del="${key}" title="Delete">🗑</button>` : ''}</div></td></tr>`;
         }).join('')
           : `<tr><td colspan="10" class="empty">No employees found.</td></tr>`;
         $('#facBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printFacultyIdCard(b.dataset.id));

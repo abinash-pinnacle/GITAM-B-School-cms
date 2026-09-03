@@ -279,6 +279,22 @@ thead th:first-child{border-radius:8px 0 0 8px} thead th:last-child{border-radiu
 tbody td{padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 tbody tr:hover{background:#fafcff}
 .row-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+
+/* The employee list has ten columns; below a wide desktop it cannot show them
+   all without running off the edge. The three that are also on the employee's
+   own profile page — Department, Reporting To, Phone — step aside on a laptop,
+   so Emp ID, Name, Role, Designation, Email and the actions stay lined up and
+   in view. They all come back on a wide screen. */
+@media (max-width:1800px){
+  .emp-tbl th:nth-child(5), .emp-tbl td:nth-child(5),
+  .emp-tbl th:nth-child(7), .emp-tbl td:nth-child(7),
+  .emp-tbl th:nth-child(9), .emp-tbl td:nth-child(9){display:none}
+}
+@media (max-width:1300px){
+  /* on a small laptop Email (8) goes too — it is one click away on the
+     employee's profile — so what is left lines up without a sideways scroll */
+  .emp-tbl th:nth-child(8), .emp-tbl td:nth-child(8){display:none}
+}
 .empty{text-align:center;color:var(--muted);padding:34px;font-size:14px}
 .pill{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block}
 .pill.green{background:#e4f6ec;color:var(--green)} .pill.red{background:#fde8ea;color:var(--red)}
