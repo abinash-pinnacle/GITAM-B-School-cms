@@ -295,6 +295,20 @@ tbody tr:hover{background:#fafcff}
      employee's profile — so what is left lines up without a sideways scroll */
   .emp-tbl th:nth-child(8), .emp-tbl td:nth-child(8){display:none}
 }
+
+/* The asset register has eleven columns and runs off the edge on anything short
+   of an extra-wide screen. The four that are also on the asset's View card —
+   Purchase Date, Purchase Cost, Vendor, Location — step aside as the window
+   narrows, so Asset ID, Name, Category, Qty, Current Value, Status and the
+   actions stay lined up and in view. They all come back above 1920px. */
+@media (max-width:1920px){
+  .as-tbl th:nth-child(5), .as-tbl td:nth-child(5),
+  .as-tbl th:nth-child(8), .as-tbl td:nth-child(8){display:none}
+}
+@media (max-width:1550px){
+  .as-tbl th:nth-child(6), .as-tbl td:nth-child(6),
+  .as-tbl th:nth-child(9), .as-tbl td:nth-child(9){display:none}
+}
 .empty{text-align:center;color:var(--muted);padding:34px;font-size:14px}
 .pill{padding:3px 11px;border-radius:20px;font-size:12px;font-weight:600;display:inline-block}
 .pill.green{background:#e4f6ec;color:var(--green)} .pill.red{background:#fde8ea;color:var(--red)}

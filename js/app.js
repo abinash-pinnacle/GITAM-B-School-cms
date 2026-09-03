@@ -9279,7 +9279,7 @@
         <button class="btn-outline btn-sm" id="asClear">Clear</button>
       </div>
       <div id="asStats" class="stat-grid" style="margin:6px 0 18px"></div>
-      <div class="tbl-wrap"><table><thead><tr>
+      <div class="tbl-wrap"><table class="as-tbl"><thead><tr>
         <th>Asset ID</th><th>Asset Name</th><th>Category</th><th style="text-align:right">Qty</th>
         <th>Purchase Date</th><th style="text-align:right">Purchase Cost</th><th style="text-align:right">Current Value</th>
         <th>Vendor</th><th>Location</th><th>Status</th><th>Actions</th>
