@@ -13686,6 +13686,7 @@
               <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
               ${canEdit && st === 'Pending' ? `<button class="btn-sm btn-edit" data-ok="${r.id}">✓ Approve</button>
               <button class="btn-sm btn-del" data-no="${r.id}">Reject</button>` : ''}
+              ${canEdit && st === 'Rejected' ? `<button class="btn-sm btn-edit" data-back="${r.id}">↩ Recover</button>` : ''}
             </div></td></tr>`;
         }).join('') : `<tr><td colspan="8" class="empty">No forms ${
           $('#sbStatus').value === 'Pending' ? 'waiting for review' : 'found'}.</td></tr>`;
@@ -13696,6 +13697,8 @@
           b.onclick = () => approveSubmission(b.dataset.ok, draw));
         $('#sbBody').querySelectorAll('[data-no]').forEach(b =>
           b.onclick = () => rejectSubmission(b.dataset.no, draw));
+        $('#sbBody').querySelectorAll('[data-back]').forEach(b =>
+          b.onclick = () => recoverSubmission(b.dataset.back, draw));
         $('#sbPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#sbPager'), rows.length, page, (p) => page = p, draw);
       };
@@ -13820,12 +13823,14 @@
       <div class="form-actions">
         ${st === 'Pending' && !readOnly() ? `<button type="button" class="btn-del" id="smNo">Reject</button>
         <button type="button" class="btn-primary" id="smOk">✓ Approve</button>` : ''}
+        ${st === 'Rejected' && !readOnly() ? `<button type="button" class="btn-primary" id="smBack">↩ Recover</button>` : ''}
         <button type="button" class="btn-outline" id="cx">Close</button>
       </div>`, true);
     $('#cx').onclick = closeModal;
-    const ok = $('#smOk'), no = $('#smNo');
+    const ok = $('#smOk'), no = $('#smNo'), back = $('#smBack');
     if (ok) ok.onclick = () => { closeModal(); approveSubmission(id, after); };
     if (no) no.onclick = () => { closeModal(); rejectSubmission(id, after); };
+    if (back) back.onclick = () => { closeModal(); recoverSubmission(id, after); };
   }
 
   /* Built field by field, in the shape the admission form writes — never by
@@ -14000,6 +14005,24 @@
           reviewNote: 'Rejected on review.',
         });
         toast('Form rejected.', 'err');
+        if (after) after(); else render();
+      });
+  }
+
+  /* Undo a rejection: the form goes back to Pending so it can be reviewed
+     again. The row was never written to the roll, so this only clears the
+     review stamp — nothing on the student side to undo. */
+  function recoverSubmission(id, after) {
+    const r = Store.find('submissions', id); if (!r) return;
+    if ((r.status || 'Pending') !== 'Rejected') return;
+    confirmAction('Recover Form',
+      `Bring the form from <b>${esc(r.name || r.roll)}</b> back to <b>Pending</b>?
+       It returns to the review queue exactly as it was sent.`,
+      'Recover', () => {
+        Store.update('submissions', id, {
+          status: 'Pending', reviewedAt: '', reviewedBy: '', reviewNote: '',
+        });
+        toast('Form recovered — back in the review queue.');
         if (after) after(); else render();
       });
   }
