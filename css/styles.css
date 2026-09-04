@@ -63,7 +63,7 @@ a{color:var(--primary);text-decoration:none}
    height; the vh line stays as the fallback for older browsers. */
 .login-wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:linear-gradient(135deg,var(--primary-dark),var(--primary) 60%,#28a05a);padding:20px}
-.login-split{display:flex;width:100%;max-width:900px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
+.login-split{display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
 .login-hero{position:relative;flex:1;min-width:0;display:flex}
 .login-hero-img{width:100%;height:100%;object-fit:cover;display:block}
 /* Overlay upar halka, neeche gehra — campus photo dikhe aur neeche ka
@@ -71,20 +71,20 @@ a{color:var(--primary);text-decoration:none}
 .login-hero-overlay{position:absolute;inset:0;
   background:linear-gradient(180deg,rgba(17,89,42,.18) 0%,rgba(17,89,42,.42) 45%,rgba(17,89,42,.86) 100%);
   color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:34px}
-.login-hero-overlay h2{font-size:21px;line-height:1.25;margin-bottom:6px}
-.login-hero-overlay p{font-size:13px;opacity:.9}
-.hero-logo{width:128px;height:74px;background:#fff;border-radius:14px;padding:6px;margin-bottom:18px;object-fit:contain}
-.login-card{background:#fff;padding:38px 34px;width:430px;max-width:100%;flex-shrink:0}
-.brand-logo{width:104px;height:60px;object-fit:contain;background:#fff;border-radius:10px;flex-shrink:0}
-.login-brand{display:flex;align-items:center;gap:14px;margin-bottom:26px}
-.login-brand h1{font-size:21px;color:var(--primary-dark);letter-spacing:.3px;line-height:1.25;white-space:nowrap}
-.login-brand p{font-size:13px;color:var(--muted)}
+.login-hero-overlay h2{font-size:24px;line-height:1.25;margin-bottom:6px}
+.login-hero-overlay p{font-size:14px;opacity:.9}
+.hero-logo{width:144px;height:84px;background:#fff;border-radius:14px;padding:6px;margin-bottom:18px;object-fit:contain}
+.login-card{background:#fff;padding:48px 44px;width:510px;max-width:100%;flex-shrink:0}
+.brand-logo{width:122px;height:70px;object-fit:contain;background:#fff;border-radius:10px;flex-shrink:0}
+.login-brand{display:flex;align-items:center;gap:16px;margin-bottom:32px}
+.login-brand h1{font-size:25px;color:var(--primary-dark);letter-spacing:.3px;line-height:1.25;white-space:nowrap}
+.login-brand p{font-size:14px;color:var(--muted)}
 .logo-circle{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));
   color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;flex-shrink:0}
-#loginForm label{display:block;font-size:13px;font-weight:500;margin:14px 0 6px}
-#loginForm input,#loginForm select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#fbfcfe}
+#loginForm label{display:block;font-size:14.5px;font-weight:500;margin:18px 0 7px}
+#loginForm input,#loginForm select{width:100%;padding:14px 15px;font-size:15px;border:1px solid var(--line);border-radius:10px;background:#fbfcfe}
 #loginForm input:focus,#loginForm select:focus{outline:none;border-color:var(--primary);background:#fff}
-#loginForm .btn-primary{margin-top:22px}
+#loginForm .btn-primary{margin-top:28px;padding:14px;font-size:16px}
 .login-error{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;text-align:center}
 .login-hint{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .login-hint strong{color:var(--ink)}
