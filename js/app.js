@@ -11044,15 +11044,22 @@
   function formData(form) {
     const o = {};
     new FormData(form).forEach((v, k) => o[k] = typeof v === 'string' ? v.trim() : v);
+    /* An untouched photo field carries nothing new. Sending it empty would blank
+       the stored photograph on the server's partial-update merge, so it is
+       dropped and the existing one left alone. A freshly chosen photo fills the
+       field and rides along as normal. */
+    if (o.photo === '') delete o.photo;
     return o;
   }
-  // profile photo field shared by studentForm / facultyForm — stores a base64
-  // data URL in a hidden input so it rides along with the rest of formData()
+  // profile photo field shared by studentForm / facultyForm. The hidden input
+  // starts empty and only fills when a new file is chosen — an unchanged photo
+  // is not resent (see formData), so the record keeps the one it has. The
+  // preview still shows the current photograph, passed in from the cache.
   function photoField(photo) {
     return `<div class="field full">
       <label>Photo</label>
       <input type="file" accept="image/*" id="photoFileInput">
-      <input type="hidden" name="photo" id="photoValueInput" value="${esc(photo||'')}">
+      <input type="hidden" name="photo" id="photoValueInput" value="">
       <div id="photoPreview" style="margin-top:8px">${photo ?
         `<img src="${esc(photo)}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:1px solid var(--line)">` : ''}</div>
     </div>`;
@@ -16221,6 +16228,20 @@
   function startApp() {
     $('#loginScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
+    /* When the photographs arrive from /api/photos a moment after sign-in, redraw
+       the current page and the account avatar so the faces fill in. The rows are
+       already updated by the time this runs, so if the reader is mid-action — a
+       dialog open or a field focused — the redraw is skipped and the next one
+       shows the faces, rather than throwing their work away. */
+    Store.afterPhotos = () => {
+      if (!user) return;
+      const busy = document.querySelector('.modal-overlay:not(.hidden)')
+        || (document.activeElement
+            && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName));
+      if (busy) return;
+      paintUser();
+      render();
+    };
     refreshPerms();
     paintUser();
     // a read-only session is flagged on <body> so the whole app can style itself

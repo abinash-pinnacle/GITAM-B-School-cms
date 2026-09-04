@@ -2048,7 +2048,27 @@ function api_backup(): void
 
 function api_bootstrap(): void
 {
-    send_json(bootstrap_data());
+    $data = bootstrap_data();
+    /* Lean mode: the photographs are blanked and left to /api/photos, a separate
+       request the browser can cache. Sending them inline made the first load
+       after sign-in drag every student's photo down before the app could paint —
+       the single biggest reason signing in felt slow. A `hasPhoto` flag stays so
+       the browser knows whose photo to expect. Only a caller that asks for lean
+       gets it; an older cached app.js, or the moments mid-deploy when the two
+       halves disagree, still receive photos inline and keep working. */
+    if (isset($_GET['lean'])) {
+        foreach ($data as &$rows) {
+            foreach ($rows as &$r) {
+                if (array_key_exists('photo', $r)) {
+                    $r['hasPhoto'] = ($r['photo'] !== '' && $r['photo'] !== null);
+                    $r['photo'] = '';
+                }
+            }
+            unset($r);
+        }
+        unset($rows);
+    }
+    send_json($data);
 }
 
 /* Everything this caller may see, in the shape the browser caches. Split out of
@@ -2136,6 +2156,26 @@ function api_signature(): void
         $parts[] = $col . ':' . count($rows) . ':' . hash('crc32b', (string) json_encode($light));
     }
     send_json(['sig' => implode(';', $parts)]);
+}
+
+/**
+ * Every photograph this caller may see, keyed by collection then id, in one
+ * request the browser pulls once after sign-in and caches — rather than dragging
+ * the same bytes down inline on every bootstrap. Same read scope as the
+ * bootstrap, since it is built from exactly the same rows.
+ */
+function api_photos(): void
+{
+    $data = bootstrap_data();
+    $out = [];
+    foreach ($data as $col => $rows) {
+        foreach ($rows as $r) {
+            if (!empty($r['photo'])) {
+                $out[$col][(string) ($r['id'] ?? '')] = $r['photo'];
+            }
+        }
+    }
+    send_json($out);
 }
 
 /* ---------------- a student applying to a drive ----------------
@@ -2984,6 +3024,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'GET' && $resource === 'signature') {
         api_signature();
+    }
+    if ($method === 'GET' && $resource === 'photos') {
+        api_photos();
     }
     if ($method === 'GET' && $resource === 'backup') {
         api_backup();

@@ -11,6 +11,13 @@ const Store = {
           applications: [], interviews: [], offers: [], placementevents: [],
           coordinators: [], admissions: [] },
 
+  /* Photographs, kept apart from the records. The bootstrap no longer carries
+     them inline — it names who has one (hasPhoto) and /api/photos delivers the
+     bytes once, cached here by "collection/id". _applyPhotos paints them back
+     onto every fresh load so a refresh never blanks a face that is already in
+     hand. */
+  photoCache: {},
+
   /* Who is calling. The token is what the server actually believes — it is
      minted at login, cannot be guessed, and is given up at logout. The id is
      kept alongside it only because the app reads it locally; the server no
@@ -110,6 +117,64 @@ const Store = {
     }
   },
 
+  /* Paint cached photographs back onto the current rows. Rows arrive from a lean
+     bootstrap with photo blank and hasPhoto telling us one exists; whatever
+     bytes we have already fetched go straight back on. */
+  _applyPhotos() {
+    const cache = this.photoCache;
+    for (const col in this.data) {
+      const rows = this.data[col];
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        if (!r) continue;
+        const hit = cache[col + '/' + r.id];
+        if (hit) r.photo = hit;
+      }
+    }
+  },
+
+  /* Is there anybody the bootstrap says has a photo whose bytes we have not
+     fetched yet? On an old server (no hasPhoto, photos came inline) this is
+     always false, so loadPhotos never even reaches for an endpoint that isn't
+     there. */
+  _photoMissing() {
+    for (const col in this.data) {
+      const rows = this.data[col];
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        if (r && r.hasPhoto && !this.photoCache[col + '/' + r.id]) return true;
+      }
+    }
+    return false;
+  },
+
+  /* Fetch the photographs the current rows are missing, cache them, paint them
+     on, and let the app redraw. Fire-and-forget: the page has already painted
+     without them, and the faces fill in a moment later. Skips the request
+     entirely when nothing is missing — an idle page, or a change that touched no
+     photo, costs nothing here. */
+  async loadPhotos() {
+    if (this._loadingPhotos || !this._photoMissing()) return false;
+    this._loadingPhotos = true;
+    try {
+      const res = await fetch(`${API}/photos`, { headers: this._headers() });
+      if (!res.ok) return false;             // an old server has none to give
+      const map = await res.json().catch(() => null);
+      if (!map || typeof map !== 'object') return false;
+      for (const col in map) {
+        const byId = map[col] || {};
+        for (const id in byId) this.photoCache[col + '/' + id] = byId[id];
+      }
+      this._applyPhotos();
+      if (typeof this.afterPhotos === 'function') this.afterPhotos();
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      this._loadingPhotos = false;
+    }
+  },
+
   // load everything from the server into the cache
   /* Two attempts, a pause apart. The commonest failure here is not a server
      that is down but one that is busy: the first request after a deploy runs
@@ -131,7 +196,10 @@ const Store = {
       const again = attempt < BACKOFF.length;
       let res;
       try {
-        res = await fetch(`${API}/bootstrap`, { headers: this._headers() });
+        // lean: photographs come separately, from /api/photos, so this first
+        // load stays light. An older server ignores the flag and sends them
+        // inline as before — either way the app has what it needs.
+        res = await fetch(`${API}/bootstrap?lean=1`, { headers: this._headers() });
       } catch (e) {
         if (!again) throw e;              // the network, not the server
         await new Promise(r => setTimeout(r, BACKOFF[attempt]));
@@ -165,6 +233,11 @@ const Store = {
           err.badBody = true;
           throw err;
         }
+        // photos already in hand go straight back onto the fresh rows, so a
+        // reload never blanks a face; any not yet fetched are pulled in the
+        // background and painted when they arrive.
+        this._applyPhotos();
+        this.loadPhotos();
         return this.data;
       }
       /* Carry why. "Could not load its data" sent two evenings running to
