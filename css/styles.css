@@ -154,13 +154,17 @@ a{color:var(--primary);text-decoration:none}
   background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-18deg)}
 #loginForm .btn-primary:hover::after{animation:btnShine .8s ease}
 
-/* people who ask their system for less motion get a calm, static screen */
+/* people who ask their system for less motion — many phones turn this on with
+   battery-saver — keep a calm screen: everything that loops or moves stops, but
+   the card and its rows still fade in gently, which is motion-free and safe. */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){
   .login-wrap,.login-wrap::before,.login-wrap::after,.particles span,
-  .login-frame,.login-frame::before,.login-frame::after,
-  .login-hero-img,.hero-logo,.login-hero-overlay,.login-footer,
-  .login-brand,.brand-logo,#loginForm > *,#loginForm .btn-primary{animation:none}
+  .login-frame::before,.login-frame::after,.login-hero-img,.hero-logo,
+  #loginForm .btn-primary{animation:none}
   #loginForm .btn-primary:hover::after{animation:none}
+  .login-frame,.login-hero-overlay,.login-footer,
+  .login-brand,.brand-logo,#loginForm > *{animation:fadeIn .6s ease both}
 }
 
 /* ===== APP LAYOUT ===== */
@@ -730,12 +734,16 @@ a.install-btn:hover{background:var(--primary-light)}
      104px logo left ~130px for a wordmark that is nowrap and needs 185px, so
      "NMIET B-SCHOOL" ran past the card and .login-split clipped it. Give the
      text room, and let it wrap instead of running off the edge. */
-  .login-card{padding:26px 20px}
+  .login-card{padding:28px 22px}
   .login-brand{gap:11px;margin-bottom:20px}
-  .brand-logo{width:76px;height:44px}
+  .brand-logo{width:78px;height:46px}
   .login-brand h1{font-size:19px;white-space:normal;overflow-wrap:anywhere}
   .login-brand p{font-size:12px}
   .install-btn{font-size:14px}
+  /* a lighter glow halo behind the card, so the rotating blur stays smooth on
+     a phone GPU; the crisp gradient border itself is untouched */
+  .login-frame::after{filter:blur(16px);opacity:.42;inset:-8px}
+  .login-split{max-width:460px}
 
   .view{padding:16px 14px}
   .panel{padding:16px 14px;margin-bottom:16px}
