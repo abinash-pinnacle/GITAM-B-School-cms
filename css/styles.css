@@ -522,6 +522,17 @@ body.sidebar-collapsed .nav-section-mid{font-size:0;padding-top:12px;margin-top:
 a.install-btn{color:var(--primary);box-sizing:border-box}
 a.install-btn:hover{background:var(--primary-light)}
 
+/* The same two buttons, now a strip across the top of the dashboard. A row that
+   wraps to a stack on a narrow phone, aligned to the right on a wide screen. */
+.app-get-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin:0 0 16px}
+.app-get-btn{display:inline-flex;align-items:center;gap:8px;border-style:dashed;
+  font-weight:600;text-decoration:none;color:var(--primary);box-sizing:border-box}
+.app-get-btn:hover{background:var(--primary-light)}
+@media (max-width:600px){
+  .app-get-bar{justify-content:stretch}
+  .app-get-btn{flex:1 1 100%;justify-content:center}
+}
+
 /* a submenu row sits under its parent, quieter and indented */
 .nav-item.nav-child{padding-left:26px;font-size:13px;opacity:.85;margin-bottom:2px}
 .nav-item.nav-child .ico{width:22px;height:22px;font-size:12px;background:transparent}

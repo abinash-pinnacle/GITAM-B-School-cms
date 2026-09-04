@@ -1029,6 +1029,13 @@
       usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
     }[view] || viewDashboard;
     v.innerHTML = fn();
+    /* The app-install offer and the Android APK sit at the top of everyone's
+       dashboard — moved off the sign-in screen so they reach people once they
+       are in, whatever their role's dashboard looks like. */
+    if (view === 'dashboard') {
+      v.insertAdjacentHTML('afterbegin', appDownloadBar());
+      wireAppDownloadBar(v);
+    }
     const home = $('#adHome'); if (home) home.onclick = () => navigate('dashboard');
     // every page a read-only role opens says so — views that already carry a
     // banner with a page-specific message keep theirs
@@ -1045,6 +1052,24 @@
     gateControls(v, view);
     // whatever was just drawn is the new baseline the live poll compares against
     if (typeof dataSignature === 'function') liveSig = dataSignature();
+  }
+
+  /* The install-app / download-APK strip shown at the top of every dashboard.
+     The Install button appears only when the browser has actually offered a PWA
+     prompt (captured in index.html and exposed as window.pwaCanInstall); the APK
+     link is always there, so it can be handed out from a desktop too. */
+  function appDownloadBar() {
+    const canInstall = typeof window.pwaCanInstall === 'function' && window.pwaCanInstall();
+    return `<div class="app-get-bar">
+      ${canInstall ? `<button type="button" class="btn-outline btn-sm app-get-btn" id="dashInstallBtn">
+        <span>📲</span><span>Install NMIET B-SCHOOL app</span></button>` : ''}
+      <a class="btn-outline btn-sm app-get-btn" href="apk/NMIET-BSCHOOL-CMS-v1.1.0.apk" download>
+        <span>🤖</span><span>Download Android app (APK)</span></a>
+    </div>`;
+  }
+  function wireAppDownloadBar(scope) {
+    const b = scope.querySelector('#dashInstallBtn');
+    if (b) b.onclick = () => { if (typeof window.pwaInstall === 'function') window.pwaInstall(); };
   }
 
   /* ========================================================= */
