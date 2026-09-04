@@ -92,6 +92,24 @@ const Store = {
     return h;
   },
 
+  /* A tiny fingerprint of everything this session can see, for the live-refresh
+     poll to ask "has anything changed?" without pulling the whole payload —
+     photos and all — down every few seconds. Returns the string, or null when
+     the request fails or the server is one deploy behind and has no such
+     endpoint yet; the caller treats null as "fall back to a full load", so an
+     old server or a hiccup just means the old, heavier behaviour, never a
+     broken refresh. */
+  async signature() {
+    try {
+      const res = await fetch(`${API}/signature`, { headers: this._headers() });
+      if (!res.ok) return null;
+      const d = await res.json().catch(() => null);
+      return d && typeof d.sig === 'string' ? d.sig : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
   // load everything from the server into the cache
   /* Two attempts, a pause apart. The commonest failure here is not a server
      that is down but one that is busy: the first request after a deploy runs

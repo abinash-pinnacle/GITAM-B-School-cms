@@ -2048,6 +2048,15 @@ function api_backup(): void
 
 function api_bootstrap(): void
 {
+    send_json(bootstrap_data());
+}
+
+/* Everything this caller may see, in the shape the browser caches. Split out of
+   api_bootstrap so the signature endpoint below can build the very same picture
+   and fingerprint it, rather than a second copy of the read rules drifting from
+   this one. */
+function bootstrap_data(): array
+{
     $finance = may_read_finance();
     $staff = may_touch_staff();
     $placement = may_read_placement();
@@ -2098,7 +2107,35 @@ function api_bootstrap(): void
         $rows = scope_rows($col, fetch_all('SELECT * FROM ' . qi($col)));
         $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
     }
-    send_json($out);
+    return $out;
+}
+
+/* The heavy fields a live-refresh fingerprint deliberately ignores: photos are
+   big to hash and almost never the thing that quietly changed under a page that
+   is just sitting open. A manual refresh or a page change still pulls a new one
+   in, so leaving them out of the fingerprint costs nothing anyone would notice. */
+const SIGNATURE_SKIP_FIELDS = ['photo'];
+
+/**
+ * A tiny fingerprint of everything this caller can see. The browser polls it
+ * every few seconds to answer one question — "has anything changed?" — without
+ * pulling the whole payload, photos and all, down the wire each time. Only when
+ * the fingerprint moves does the browser fetch a fresh bootstrap.
+ */
+function api_signature(): void
+{
+    $data = bootstrap_data();
+    $parts = [];
+    foreach ($data as $col => $rows) {
+        $light = array_map(function ($r) {
+            foreach (SIGNATURE_SKIP_FIELDS as $f) {
+                unset($r[$f]);
+            }
+            return $r;
+        }, $rows);
+        $parts[] = $col . ':' . count($rows) . ':' . hash('crc32b', (string) json_encode($light));
+    }
+    send_json(['sig' => implode(';', $parts)]);
 }
 
 /* ---------------- a student applying to a drive ----------------
@@ -2944,6 +2981,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
 
     if ($method === 'GET' && $resource === 'bootstrap') {
         api_bootstrap();
+    }
+    if ($method === 'GET' && $resource === 'signature') {
+        api_signature();
     }
     if ($method === 'GET' && $resource === 'backup') {
         api_backup();

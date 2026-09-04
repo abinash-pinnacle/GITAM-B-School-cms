@@ -378,7 +378,8 @@
      focused — that is somebody in the middle of typing or about to click, and
      a redraw would throw their work away. */
   let livePollTimer = null;
-  let liveSig = null;
+  let liveSig = null;          // client-side fingerprint, kept for the fallback path
+  let liveServerSig;           // last signature the server reported; undefined until first seen
 
   /** a cheap fingerprint of the cache: catches an add, a delete, and an edit
       to the fields a list actually shows, without stringifying everything */
@@ -404,6 +405,7 @@
   function startLivePolling() {
     stopLivePolling();
     liveSig = dataSignature();
+    liveServerSig = undefined;
     livePollTimer = setInterval(async () => {
       if (!user) { stopLivePolling(); return; }
       const busy = document.querySelector('.modal-overlay:not(.hidden)')
@@ -411,11 +413,28 @@
             && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName));
       if (busy) return;                       // the user is mid-action — leave them be
       try {
-        await Store.load();
-        const sig = dataSignature();
-        if (sig !== liveSig && user) {
-          liveSig = sig;
-          render();
+        /* Ask the cheap question first — "has anything changed?" — and only pay
+           for the whole payload, photos and all, when the answer is yes. This is
+           what stops an idle page re-downloading every record every twelve
+           seconds just to find nothing had moved. */
+        const srvSig = await Store.signature();
+        if (srvSig === null) {
+          /* A server one deploy behind has no such endpoint, or the request just
+             failed. Fall back to the old way — pull everything, redraw only if
+             the fingerprint moved. Heavier, but never a stale page. */
+          await Store.load();
+          const sig = dataSignature();
+          if (sig !== liveSig && user) { liveSig = sig; render(); }
+          return;
+        }
+        if (liveServerSig === undefined) {    // first reading is only a baseline
+          liveServerSig = srvSig;
+          return;
+        }
+        if (srvSig !== liveServerSig) {        // something changed — now the full pull earns its keep
+          liveServerSig = srvSig;
+          await Store.load();
+          if (user) render();
         }
       } catch (e) { /* a server hiccup — try again next tick */ }
     }, 12000);
