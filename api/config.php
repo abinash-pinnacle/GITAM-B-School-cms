@@ -515,13 +515,16 @@ const COORDINATOR_READONLY = ['students', 'faculty', 'courses', 'syllabus', 'tim
                               'settings', 'users', 'coordinators', 'events', 'marks'];
 
 /* ---------------- admissions ----------------
-   The desk that enrols people. It creates and corrects student records, and
-   the login that comes with each one, and touches nothing else — not fees,
-   not marks, not attendance, and not the record of a student already gone,
-   which is why it cannot delete. */
-const ADMISSION_WRITABLE = ['students', 'users'];
+   The desk that enrols people. It works the admission-form queue — approving,
+   rejecting and recovering the forms students send in — and creates and corrects
+   the student records and logins those forms become. It touches nothing else —
+   not fees, not marks, not attendance, and not the record of a student already
+   gone, which is why it cannot delete. Without `submissions` here the desk saw
+   the queue (the bootstrap carries it) but every Approve/Reject/Recover was
+   refused by the server, so a form the officer acted on quietly stayed Pending. */
+const ADMISSION_WRITABLE = ['students', 'users', 'submissions'];
 const ADMISSION_READABLE = ['students', 'users', 'courses', 'syllabus', 'settings',
-                            'events', 'admissions'];
+                            'events', 'admissions', 'submissions'];
 
 /** requisitions: staff raise them, admin/accountant approve them — students never see them */
 const STAFF_COLLECTIONS = ['requisitions'];
