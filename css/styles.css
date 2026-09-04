@@ -62,8 +62,25 @@ a{color:var(--primary);text-decoration:none}
    full-height box is always taller than what you can see. dvh is the real
    height; the vh line stays as the fallback for older browsers. */
 .login-wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,var(--primary-dark),var(--primary) 60%,#28a05a);padding:20px}
-.login-split{display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow-lg)}
+  background:linear-gradient(125deg,var(--primary-dark),var(--primary) 40%,#1f9c57 72%,var(--primary-dark));
+  background-size:300% 300%;animation:loginGradient 18s ease infinite;padding:20px;overflow:hidden}
+/* two soft glows drifting behind the card, for depth */
+.login-wrap::before,.login-wrap::after{content:"";position:fixed;width:46vmax;height:46vmax;border-radius:50%;
+  filter:blur(60px);opacity:.35;pointer-events:none;z-index:0}
+.login-wrap::before{background:radial-gradient(circle,#37d07f,transparent 60%);top:-14vmax;left:-10vmax;animation:blobDrift 22s ease-in-out infinite}
+.login-wrap::after{background:radial-gradient(circle,#2f6df0,transparent 60%);bottom:-16vmax;right:-12vmax;animation:blobDrift 26s ease-in-out infinite reverse}
+.login-footer{position:relative;z-index:1}
+/* soft specks drifting up behind the card */
+.particles{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.particles span{position:absolute;bottom:-24px;border-radius:50%;background:rgba(255,255,255,.35);
+  box-shadow:0 0 8px rgba(255,255,255,.35);animation:floatUp linear infinite}
+/* a rotating gradient ring glows around the whole card */
+.login-frame{position:relative;border-radius:20px;padding:2px;z-index:1}
+.login-frame::before{content:"";position:absolute;inset:0;border-radius:20px;z-index:0;
+  background:conic-gradient(from 0deg,#37d07f,#2f6df0,#123f8c,#f5a623,#37d07f);animation:spin 9s linear infinite}
+.login-frame::after{content:"";position:absolute;inset:-12px;border-radius:30px;z-index:-1;
+  background:conic-gradient(from 0deg,#37d07f,#2f6df0,#123f8c,#f5a623,#37d07f);filter:blur(26px);opacity:.5;animation:spin 9s linear infinite}
+.login-split{position:relative;z-index:1;display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden}
 .login-hero{position:relative;flex:1;min-width:0;display:flex}
 .login-hero-img{width:100%;height:100%;object-fit:cover;display:block}
 /* Overlay upar halka, neeche gehra — campus photo dikhe aur neeche ka
@@ -77,18 +94,74 @@ a{color:var(--primary);text-decoration:none}
 .login-card{background:#fff;padding:48px 44px;width:510px;max-width:100%;flex-shrink:0}
 .brand-logo{width:122px;height:70px;object-fit:contain;background:#fff;border-radius:10px;flex-shrink:0}
 .login-brand{display:flex;align-items:center;gap:16px;margin-bottom:32px}
-.login-brand h1{font-size:25px;color:var(--primary-dark);letter-spacing:.3px;line-height:1.25;white-space:nowrap}
+.login-brand h1{font-size:25px;letter-spacing:.3px;line-height:1.25;white-space:nowrap;
+  background:linear-gradient(90deg,var(--primary-dark),#1f9c57);-webkit-background-clip:text;background-clip:text;color:transparent}
 .login-brand p{font-size:14px;color:var(--muted)}
 .logo-circle{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));
   color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:26px;flex-shrink:0}
 #loginForm label{display:block;font-size:14.5px;font-weight:500;margin:18px 0 7px}
-#loginForm input,#loginForm select{width:100%;padding:14px 15px;font-size:15px;border:1px solid var(--line);border-radius:10px;background:#fbfcfe}
+.in-wrap{position:relative}
+.in-wrap .in-ico{position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.5;pointer-events:none;transition:.2s}
+.in-wrap:focus-within .in-ico{opacity:1;transform:translateY(-50%) scale(1.12)}
+#loginForm input,#loginForm select{width:100%;padding:14px 15px 14px 44px;font-size:15px;border:1px solid var(--line);border-radius:10px;background:#fbfcfe}
 #loginForm input:focus,#loginForm select:focus{outline:none;border-color:var(--primary);background:#fff}
-#loginForm .btn-primary{margin-top:28px;padding:14px;font-size:16px}
+#loginForm .btn-primary{margin-top:28px;padding:14px;font-size:16px;
+  background:linear-gradient(120deg,var(--primary),#1f9c57);background-size:180% 180%;animation:btnGrad 6s ease infinite}
 .login-error{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;text-align:center}
 .login-hint{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .login-hint strong{color:var(--ink)}
 .login-footer{color:rgba(255,255,255,.8);font-size:12.5px;margin-top:22px}
+
+/* ===== login: a stylish way in ===== */
+@keyframes loginGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes blobDrift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4vmax,3vmax) scale(1.12)}}
+@keyframes floatUp{0%{transform:translateY(0) translateX(0);opacity:0}10%{opacity:.8}90%{opacity:.7}100%{transform:translateY(-105vh) translateX(20px);opacity:0}}
+@keyframes spin{to{transform:rotate(1turn)}}
+@keyframes btnGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes cardIn{from{opacity:0;transform:translateY(28px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.09)}}
+@keyframes floatLogo{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes footerIn{from{opacity:0}to{opacity:.8}}
+@keyframes btnShine{from{left:-70%}to{left:130%}}
+
+/* the whole card glides up on arrival; the campus photo slowly drifts behind it */
+.login-frame{animation:cardIn .8s cubic-bezier(.22,.68,.24,1) both}
+.login-hero-img{animation:kenburns 20s ease-in-out infinite alternate}
+.hero-logo{animation:floatLogo 4.5s ease-in-out infinite}
+.login-hero-overlay{animation:riseIn .8s ease .35s both}
+.login-footer{animation:footerIn 1s ease .8s both}
+
+/* brand and each form row rise in, one after another */
+.login-brand{animation:riseIn .6s ease .25s both}
+.brand-logo{animation:riseIn .6s ease .18s both}
+#loginForm > *{animation:riseIn .55s ease both}
+#loginForm > *:nth-child(1){animation-delay:.34s}
+#loginForm > *:nth-child(2){animation-delay:.42s}
+#loginForm > *:nth-child(3){animation-delay:.50s}
+#loginForm > *:nth-child(4){animation-delay:.58s}
+#loginForm > *:nth-child(5){animation-delay:.66s}
+
+/* inputs lift and glow on focus; the button lifts and shines on hover */
+#loginForm input{transition:border-color .18s,background .18s,box-shadow .2s,transform .18s}
+#loginForm input:focus{box-shadow:0 0 0 4px rgba(18,63,140,.14);transform:translateY(-1px)}
+#loginForm .btn-primary{position:relative;overflow:hidden;
+  transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+#loginForm .btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(18,63,140,.42);filter:brightness(1.08)}
+#loginForm .btn-primary:active{transform:translateY(0)}
+/* a light sweeps across the button on hover */
+#loginForm .btn-primary::after{content:"";position:absolute;top:0;left:-70%;width:55%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-18deg)}
+#loginForm .btn-primary:hover::after{animation:btnShine .8s ease}
+
+/* people who ask their system for less motion get a calm, static screen */
+@media (prefers-reduced-motion: reduce){
+  .login-wrap,.login-wrap::before,.login-wrap::after,.particles span,
+  .login-frame,.login-frame::before,.login-frame::after,
+  .login-hero-img,.hero-logo,.login-hero-overlay,.login-footer,
+  .login-brand,.brand-logo,#loginForm > *,#loginForm .btn-primary{animation:none}
+  #loginForm .btn-primary:hover::after{animation:none}
+}
 
 /* ===== APP LAYOUT ===== */
 .app-wrap{display:flex;min-height:100vh;min-height:100dvh}

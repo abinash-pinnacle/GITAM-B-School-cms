@@ -9,10 +9,10 @@
   <!-- installable app (PWA): icons, colours and the manifest an APK builder reads -->
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#123f8c" />
-  <link rel="icon" href="assets/icons/favicon.ico?b=20260903x" sizes="any" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260903x" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260903x" />
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260903x" />
+  <link rel="icon" href="assets/icons/favicon.ico?b=20260903y" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260903y" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260903y" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260903y" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <!-- NOT black-translucent: that draws the page *under* the iPhone status
        bar, so in the installed app the topbar and the ☰ button end up beneath
@@ -25,13 +25,24 @@
        Bump this stamp whenever css/js changes, otherwise a phone that cached
        the old files (iOS Safari caches JS for days when no Cache-Control is
        sent) keeps running yesterday's app against today's API. -->
-  <link rel="stylesheet" href="css/styles.css?b=20260903x" />
+  <link rel="stylesheet" href="css/styles.css?b=20260903y" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
   <!-- ============ LOGIN SCREEN ============ -->
   <div id="loginScreen" class="login-wrap">
+    <!-- soft specks drifting up behind the card -->
+    <div class="particles" aria-hidden="true">
+      <span style="left:8%;width:8px;height:8px;animation-duration:16s;animation-delay:0s"></span>
+      <span style="left:20%;width:12px;height:12px;animation-duration:22s;animation-delay:3s"></span>
+      <span style="left:35%;width:6px;height:6px;animation-duration:14s;animation-delay:6s"></span>
+      <span style="left:55%;width:10px;height:10px;animation-duration:19s;animation-delay:1.5s"></span>
+      <span style="left:70%;width:7px;height:7px;animation-duration:17s;animation-delay:4.5s"></span>
+      <span style="left:85%;width:13px;height:13px;animation-duration:24s;animation-delay:8s"></span>
+      <span style="left:92%;width:6px;height:6px;animation-duration:15s;animation-delay:2s"></span>
+    </div>
+    <div class="login-frame">
     <div class="login-split">
       <!-- left: campus hero -->
       <div class="login-hero">
@@ -55,10 +66,12 @@
 
       <form id="loginForm" autocomplete="off">
         <label>Username</label>
-        <input type="text" id="loginUser" placeholder="Enter username" required />
+        <div class="in-wrap"><span class="in-ico">&#128100;</span>
+          <input type="text" id="loginUser" placeholder="Enter username" required /></div>
 
         <label>Password</label>
-        <input type="password" id="loginPass" placeholder="Enter password" required />
+        <div class="in-wrap"><span class="in-ico">&#128274;</span>
+          <input type="password" id="loginPass" placeholder="Enter password" required /></div>
 
         <!-- No role picker: the account behind these credentials decides the
              role, so nobody has to know which one to choose and nobody can
@@ -73,6 +86,7 @@
 
       </div><!-- /login-card -->
     </div><!-- /login-split -->
+    </div><!-- /login-frame -->
     <div class="login-footer">© <span id="year"></span> NMIET B-SCHOOL · Bhubaneswar. All rights reserved.</div>
   </div>
 
@@ -138,9 +152,9 @@
   <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/xlsx.js?b=20260903x"></script>
-  <script src="js/store.js?b=20260903x"></script>
-  <script src="js/app.js?b=20260903x"></script>
+  <script src="js/xlsx.js?b=20260903y"></script>
+  <script src="js/store.js?b=20260903y"></script>
+  <script src="js/app.js?b=20260903y"></script>
 
   <!-- PWA: register the shell cache and wire the install button.
        Kept inline and defensive so an unsupported browser is a no-op. -->
