@@ -1754,6 +1754,28 @@ function api_apply(): void
                    'message' => 'University Regd. No. must be exactly 10 digits, or left blank.'], 422);
     }
 
+    /* One person, one form. A mobile number or email already sitting in the
+       queue — or already approved into a student — cannot be used to send a
+       second form: an applicant applies once, and a wrong detail on a pending
+       form is fixed by the office, not by filing another. A form that was
+       rejected does not block a fresh attempt — somebody turned away may
+       reasonably apply again — so only Pending and Approved rows count here. */
+    $clash = null;
+    if (fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('submissions') . ' WHERE '
+            . qi('phone') . ' = ? AND ' . qi('status') . " IN ('Pending','Approved')", [$phone])) {
+        $clash = 'mobile number';
+    } elseif ($email !== '' && fetch_one('SELECT ' . qi('id') . ' FROM ' . qi('submissions') . ' WHERE LOWER('
+            . qi('email') . ') = LOWER(?) AND ' . qi('status') . " IN ('Pending','Approved')", [$email])) {
+        $clash = 'email address';
+    }
+    if ($clash !== null) {
+        send_json([
+            'error'   => 'duplicate',
+            'message' => 'A form has already been submitted with this ' . $clash
+                       . '. You can apply only once — if a detail is wrong, please contact the admission office.',
+        ], 409);
+    }
+
     /* A passout year is four digits or it is nothing. The form says so too;
        this is here because the form is not the only way to reach this
        endpoint, and a half-typed year would be filed as the year passed. */
