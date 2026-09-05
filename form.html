@@ -197,14 +197,14 @@
             <select name="semester"><option value=""></option>
               <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
           <div class="field"><label>Section</label><input name="section" maxlength="8" placeholder="A"></div>
-          <div class="field"><label>Batch</label><input name="batch" maxlength="20" placeholder="e.g. 2025-2027"></div>
-          <div class="field"><label>Date of Admission</label><input name="admissionDate" type="date"></div>
+          <div class="field"><label>Batch <span class="req">*</span></label><input name="batch" maxlength="20" placeholder="e.g. 2025-2027"></div>
+          <div class="field"><label>Date of Admission <span class="req">*</span></label><input name="admissionDate" type="date"></div>
           <div class="field"><label>Club</label><input name="house" maxlength="60"></div>
         </div>
 
         <h3 class="sec">Entrance</h3>
         <div class="grid">
-          <div class="field"><label>Entrance Examination</label>
+          <div class="field"><label>Entrance Examination <span class="req">*</span></label>
             <input name="entranceExam" maxlength="40" placeholder="e.g. CAT, OJEE"></div>
           <div class="field"><label>Entrance Rank</label>
             <input name="entranceRank" inputmode="numeric" maxlength="10"></div>
@@ -219,27 +219,27 @@
           <div class="field"><label>Gender <span class="req">*</span></label>
             <select name="gender"><option value=""></option>
               <option>Male</option><option>Female</option><option>Other</option></select></div>
-          <div class="field"><label>Blood Group</label>
+          <div class="field"><label>Blood Group <span class="req">*</span></label>
             <select name="bloodGroup"><option value=""></option>
               <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
               <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
-          <div class="field"><label>Admission Category</label>
+          <div class="field"><label>Admission Category <span class="req">*</span></label>
             <select name="admissionCategory"><option value=""></option>
               <option>General</option><option>OBC</option><option>SEBC</option><option>SC</option>
               <option>ST</option><option>EWS</option><option>TFW</option>
               <option>Physically Handicapped</option><option>Management</option><option>NRI</option></select></div>
-          <div class="field"><label>Religion</label><input name="religion" maxlength="40"></div>
+          <div class="field"><label>Religion <span class="req">*</span></label><input name="religion" maxlength="40"></div>
           <div class="field"><label>Nationality</label><input name="nationality" maxlength="40" value="Indian"></div>
           <div class="field"><label>Birthplace</label><input name="birthplace" maxlength="80"></div>
           <div class="field"><label>Identification Mark</label><input name="identificationMark" maxlength="120"></div>
-          <div class="field"><label>Languages Known</label>
+          <div class="field"><label>Languages Known <span class="req">*</span></label>
             <input name="languages" maxlength="120" placeholder="e.g. Odia, Hindi, English"></div>
           <div class="field"><label>Hobbies</label><input name="hobbies" maxlength="120"></div>
         </div>
 
         <h3 class="sec">Identity documents</h3>
         <div class="grid">
-          <div class="field"><label>Aadhaar No.</label>
+          <div class="field"><label>Aadhaar No. <span class="req">*</span></label>
             <input name="aadhaar" inputmode="numeric" maxlength="12"></div>
           <div class="field"><label>PAN No.</label><input name="pan" maxlength="10"></div>
           <div class="field"><label>Voter ID</label><input name="voterId" maxlength="20"></div>
@@ -652,7 +652,12 @@
     var NEED = [
       ['lastName', 'last name'], ['email', 'email address'],
       ['branchName', 'branch'], ['semester', 'semester'],
+      ['batch', 'batch'], ['admissionDate', 'date of admission'],
+      ['entranceExam', 'entrance examination'],
       ['dob', 'date of birth'], ['gender', 'gender'],
+      ['bloodGroup', 'blood group'], ['admissionCategory', 'admission category'],
+      ['religion', 'religion'], ['languages', 'languages known'],
+      ['aadhaar', 'Aadhaar number'],
       ['address', 'current address'], ['state', 'state'],
       ['city', 'city'], ['pincode', 'pincode'],
       ['emergencyName', 'emergency contact name'],
@@ -665,6 +670,13 @@
         show('err', 'Please fill in the ' + NEED[ni][1] + '.');
         return;
       }
+    }
+    // Aadhaar, when required, is exactly twelve digits
+    if (!/^\d{12}$/.test((d.aadhaar || '').trim())) {
+      var aa = document.querySelector('[name="aadhaar"]');
+      if (aa) { showStep(paneOf(aa)); aa.focus(); }
+      show('err', 'Aadhaar number must be exactly 12 digits.');
+      return;
     }
     // at least one guardian — Father, Mother or Local Guardian — with name + mobile
     var hasG = GUARDIANS.some(function (g) {

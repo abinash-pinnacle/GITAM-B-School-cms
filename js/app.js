@@ -206,6 +206,12 @@
         if (ops.size) allow[col] = [...ops];
       });
     });
+    /* The admissions desk's review queue (submissions) is a page, not one of the
+       modules above, so it never falls out of that loop. Grant its writes here,
+       in step with ADMISSION_WRITABLE on the server — this is what lets an
+       admission officer approve, reject, recover or correct a form instead of
+       the write being blocked in the browser and never sent. */
+    if (base === 'admission') allow.submissions = ['add', 'update'];
     Store.setReadOnly(true, allow);
   }
   /** true for a role that may look at the master data but never change it */
