@@ -123,9 +123,10 @@
   <div class="card" id="formCard">
     <h2>Student Registration</h2>
     <p class="sub">
-      Fill this in once and the office will review it. Only your <b>name</b>,
-      <b>mobile number</b> and a <b>passport size photo</b> are required — everything else
-      helps, but you can leave it blank and the office will fill it in.
+      Fill this in once and the office will review it. Fields marked
+      <span class="req">*</span> are required; a few — the university registration
+      number, second specialisation, PAN/passport and the like — you can leave
+      blank if they do not apply to you.
     </p>
     <p class="sub">
       <b>Already enrolled?</b> Put your University Regd. No. in and your existing record is
@@ -155,12 +156,12 @@
           <div class="field"><label>First Name <span class="req">*</span></label>
             <input name="firstName" maxlength="80"></div>
           <div class="field"><label>Middle Name</label><input name="middleName" maxlength="80"></div>
-          <div class="field"><label>Last Name</label><input name="lastName" maxlength="80"></div>
+          <div class="field"><label>Last Name <span class="req">*</span></label><input name="lastName" maxlength="80"></div>
           <div class="field"><label>Mobile No <span class="req">*</span></label>
             <input name="phone" inputmode="numeric" maxlength="10" placeholder="10-digit number"></div>
           <div class="field"><label>WhatsApp No</label>
             <input name="whatsapp" inputmode="numeric" maxlength="10"></div>
-          <div class="field"><label>Email ID</label>
+          <div class="field"><label>Email ID <span class="req">*</span></label>
             <input name="email" type="email" maxlength="120" placeholder="name@example.com"></div>
           <div class="field"><label>College Email ID</label>
             <input name="domainEmail" type="email" maxlength="120"></div>
@@ -179,7 +180,7 @@
           <div class="field"><label>Course</label>
             <!-- one course, so there is nothing to leave blank -->
             <select name="course"><option selected>MBA</option></select></div>
-          <div class="field"><label>Branch</label>
+          <div class="field"><label>Branch <span class="req">*</span></label>
             <select name="branchName"><option value=""></option>
               <option>General Management</option>
               <option>Logistics and Supply Chain Management</option>
@@ -192,7 +193,7 @@
             <select name="specialisation2"><option value="">— None —</option>
               <option>Marketing</option><option>Finance</option><option>HR</option>
               <option>Retail</option><option>Logistics</option></select></div>
-          <div class="field"><label>Semester</label>
+          <div class="field"><label>Semester <span class="req">*</span></label>
             <select name="semester"><option value=""></option>
               <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
           <div class="field"><label>Section</label><input name="section" maxlength="8" placeholder="A"></div>
@@ -214,8 +215,8 @@
       <div class="pane" data-pane="Personal">
         <h3 class="sec">Personal details</h3>
         <div class="grid">
-          <div class="field"><label>Date of Birth</label><input name="dob" type="date"></div>
-          <div class="field"><label>Gender</label>
+          <div class="field"><label>Date of Birth <span class="req">*</span></label><input name="dob" type="date"></div>
+          <div class="field"><label>Gender <span class="req">*</span></label>
             <select name="gender"><option value=""></option>
               <option>Male</option><option>Female</option><option>Other</option></select></div>
           <div class="field"><label>Blood Group</label>
@@ -259,8 +260,9 @@
 
       <!-- 4 ------------------------------------------------------------ -->
       <div class="pane" data-pane="Education">
-        <h3 class="sec">Previous qualifications</h3>
-        <p class="sub">Fill in only the rows that apply to you.</p>
+        <h3 class="sec">Previous qualifications <span class="req">*</span></h3>
+        <p class="sub">10th, 12th and your graduation (passout year and % marks) are required;
+          fill the other rows only if they apply to you.</p>
         <div class="qual-wrap">
           <table class="qual">
             <thead><tr><th style="width:90px">Qualification</th><th style="width:190px">Stream</th>
@@ -273,6 +275,8 @@
 
       <!-- 5 ------------------------------------------------------------ -->
       <div class="pane" data-pane="Family">
+        <p class="sub">Please fill in at least one <span class="req">*</span> — Father, Mother or
+          Local Guardian — with a name and mobile number.</p>
         <div id="guardianBlocks"></div>
       </div>
 
@@ -280,12 +284,12 @@
       <div class="pane" data-pane="Address">
         <h3 class="sec">Current address</h3>
         <div class="grid" data-address>
-          <div class="field full"><label>Address</label><textarea name="address" maxlength="500"></textarea></div>
-          <div class="field"><label>State / Union Territory</label><select name="state" data-state></select></div>
+          <div class="field full"><label>Address <span class="req">*</span></label><textarea name="address" maxlength="500"></textarea></div>
+          <div class="field"><label>State / Union Territory <span class="req">*</span></label><select name="state" data-state></select></div>
           <div class="field"><label>District</label><select name="district" data-district disabled></select></div>
-          <div class="field"><label>City</label><input name="city" maxlength="60" data-city></div>
+          <div class="field"><label>City <span class="req">*</span></label><input name="city" maxlength="60" data-city></div>
           <div class="field"><label>Country</label><input name="country" maxlength="60" value="India"></div>
-          <div class="field"><label>Pincode</label><input name="pincode" inputmode="numeric" maxlength="6"></div>
+          <div class="field"><label>Pincode <span class="req">*</span></label><input name="pincode" inputmode="numeric" maxlength="6"></div>
         </div>
 
         <h3 class="sec">Permanent address</h3>
@@ -316,10 +320,10 @@
             <textarea name="healthNotes" maxlength="500"></textarea></div>
         </div>
 
-        <h3 class="sec">Emergency contact</h3>
+        <h3 class="sec">Emergency contact <span class="req">*</span></h3>
         <div class="grid">
-          <div class="field"><label>Name</label><input name="emergencyName" maxlength="90"></div>
-          <div class="field"><label>Mobile</label>
+          <div class="field"><label>Name <span class="req">*</span></label><input name="emergencyName" maxlength="90"></div>
+          <div class="field"><label>Mobile <span class="req">*</span></label>
             <input name="emergencyPhone" inputmode="numeric" maxlength="10"></div>
         </div>
       </div>
@@ -638,6 +642,55 @@
     if (!/^[6-9]\d{9}$/.test((d.phone || '').trim())) {
       showStep(0); show('err', 'Please enter a valid 10-digit mobile number.');
       var ph = document.querySelector('[name="phone"]'); if (ph) ph.focus();
+      return;
+    }
+
+    /* Everything the office needs to enrol without chasing the student later.
+       Only the university registration number stays optional — most applicants
+       do not have one yet. Each check sends the reader to the step and the box,
+       so nobody is told about a field on a page they cannot see. */
+    var NEED = [
+      ['lastName', 'last name'], ['email', 'email address'],
+      ['branchName', 'branch'], ['semester', 'semester'],
+      ['dob', 'date of birth'], ['gender', 'gender'],
+      ['address', 'current address'], ['state', 'state'],
+      ['city', 'city'], ['pincode', 'pincode'],
+      ['emergencyName', 'emergency contact name'],
+      ['emergencyPhone', 'emergency contact mobile']
+    ];
+    for (var ni = 0; ni < NEED.length; ni++) {
+      if (!(d[NEED[ni][0]] || '').trim()) {
+        var nel = document.querySelector('[name="' + NEED[ni][0] + '"]');
+        if (nel) { showStep(paneOf(nel)); nel.focus(); }
+        show('err', 'Please fill in the ' + NEED[ni][1] + '.');
+        return;
+      }
+    }
+    // at least one guardian — Father, Mother or Local Guardian — with name + mobile
+    var hasG = GUARDIANS.some(function (g) {
+      return (d[g[0] + 'Name'] || '').trim() && (d[g[0] + 'Mobile'] || '').trim();
+    });
+    if (!hasG) {
+      var gel = document.querySelector('[name="fatherName"]');
+      if (gel) { showStep(paneOf(gel)); gel.focus(); }
+      show('err', 'Please give at least one guardian (Father, Mother or Local Guardian) with a name and mobile number.');
+      return;
+    }
+    // 10th, 12th and a graduation: passout year and % marks are needed
+    function qDone(s) { return (d[s + 'Year'] || '').trim() && (d[s + 'Marks'] || '').trim(); }
+    var needQual = [['q10', '10th'], ['q12', '12th']];
+    for (var qni = 0; qni < needQual.length; qni++) {
+      if (!qDone(needQual[qni][0])) {
+        var qel = document.querySelector('[name="' + needQual[qni][0] + 'Year"]');
+        if (qel) { showStep(paneOf(qel)); qel.focus(); }
+        show('err', 'Please fill in your ' + needQual[qni][1] + ' passout year and % marks.');
+        return;
+      }
+    }
+    if (!['qp3', 'qbca', 'qbba', 'qbtech', 'qdip', 'qother'].some(qDone)) {
+      var qg = document.querySelector('[name="qp3Year"]');
+      if (qg) { showStep(paneOf(qg)); qg.focus(); }
+      show('err', 'Please fill in your graduation details (passout year and % marks) in Previous Qualifications.');
       return;
     }
     if ((d.whatsapp || '') !== '' && !/^[6-9]\d{9}$/.test(d.whatsapp.trim())) {

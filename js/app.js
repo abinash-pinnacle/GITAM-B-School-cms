@@ -13735,6 +13735,7 @@
             <td><span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span></td>
             <td><div class="row-actions">
               <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
+              ${canEdit && st !== 'Approved' ? `<button class="btn-sm btn-outline" data-ed="${r.id}" title="Correct the form">✏️ Edit</button>` : ''}
               ${canEdit && st === 'Pending' ? `<button class="btn-sm btn-edit" data-ok="${r.id}">✓ Approve</button>
               <button class="btn-sm btn-del" data-no="${r.id}">Reject</button>` : ''}
               ${canEdit && st === 'Rejected' ? `<button class="btn-sm btn-edit" data-back="${r.id}">↩ Recover</button>` : ''}
@@ -13750,6 +13751,8 @@
           b.onclick = () => rejectSubmission(b.dataset.no, draw));
         $('#sbBody').querySelectorAll('[data-back]').forEach(b =>
           b.onclick = () => recoverSubmission(b.dataset.back, draw));
+        $('#sbBody').querySelectorAll('[data-ed]').forEach(b =>
+          b.onclick = () => editSubmission(b.dataset.ed, draw));
         $('#sbPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#sbPager'), rows.length, page, (p) => page = p, draw);
       };
@@ -13872,16 +13875,18 @@
         ['Regular Medication', d.medication], ['Notes', d.healthNotes]])}
       ${block('Emergency Contact', [['Name', d.emergencyName], ['Mobile', d.emergencyPhone]])}
       <div class="form-actions">
+        ${st !== 'Approved' && !readOnly() ? `<button type="button" class="btn-outline" id="smEdit">✏️ Edit</button>` : ''}
         ${st === 'Pending' && !readOnly() ? `<button type="button" class="btn-del" id="smNo">Reject</button>
         <button type="button" class="btn-primary" id="smOk">✓ Approve</button>` : ''}
         ${st === 'Rejected' && !readOnly() ? `<button type="button" class="btn-primary" id="smBack">↩ Recover</button>` : ''}
         <button type="button" class="btn-outline" id="cx">Close</button>
       </div>`, true);
     $('#cx').onclick = closeModal;
-    const ok = $('#smOk'), no = $('#smNo'), back = $('#smBack');
+    const ok = $('#smOk'), no = $('#smNo'), back = $('#smBack'), ed = $('#smEdit');
     if (ok) ok.onclick = () => { closeModal(); approveSubmission(id, after); };
     if (no) no.onclick = () => { closeModal(); rejectSubmission(id, after); };
     if (back) back.onclick = () => { closeModal(); recoverSubmission(id, after); };
+    if (ed) ed.onclick = () => { closeModal(); editSubmission(id, after); };
   }
 
   /* Built field by field, in the shape the admission form writes — never by
@@ -14076,6 +14081,72 @@
         toast('Form recovered — back in the review queue.');
         if (after) after(); else render();
       });
+  }
+
+  /* Correct a form the student filled wrong, before it is approved. Everything
+     the student sent stays (photo, guardians, qualifications and the rest); only
+     the boxes shown here are overwritten with what the office types. The row is
+     still just a form — it reaches the roll only when approved. */
+  function editSubmission(id, after) {
+    const r = Store.find('submissions', id); if (!r) return;
+    const d = subData(r);
+    const gv = (k) => esc(d[k] != null ? String(d[k]) : '');
+    const grid = (rows) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 14px">${rows}</div>`;
+    const F = (name, label, type) =>
+      `<div class="field"><label>${esc(label)}</label>
+         <input name="${name}" type="${type || 'text'}" value="${gv(name)}"></div>`;
+    const TA = (name, label) =>
+      `<div class="field" style="grid-column:1/-1"><label>${esc(label)}</label>
+         <textarea name="${name}" rows="2">${gv(name)}</textarea></div>`;
+    openModal('Edit Form — ' + (r.name || r.roll || ''), `
+      <form id="edSub">
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.6">
+          Fix anything the student got wrong, then Save. This changes the form only —
+          it still has to be <b>Approved</b> to reach the roll. Boxes left blank here are
+          cleared on the form; everything not shown (photo, guardians, qualifications) is kept.</p>
+        <h4 class="ro-sub">Basic</h4>${grid(
+          F('roll', 'Student ID') + F('title', 'Title') +
+          F('firstName', 'First Name') + F('middleName', 'Middle Name') + F('lastName', 'Last Name') +
+          F('phone', 'Mobile') + F('whatsapp', 'WhatsApp') +
+          F('email', 'Email') + F('domainEmail', 'College Email'))}
+        <h4 class="ro-sub">Course</h4>${grid(
+          F('course', 'Course') + F('branchName', 'Branch') +
+          F('specialisation', 'Specialisation I') + F('specialisation2', 'Specialisation II') +
+          F('semester', 'Semester') + F('section', 'Section') + F('batch', 'Batch') +
+          F('admissionDate', 'Date of Admission', 'date') + F('house', 'Club'))}
+        <h4 class="ro-sub">Personal</h4>${grid(
+          F('dob', 'Date of Birth', 'date') + F('gender', 'Gender') +
+          F('bloodGroup', 'Blood Group') + F('admissionCategory', 'Admission Category') +
+          F('aadhaar', 'Aadhaar') + F('univRegNo', 'University Regd. No.'))}
+        <h4 class="ro-sub">Current Address</h4>${grid(
+          TA('address', 'Address') +
+          F('state', 'State') + F('district', 'District') + F('city', 'City') +
+          F('country', 'Country') + F('pincode', 'Pincode'))}
+        <div class="form-actions">
+          <button type="button" class="btn-outline" id="edCancel">Cancel</button>
+          <button type="submit" class="btn-primary">Save changes</button>
+        </div>
+      </form>`, true);
+    $('#edCancel').onclick = closeModal;
+    $('#edSub').onsubmit = (e) => {
+      e.preventDefault();
+      const ed = {};
+      new FormData(e.target).forEach((v, k) => ed[k] = typeof v === 'string' ? v.trim() : v);
+      if (!ed.firstName) { toast('First name cannot be empty.', 'err'); return; }
+      if (ed.phone && !/^[6-9]\d{9}$/.test(ed.phone)) { toast('Enter a valid 10-digit mobile number.', 'err'); return; }
+      // keep everything the student sent, override only the boxes shown here
+      const newData = Object.assign({}, d, ed);
+      const name = [ed.firstName, ed.middleName, ed.lastName]
+        .map(x => (x || '').trim()).filter(Boolean).join(' ');
+      Store.update('submissions', id, {
+        data: newData, name,
+        roll: ed.roll || '', phone: ed.phone || '', email: ed.email || '',
+        course: ed.course || '', branchName: ed.branchName || '', semester: ed.semester || '',
+      });
+      closeModal();
+      toast('Form updated.');
+      if (after) after(); else render();
+    };
   }
 
   function viewUserSettings() {
