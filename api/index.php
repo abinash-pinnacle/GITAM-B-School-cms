@@ -10,6 +10,9 @@
  *   POST   /api/{collection}        -> create/replace a row (id generated if absent)
  *   PUT    /api/{collection}/{id}   -> patch the given fields
  *   DELETE /api/{collection}/{id}   -> remove a row
+ *
+ * Public admission form (/api/apply) refuses a second entry from a mobile number
+ * or email already Pending or Approved — one applicant, one form.
  */
 
 /* A warning belongs in the log and nowhere else.
