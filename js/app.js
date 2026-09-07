@@ -13671,6 +13671,7 @@
           <option value="Approved">Approved</option>
           <option value="Rejected">Rejected</option>
         </select>
+        <button class="btn-outline btn-sm" id="sbXls">⬇ Excel</button>
         <button class="btn-outline btn-sm" id="sbLink">🔗 Form Link</button>
       </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
@@ -13765,9 +13766,52 @@
       $('#sbQ').oninput = () => { page = 1; draw(); };
       $('#sbStatus').onchange = () => { page = 1; draw(); };
       $('#sbLink').onclick = () => formLinkModal();
+      // exports exactly what the filter and search are showing, in order
+      $('#sbXls').onclick = () => {
+        const rows = rowsFor();
+        if (!rows.length) { toast('No forms to export.', 'err'); return; }
+        downloadXlsx(submissionsReport(rows));
+      };
       draw();
     };
     return html;
+  }
+
+  /* The admission-form queue as a spreadsheet — who filled the form, with the
+     handful of columns the office actually works from. Exports whatever the
+     page is showing, so a Pending or a rejected list each come out on their own. */
+  function submissionsReport(rows) {
+    return {
+      title: 'Admission Forms', sheetName: 'Admission Forms', subtitle: reportStamp(),
+      columns: [
+        { header: 'Name', key: 'name', width: 24 },
+        { header: 'Phone', key: 'phone', width: 14 },
+        { header: 'Email', key: 'email', width: 28 },
+        { header: 'Course', key: 'course', width: 12 },
+        { header: 'Branch', key: 'branch', width: 26 },
+        { header: 'Status', key: 'status', width: 12 },
+        { header: 'Submitted', key: 'submitted', width: 20 },
+      ],
+      rows: rows.map(r => {
+        const d = subData(r);
+        const name = r.name
+          || [d.firstName, d.middleName, d.lastName].map(x => (x || '').trim()).filter(Boolean).join(' ')
+          || '—';
+        return {
+          name,
+          phone: r.phone || d.phone || '',
+          email: r.email || d.email || '',
+          course: r.course || d.course || '',
+          branch: r.branchName || d.branchName || '',
+          status: r.status || 'Pending',
+          submitted: (() => {
+            try { return new Date(r.submittedAt).toLocaleString('en-IN'); }
+            catch (e) { return r.submittedAt || ''; }
+          })(),
+        };
+      }),
+      totals: { name: rows.length + ' form(s)' },
+    };
   }
 
   /* The link, ready to hand out. Shown rather than sent, because who it goes to
