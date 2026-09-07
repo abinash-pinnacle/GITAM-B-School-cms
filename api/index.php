@@ -1083,7 +1083,9 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        that attendance is built from — students, papers, faculty — and writes
        none of it: the one collection it may change is `attendance` itself. */
     if (current_role() === 'course_coordinator') {
-        if ($isWrite && $resource !== 'attendance') {
+        // signing out and changing one's own password act on the caller's own
+        // session and account, not on master data — never blocked by role
+        if ($isWrite && !in_array($resource, ['attendance', 'change-password', 'logout'], true)) {
             send_json([
                 'error'   => 'forbidden',
                 'message' => 'A course coordinator can register attendance, not change master records.',
@@ -1109,8 +1111,10 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        remove one, and outside students and their logins it may not write at
        all. Reads are narrowed to what enrolling needs. */
     if (current_role() === 'admission') {
-        // correcting a student id is a student edit, which is what this desk does
-        if ($isWrite && $resource !== 'reissue-student-id'
+        // correcting a student id is a student edit, which is what this desk does;
+        // signing out and changing one's own password are self-service and never
+        // blocked by role
+        if ($isWrite && !in_array($resource, ['reissue-student-id', 'change-password', 'logout'], true)
             && !in_array($resource, ADMISSION_WRITABLE, true)) {
             send_json([
                 'error'   => 'forbidden',
