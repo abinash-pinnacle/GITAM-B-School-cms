@@ -12,7 +12,8 @@
  *   DELETE /api/{collection}/{id}   -> remove a row
  *
  * Public admission form (/api/apply) refuses a second entry from a mobile number
- * or email already Pending or Approved — one applicant, one form.
+ * or email already Pending or Approved — one applicant, one form. Signing out and
+ * changing one's own password are self-service — never blocked by a role guard.
  */
 
 /* A warning belongs in the log and nowhere else.

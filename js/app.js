@@ -1056,8 +1056,47 @@
     v.classList.toggle('view-frozen', moduleViewOnly(view));
     if (typeof fn.after === 'function') fn.after();
     gateControls(v, view);
+    /* On a phone every wide table is turned into one card per row (see the
+       card-rows CSS). The header text is copied onto each cell as data-label so
+       the value reads next to its column name; an observer re-runs it because a
+       lot of pages redraw their tbody on search, filter or paging. */
+    cardifyTables(v);
+    if (tableCardObserver) tableCardObserver.disconnect();
+    tableCardObserver = new MutationObserver(() => {
+      if (cardifyPending) return;
+      cardifyPending = true;
+      // a microtask, not requestAnimationFrame — rAF is paused while the tab is
+      // in the background, and a redraw can land there; this always runs
+      Promise.resolve().then(() => { cardifyPending = false; cardifyTables(v); });
+    });
+    tableCardObserver.observe(v, { childList: true, subtree: true });
     // whatever was just drawn is the new baseline the live poll compares against
     if (typeof dataSignature === 'function') liveSig = dataSignature();
+  }
+
+  /* Label every data-table cell with its column heading, so the phone stylesheet
+     can lay each row out as a card (heading : value). Skips the label/value
+     tables, the timetable grid and the qualification form, which are their own
+     shapes. Cells that span the row (an "empty" message) are left unlabelled. */
+  let tableCardObserver = null;
+  let cardifyPending = false;
+  function cardifyTables(scope) {
+    scope.querySelectorAll('.tbl-wrap table').forEach(t => {
+      if (t.matches('.info-tbl,.tt-table,.qual-tbl,.tbl-filter')) return;
+      const heads = [...t.querySelectorAll('thead th')].map(th => (th.textContent || '').trim());
+      if (!heads.length) return;
+      t.classList.add('card-rows');
+      t.querySelectorAll('tbody tr').forEach(tr => {
+        let i = 0;
+        [...tr.children].forEach(td => {
+          if (td.tagName !== 'TD') return;
+          const span = +(td.getAttribute('colspan') || 1);
+          const label = span > 1 ? '' : (heads[i] || '');
+          if (label) td.setAttribute('data-label', label); else td.removeAttribute('data-label');
+          i += span;
+        });
+      });
+    });
   }
 
   /* The install-app / download-APK strip shown at the top of every dashboard.

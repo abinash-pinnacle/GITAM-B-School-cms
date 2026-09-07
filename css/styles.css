@@ -789,6 +789,29 @@ a.install-btn:hover{background:var(--primary-light)}
      other row still fits across and is left alone. */
   .bday-row.is-today .bday-when{width:100%;flex-direction:row;align-items:center;
     justify-content:flex-start;gap:8px;padding-left:50px}
+
+  /* ---- wide tables become one card per row on a phone ----
+     The header row is dropped and each cell carries its column name (set as
+     data-label by cardifyTables) beside the value, so nothing has to be scrolled
+     sideways. Turned on by the card-rows class, which skips the label/value
+     tables, the timetable and the qualification grid. */
+  .card-rows thead{display:none}
+  .card-rows,.card-rows tbody,.card-rows tr,.card-rows td{display:block;width:100%}
+  .card-rows tr{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;
+    background:#fff;box-shadow:var(--shadow);overflow:hidden}
+  .card-rows td{display:flex!important;justify-content:space-between;align-items:center;gap:14px;
+    padding:10px 14px;border:none;border-bottom:1px solid var(--line);
+    text-align:right;font-size:13.5px;white-space:normal;min-width:0}
+  .card-rows tr td:last-child{border-bottom:none}
+  .card-rows td:empty{display:none!important}
+  .card-rows td::before{content:attr(data-label);font-weight:600;color:var(--primary-dark);
+    text-align:left;flex:0 0 auto;white-space:nowrap;font-size:12px;letter-spacing:.01em}
+  .card-rows td:not([data-label]){justify-content:flex-end}
+  .card-rows td[colspan]{text-align:center;justify-content:center;color:var(--muted);padding:16px}
+  .card-rows td[colspan]::before{content:none}
+  /* the row's own action buttons wrap neatly to the right under their label */
+  .card-rows td .row-actions{flex-wrap:wrap;justify-content:flex-end}
+  .tbl-wrap:has(.card-rows){overflow:visible}
 }
 
 /* ============ student file: the profile page and its long form ============ */
