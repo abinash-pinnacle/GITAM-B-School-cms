@@ -13692,6 +13692,38 @@
                      ['qp3', '+3'], ['qbca', 'BCA'], ['qbba', 'BBA'], ['qbtech', 'B.Tech'],
                      ['qother', 'Other']];
   const SUB_GUARDIANS = [['father', 'Father'], ['mother', 'Mother'], ['guardian', 'Local Guardian']];
+  /* Every field the public form carries, grouped the way the form asks them —
+     shared by the full edit dialog and the Excel export so both show the whole
+     record, not a handful of columns. 'ta' marks a textarea/long field. */
+  const SUB_EDIT_GROUPS = [
+    ['Basic', [['roll', 'Student ID'], ['title', 'Title'], ['firstName', 'First Name'],
+      ['middleName', 'Middle Name'], ['lastName', 'Last Name'], ['phone', 'Mobile'],
+      ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['domainEmail', 'College Email']]],
+    ['Course', [['course', 'Course'], ['branchName', 'Branch'], ['specialisation', 'Specialisation I'],
+      ['specialisation2', 'Specialisation II'], ['semester', 'Semester'], ['section', 'Section'],
+      ['batch', 'Batch'], ['admissionDate', 'Date of Admission', 'date'], ['house', 'Club'],
+      ['entranceExam', 'Entrance Examination'], ['entranceRank', 'Entrance Rank']]],
+    ['Personal', [['dob', 'Date of Birth', 'date'], ['gender', 'Gender'], ['bloodGroup', 'Blood Group'],
+      ['admissionCategory', 'Admission Category'], ['religion', 'Religion'], ['nationality', 'Nationality'],
+      ['birthplace', 'Birthplace'], ['identificationMark', 'Identification Mark'],
+      ['languages', 'Languages Known'], ['hobbies', 'Hobbies']]],
+    ['Identity Documents', [['univRegNo', 'University Regd. No.'], ['aadhaar', 'Aadhaar'], ['pan', 'PAN'],
+      ['voterId', 'Voter ID'], ['drivingLicense', 'Driving License'], ['passport', 'Passport']]],
+    ['Facilities Requested', [['hostel', 'Hostel'], ['transport', 'Transport'], ['nss', 'NSS']]],
+  ];
+  const SUB_TAIL_GROUPS = [
+    ['Current Address', [['address', 'Address', 'ta'], ['state', 'State'], ['district', 'District'],
+      ['city', 'City'], ['country', 'Country'], ['pincode', 'Pincode']]],
+    ['Permanent Address', [['permAddress', 'Address', 'ta'], ['permState', 'State'], ['permDistrict', 'District'],
+      ['permCity', 'City'], ['permCountry', 'Country'], ['permPincode', 'Pincode']]],
+    ['Health', [['height', 'Height (cm)'], ['weight', 'Weight (kg)'], ['allergies', 'Allergies', 'ta'],
+      ['conditions', 'Medical Conditions', 'ta'], ['medication', 'Regular Medication', 'ta'],
+      ['healthNotes', 'Notes', 'ta']]],
+    ['Emergency Contact', [['emergencyName', 'Name'], ['emergencyPhone', 'Mobile']]],
+  ];
+  const SUB_GUARDIAN_FIELDS = [['Name', 'Name'], ['Occupation', 'Occupation'], ['Mobile', 'Mobile'],
+    ['Phone', 'Phone'], ['Income', 'Annual Income'], ['Email', 'Email'], ['Qualification', 'Qualification']];
+  const SUB_QUAL_PARTS = ['Stream', 'Institute', 'Year', 'Marks'];
 
   function subData(r) {
     const raw = r && r.data;
@@ -13819,37 +13851,54 @@
   /* The admission-form queue as a spreadsheet — who filled the form, with the
      handful of columns the office actually works from. Exports whatever the
      page is showing, so a Pending or a rejected list each come out on their own. */
+  /* Every field the student filled, one row per form — the whole record, not a
+     handful of columns. Built from the same groups the edit dialog uses. */
+  function submissionExportColumns() {
+    const cols = [
+      { header: 'Name', key: '_name', width: 24 },
+      { header: 'Status', key: '_status', width: 11 },
+      { header: 'Type', key: '_type', width: 15 },
+      { header: 'Submitted', key: '_submitted', width: 20 },
+    ];
+    SUB_EDIT_GROUPS.forEach(([, fields]) => fields.forEach(([k, label]) =>
+      cols.push({ header: label, key: k, width: 16 })));
+    SUB_QUALS.forEach(([k, level]) => SUB_QUAL_PARTS.forEach(part =>
+      cols.push({ header: level + ' ' + part, key: k + part, width: 14 })));
+    SUB_GUARDIANS.forEach(([k, label]) => {
+      SUB_GUARDIAN_FIELDS.forEach(([suf, gl]) => cols.push({ header: label + ' ' + gl, key: k + suf, width: 16 }));
+      if (k === 'guardian') cols.push({ header: 'Local Guardian Home Address', key: 'guardianAddress', width: 28 });
+    });
+    SUB_TAIL_GROUPS.forEach(([grp, fields]) => fields.forEach(([k, label]) => {
+      const prefix = grp === 'Permanent Address' ? 'Permanent ' : grp === 'Emergency Contact' ? 'Emergency ' : '';
+      cols.push({ header: prefix + label, key: k, width: 16 });
+    }));
+    return cols;
+  }
   function submissionsReport(rows) {
     return {
       title: 'Admission Forms', sheetName: 'Admission Forms', subtitle: reportStamp(),
-      columns: [
-        { header: 'Name', key: 'name', width: 24 },
-        { header: 'Phone', key: 'phone', width: 14 },
-        { header: 'Email', key: 'email', width: 28 },
-        { header: 'Course', key: 'course', width: 12 },
-        { header: 'Branch', key: 'branch', width: 26 },
-        { header: 'Status', key: 'status', width: 12 },
-        { header: 'Submitted', key: 'submitted', width: 20 },
-      ],
+      columns: submissionExportColumns(),
       rows: rows.map(r => {
         const d = subData(r);
-        const name = r.name
+        const out = Object.assign({}, d);   // every form field, flat
+        delete out.photo;                    // the base64 photograph has no column
+        out._name = r.name
           || [d.firstName, d.middleName, d.lastName].map(x => (x || '').trim()).filter(Boolean).join(' ')
           || '—';
-        return {
-          name,
-          phone: r.phone || d.phone || '',
-          email: r.email || d.email || '',
-          course: r.course || d.course || '',
-          branch: r.branchName || d.branchName || '',
-          status: r.status || 'Pending',
-          submitted: (() => {
-            try { return new Date(r.submittedAt).toLocaleString('en-IN'); }
-            catch (e) { return r.submittedAt || ''; }
-          })(),
-        };
+        out._status = r.status || 'Pending';
+        out._type = r.kind === 'update' ? 'Existing student' : 'New admission';
+        out._submitted = (() => {
+          try { return new Date(r.submittedAt).toLocaleString('en-IN'); }
+          catch (e) { return r.submittedAt || ''; }
+        })();
+        // the queue's own copy of these wins over the blob, if they differ
+        out.phone = r.phone || d.phone || '';
+        out.email = r.email || d.email || '';
+        out.course = r.course || d.course || '';
+        out.branchName = r.branchName || d.branchName || '';
+        return out;
       }),
-      totals: { name: rows.length + ' form(s)' },
+      totals: { _name: rows.length + ' form(s)' },
     };
   }
 
@@ -14181,36 +14230,32 @@
     const d = subData(r);
     const gv = (k) => esc(d[k] != null ? String(d[k]) : '');
     const grid = (rows) => `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 14px">${rows}</div>`;
-    const F = (name, label, type) =>
-      `<div class="field"><label>${esc(label)}</label>
-         <input name="${name}" type="${type || 'text'}" value="${gv(name)}"></div>`;
-    const TA = (name, label) =>
-      `<div class="field" style="grid-column:1/-1"><label>${esc(label)}</label>
-         <textarea name="${name}" rows="2">${gv(name)}</textarea></div>`;
+    const F = (name, label, type) => type === 'ta'
+      ? `<div class="field" style="grid-column:1/-1"><label>${esc(label)}</label>
+           <textarea name="${name}" rows="2">${gv(name)}</textarea></div>`
+      : `<div class="field"><label>${esc(label)}</label>
+           <input name="${name}" type="${type || 'text'}" value="${gv(name)}"></div>`;
+    const groupHtml = (g) => `<h4 class="ro-sub">${esc(g[0])}</h4>${grid(g[1].map(f => F(f[0], f[1], f[2])).join(''))}`;
+    // the qualification rows the student used, and 10th/12th which are required
+    const qualLevels = SUB_QUALS.filter(([k]) => k === 'q10' || k === 'q12'
+      || SUB_QUAL_PARTS.some(s => (d[k + s] || '').toString().trim()));
+    const qualHtml = `<h4 class="ro-sub">Previous Qualifications</h4>` + (qualLevels.length ? qualLevels : [['q10', '10th'], ['q12', '12th']])
+      .map(([k, label]) => `<div style="font-weight:600;color:var(--primary-dark);font-size:12px;margin:6px 0 2px">${esc(label)}</div>`
+        + grid(F(k + 'Stream', 'Stream') + F(k + 'Institute', 'Institute')
+          + F(k + 'Year', 'Passout Year') + F(k + 'Marks', '% Marks'))).join('');
+    const guardHtml = SUB_GUARDIANS.map(([k, label]) => `<h4 class="ro-sub">${esc(label)}</h4>`
+      + grid(SUB_GUARDIAN_FIELDS.map(([suf, gl]) => F(k + suf, gl)).join('')
+        + (k === 'guardian' ? F(k + 'Address', 'Home Address', 'ta') : ''))).join('');
     openModal('Edit Form — ' + (r.name || r.roll || ''), `
       <form id="edSub">
         <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.6">
-          Fix anything the student got wrong, then Save. This changes the form only —
-          it still has to be <b>Approved</b> to reach the roll. Boxes left blank here are
-          cleared on the form; everything not shown (photo, guardians, qualifications) is kept.</p>
-        <h4 class="ro-sub">Basic</h4>${grid(
-          F('roll', 'Student ID') + F('title', 'Title') +
-          F('firstName', 'First Name') + F('middleName', 'Middle Name') + F('lastName', 'Last Name') +
-          F('phone', 'Mobile') + F('whatsapp', 'WhatsApp') +
-          F('email', 'Email') + F('domainEmail', 'College Email'))}
-        <h4 class="ro-sub">Course</h4>${grid(
-          F('course', 'Course') + F('branchName', 'Branch') +
-          F('specialisation', 'Specialisation I') + F('specialisation2', 'Specialisation II') +
-          F('semester', 'Semester') + F('section', 'Section') + F('batch', 'Batch') +
-          F('admissionDate', 'Date of Admission', 'date') + F('house', 'Club'))}
-        <h4 class="ro-sub">Personal</h4>${grid(
-          F('dob', 'Date of Birth', 'date') + F('gender', 'Gender') +
-          F('bloodGroup', 'Blood Group') + F('admissionCategory', 'Admission Category') +
-          F('aadhaar', 'Aadhaar') + F('univRegNo', 'University Regd. No.'))}
-        <h4 class="ro-sub">Current Address</h4>${grid(
-          TA('address', 'Address') +
-          F('state', 'State') + F('district', 'District') + F('city', 'City') +
-          F('country', 'Country') + F('pincode', 'Pincode'))}
+          Everything the student filled is here — fix anything wrong and Save. This changes the
+          form only; it still has to be <b>Approved</b> to reach the roll. A box left blank is
+          cleared on the form; the photograph is kept.</p>
+        ${SUB_EDIT_GROUPS.map(groupHtml).join('')}
+        ${qualHtml}
+        ${guardHtml}
+        ${SUB_TAIL_GROUPS.map(groupHtml).join('')}
         <div class="form-actions">
           <button type="button" class="btn-outline" id="edCancel">Cancel</button>
           <button type="submit" class="btn-primary">Save changes</button>
