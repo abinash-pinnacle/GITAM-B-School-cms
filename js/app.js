@@ -83,6 +83,7 @@
   function facultyAttendanceOn() { return settingOn('facultyAttendance', true); }
   function canMarkAttendance() {
     if (!user) return false;
+    if (hasCustomAccess(user)) return can('attendance', 'add');   // decided by the grant
     if (['admin', 'course_coordinator'].includes(user.role)) return true;
     return user.role === 'faculty' && facultyAttendanceOn();
   }
@@ -166,7 +167,12 @@
   const SUBADMIN_ROLE = 'subadmin';
   /** the placement cell — the admin runs everything, the officer runs placement */
   const PLACEMENT_MANAGE_ROLES = ['admin', 'placement_officer'];
-  function canManagePlacement() { return !!user && PLACEMENT_MANAGE_ROLES.includes(user.role); }
+  function canManagePlacement() {
+    if (!user) return false;
+    // custom-access → decided by the placement grant, not the role
+    if (hasCustomAccess(user)) return WRITE_ACTIONS.some(a => can('placement', a));
+    return PLACEMENT_MANAGE_ROLES.includes(user.role);
+  }
   function isPlacementOfficer() { return !!user && user.role === 'placement_officer'; }
   /** true for a role that may only look at data, never change it */
   function roleReadOnly() { return !!user && READ_ONLY_ROLES.includes(user.role); }
@@ -227,10 +233,14 @@
   }
   /** true for a role that may look at the master data but never change it */
   function viewsMasterOnly() {
+    // a custom-access account is decided by its grant, not its base role — so a
+    // coordinator or admission officer the Super Admin gave a module to is not
+    // forced view-only on it
+    if (hasCustomAccess(user)) return readOnly();
     return readOnly() || (!!user && ['course_coordinator', 'admission'].includes(user.role));
   }
   /** roles whose scope is the whole college: the admin runs it, the center head watches it */
-  function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
+  function collegeWide() { return !!user && (user.role === 'admin' || user.role === 'center_head' || hasCustomAccess(user)); }
   /* ---------- actions ----------
      What can be done inside a module. One list, drawn by the permission screen
      and checked by the server, so a box ticked there is the box the API reads. */
@@ -2295,8 +2305,11 @@
   function viewStudents() {
     // the admissions desk enrols and corrects; only the admin removes a record
     const base = baseRoleOf(user.role);
-    const canEdit = ['admin', 'admission'].includes(base) && can('students', 'edit');
-    const canDelete = base === 'admin' && can('students', 'delete');
+    const custom = hasCustomAccess(user);
+    const canEdit = custom
+      ? (can('students', 'add') || can('students', 'edit'))
+      : (['admin', 'admission'].includes(base) && can('students', 'edit'));
+    const canDelete = custom ? can('students', 'delete') : (base === 'admin' && can('students', 'delete'));
     // librarians and the center head can't edit students, but they do need each
     // student's book history
     const canSeeBooks = ['admin', 'librarian', 'center_head'].includes(user.role);
@@ -5845,7 +5858,7 @@
     /* The Super Admin, and an Admin granted Staff, set the employee's login here.
        A new employee always gets one on save either way; showing the section
        just lets them choose the user id and password instead of the defaults. */
-    const withLogin = user.role === 'admin' || user.role === SUBADMIN_ROLE;
+    const withLogin = user.role === 'admin' || hasCustomAccess(user);
     const per = stuPart(f, 'personal');
     const other = stuPart(f, 'otherInfo');
     const addr = stuPart(f, 'addressInfo');
@@ -6437,7 +6450,11 @@
      Every role reaches this page except the accounts office, and only the
      admin can change it — enforced in api/index.php, not just hidden here. */
   const SYLLABUS_TYPES = ['Theory', 'Lab', 'Elective', 'Project'];
-  function canEditSyllabus() { return !!user && user.role === 'admin'; }
+  function canEditSyllabus() {
+    if (!user) return false;
+    if (hasCustomAccess(user)) return can('academics', 'edit');
+    return user.role === 'admin';
+  }
 
   function syllabusRows(branch, sem, q) {
     const needle = (q || '').trim().toLowerCase();
@@ -7328,7 +7345,7 @@
     return grid;
   }
   function viewTimetable() {
-    const isAdmin = user.role === 'admin';
+    const isAdmin = user.role === 'admin' || (hasCustomAccess(user) && can('academics', 'edit'));
     const isFaculty = user.role === 'faculty';
     // the center head and the coordinator pick any class the admin can, and
     // edit none of it
@@ -7773,7 +7790,7 @@
   /*  EVENTS                                                    */
   /* ========================================================= */
   function viewEvents() {
-    const canEdit = user.role === 'admin';
+    const canEdit = hasCustomAccess(user) ? can('events', 'edit') : user.role === 'admin';
     const html = `<div class="panel"><div class="panel-head"><h3>College Events</h3>
       ${canEdit ? `<button class="btn-primary" id="addEvent">+ Add Event</button>` : ''}</div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -7836,7 +7853,7 @@
   // catalogue-only for librarians (they have dedicated Issue/Return pages);
   // admin keeps the combined catalogue + issue + currently-issued view
   function viewLibrary() {
-    const full = user.role === 'admin';
+    const full = user.role === 'admin' || hasCustomAccess(user);
     const canEdit = !readOnly();
     let html = full ? libraryAccountsPanel() : '';
     if (readOnly()) {
@@ -10892,7 +10909,11 @@
   const REQ_STAGE2 = ['Approved', 'Ordered', 'Received'];   // what accounts does next
   function isReqPending(r) { return (r.status || 'Pending') === 'Pending'; }
   /** does this role sign requests off, rather than process them? */
-  function reviewsRequisitions() { return !!user && (user.role === 'admin' || user.role === 'center_head'); }
+  function reviewsRequisitions() {
+    if (!user) return false;
+    if (hasCustomAccess(user)) return can('requisitions', 'approve');
+    return user.role === 'admin' || user.role === 'center_head';
+  }
   /** the statuses this role may choose on the review form */
   function reqStatusChoices() {
     if (user.role === 'center_head') return ['Pending'].concat(REQ_STAGE1);

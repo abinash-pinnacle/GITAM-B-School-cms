@@ -1286,7 +1286,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     }
 
     if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true) && is_read_only_role()
-        && !read_only_write_allowed($resource, $method)) {
+        && !read_only_write_allowed($resource, $method) && !has_custom_access()) {
         send_json([
             'error'   => 'read-only',
             'message' => 'Your role has view-only access and cannot change data.',
@@ -1295,7 +1295,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
 
     if ($resource === 'syllabus') {
         $role = current_user()['role'] ?? '';
-        if (in_array($role, SYLLABUS_HIDDEN_ROLES, true)) {
+        if (in_array($role, SYLLABUS_HIDDEN_ROLES, true) && !has_custom_access()) {
             send_json(['error' => 'forbidden',
                        'message' => 'The curriculum is not part of the accounts office.'], 403);
         }
@@ -1323,8 +1323,10 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
 
     /* A course coordinator exists to run attendance. It reads the master data
        that attendance is built from — students, papers, faculty — and writes
-       none of it: the one collection it may change is `attendance` itself. */
-    if (current_role() === 'course_coordinator') {
+       none of it: the one collection it may change is `attendance` itself. But a
+       coordinator the Super Admin has put on custom access is governed by that
+       grant instead, so this role rule steps aside for it. */
+    if (current_role() === 'course_coordinator' && !has_custom_access()) {
         // signing out and changing one's own password act on the caller's own
         // session and account, not on master data — never blocked by role
         if ($isWrite && !in_array($resource, ['attendance', 'change-password', 'logout'], true)) {
@@ -1352,8 +1354,9 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
 
     /* The admissions desk enrols students and corrects them; it may not
        remove one, and outside students and their logins it may not write at
-       all. Reads are narrowed to what enrolling needs. */
-    if (current_role() === 'admission') {
+       all. Reads are narrowed to what enrolling needs. An admission officer on
+       custom access is governed by its grant instead, so this steps aside. */
+    if (current_role() === 'admission' && !has_custom_access()) {
         // correcting a student id is a student edit, which is what this desk does;
         // signing out and changing one's own password are self-service and never
         // blocked by role
