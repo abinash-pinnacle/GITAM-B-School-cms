@@ -151,12 +151,19 @@
      change data even by calling the API directly.
      ========================================================= */
   const READ_ONLY_ROLES = ['center_head'];
+  /* The full-power role keeps the internal key `admin`, so every rule that
+     already grants it everything is untouched; only its label changes. The
+     restricted Admin (`subadmin`) is a seeded role row, not a built-in here, so
+     it stays out of the Employees designations and reads its label from that
+     row (roleLabel) — it is offered wherever custom roles are. */
   const ROLE_LABEL = {
-    admin: 'Admin', accountant: 'Accountant', center_head: 'Center Head',
+    admin: 'Super Admin', accountant: 'Accountant', center_head: 'Center Head',
     placement_officer: 'Placement Officer', course_coordinator: 'Course Coordinator',
     admission: 'Admission Officer',
     faculty: 'Faculty', librarian: 'Librarian', student: 'Student',
   };
+  /** the restricted-Admin role key; its label lives on the seeded roles row */
+  const SUBADMIN_ROLE = 'subadmin';
   /** the placement cell — the admin runs everything, the officer runs placement */
   const PLACEMENT_MANAGE_ROLES = ['admin', 'placement_officer'];
   function canManagePlacement() { return !!user && PLACEMENT_MANAGE_ROLES.includes(user.role); }
@@ -259,7 +266,8 @@
   /** the label shown in the top bar and the sidebar */
   function roleLabel(role) {
     const r = roleRow(role);
-    return (r && r.label) || ROLE_LABEL[role] || role;
+    return (r && r.label) || ROLE_LABEL[role]
+      || (role === SUBADMIN_ROLE ? 'Admin' : role);
   }
   const ROLE_LIST = Object.keys(ROLE_LABEL);
 
@@ -471,7 +479,7 @@
   // the mark-attendance page itself, not the portal root — /emp/ only lands on
   // the login index, which is a step further from what staff actually need
   const EMP_ATTENDANCE_URL = 'https://pinnacle.myattendance.co.in/emp/add_attendance';
-  const EMP_ATTENDANCE = [NAV_LINK, '🕐', 'Employee Attendance', EMP_ATTENDANCE_URL];
+  const EMP_ATTENDANCE = [NAV_LINK, '🕐', 'My Attendance', EMP_ATTENDANCE_URL];
   const MENU = {
     admin: [
       ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['students','🎓','Students'],
@@ -497,6 +505,7 @@
       ['offers','📜','Offers'], ['plcalendar','📅','Placement Calendar'],
       ['plreports','📊','Placement Reports'], ['placementofficers','🧑‍💼','Placement Officers'],
       ['usersettings','⚙️','User Management'], ['roles','🛡️','Roles & Permissions'],
+      ['adminmgmt','👥','Admin Management'],
       [NAV_SECTION,'','Staff'],
       EMP_ATTENDANCE,
     ],
@@ -600,8 +609,24 @@
     items = items.filter(([key, , , url]) =>
       key === NAV_SECTION || key === NAV_LINK
       || allowed(key === NAV_GROUP ? url : key));
-    return items.filter(([key], i) =>
-      key !== NAV_SECTION || items.slice(i + 1).some(([k]) => k !== NAV_SECTION));
+    /* My Attendance rides at the very top for everyone who has it — it is the
+       one thing staff open every day. Pulled to the front here rather than moved
+       in each role's menu, and before the section-drop below so the heading it
+       used to sit under (Staff) falls away once it is empty. */
+    const ea = items.findIndex(([key, , , url]) => key === NAV_LINK && url === EMP_ATTENDANCE_URL);
+    if (ea > -1) items.unshift(items.splice(ea, 1)[0]);
+    /* Drop a section heading that now leads nothing: keep it only when a real
+       item follows before the next heading. Without the "before the next
+       heading" part a single trailing link kept every empty section above it
+       alive, which is what put a bare "Finance" over nothing on a narrow grant. */
+    return items.filter(([key], i) => {
+      if (key !== NAV_SECTION) return true;
+      for (let j = i + 1; j < items.length; j++) {
+        if (items[j][0] === NAV_SECTION) return false;
+        return true;
+      }
+      return false;
+    });
   }
 
   function buildNav() {
@@ -751,7 +776,7 @@
                                                     ['events']],
     ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches'],
                                                     []],
-    ['system',       'Users, Roles & Settings',     ['accounts', 'usersettings', 'roles'],
+    ['system',       'Users, Roles & Settings',     ['accounts', 'usersettings', 'roles', 'adminmgmt'],
                                                     ['users', 'settings', 'roles', 'auditlog']],
   ];
   /* Pages nobody is ever narrowed out of: the dashboard they land on and the
@@ -818,12 +843,20 @@
   }
   /** the role template, or null when the role has never been narrowed */
   function rolePerms(key) {
+    /* The Admin is narrowed per account, never at the role level: its template
+       is deliberately empty, and an empty template read as a restriction would
+       zero every Admin. So it never narrows here — the per-user grant does. */
+    if (key === SUBADMIN_ROLE) return null;
     const r = roleRow(key);
     return r ? readPermSet(r.permissions) : null;
   }
   /** the per-user override, or null when the account is not narrowed */
   function userPerms(u) {
-    if (!u || (u.access || 'full') !== 'restricted') return null;
+    if (!u) return null;
+    /* An Admin is always narrowed by its own grant: its ceiling is the Super
+       Admin's, so a missing override must read as "nothing", never "everything".
+       This mirrors effective_perms() on the server. */
+    if ((u.access || 'full') !== 'restricted' && u.role !== SUBADMIN_ROLE) return null;
     return readPermSet(u.permissions) || {};
   }
 
@@ -1033,6 +1066,7 @@
       placementofficers: viewPlacementOfficers,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
       usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
+      adminmgmt: viewAdminManagement,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     /* The app-install offer and the Android APK sit at the top of everyone's
@@ -1311,6 +1345,81 @@
     </div>`;
   }
 
+  /* ---- ADMIN dashboard ----
+     Built entirely from what the Super Admin granted. A stat card, a quick
+     action and a panel each appear only for a module this account may view, so
+     nothing it cannot reach is counted, linked or shown here — the same rule the
+     server enforces, drawn on the page. An Admin with no modules yet sees a
+     plain "waiting for access" note rather than an empty grid. */
+  function subAdminDashboard() {
+    viewDashboard.after = null;
+    const show = (m) => can(m, 'view');
+    const cards = [];
+    if (show('students')) cards.push(statCard('🎓', Store.all('students').length, 'Total Students'));
+    if (show('staff')) cards.push(statCard('👨‍🏫', Store.all('faculty').length, 'Faculty Members', 'c2'));
+    if (show('academics')) cards.push(statCard('📚', Store.all('courses').length, 'Courses Offered', 'c3'));
+    if (show('attendance')) cards.push(statCard('🗓️', Store.all('attendance').filter(a => a.date === today()).length, "Today's Classes", 'c3'));
+    if (show('fees')) {
+      const fees = Store.all('fees');
+      const tot = fees.reduce((s, f) => s + (f.total || 0), 0);
+      const col = fees.reduce((s, f) => s + Math.min(f.total, f.paid || 0), 0);
+      cards.push(statCard('💳', (tot ? Math.round(col / tot * 100) : 0) + '%', 'Fees Collected', 'c3'));
+    }
+    if (show('library')) cards.push(statCard('📖', Store.all('books').reduce((s, b) => s + (b.total || 0), 0), 'Library Books', 'c2'));
+    if (show('placement')) cards.push(statCard('💼', Store.all('offers').filter(o => ['Accepted', 'Joined'].includes(o.status)).length, 'Placed Students', 'c2'));
+    if (show('requisitions')) cards.push(statCard('📦', Store.all('requisitions').filter(r => (r.status || '') === 'Pending').length, 'Pending Requisitions', 'c4'));
+    if (show('assets')) cards.push(statCard('🏢', Store.all('assets').length, 'Asset Records', 'c3'));
+
+    // quick actions: one link per granted page the sidebar shows this account
+    const quick = menuFor(user).filter(([k]) =>
+      k !== NAV_SECTION && k !== NAV_LINK && k !== NAV_GROUP
+      && k !== 'dashboard' && !ALWAYS_ALLOWED.includes(k));
+
+    // the granted modules, with the actions allowed on each — so the Admin can
+    // see exactly what it may do, and ask the Super Admin for more if needed
+    const grantRows = MODULES.filter(([m]) => (PERMS[m] || []).length)
+      .map(([m, label]) => [label, PERMS[m]]);
+
+    let html = `<div class="welcome-banner">
+      <div class="wb-text">
+        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <p>NMIET B-SCHOOL · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
+        <div class="wb-chips"><span>🔑 ${grantRows.length} module${grantRows.length === 1 ? '' : 's'} granted</span></div>
+      </div>
+      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+    </div>`;
+
+    if (!grantRows.length) {
+      html += `<div class="panel"><p class="empty">Your account has not been granted any modules yet.
+        The Super Admin assigns access from <b>Admin Management</b>.</p></div>`;
+      return html;
+    }
+
+    if (cards.length) html += `<div class="stat-grid">${cards.join('')}</div>`;
+
+    html += `<div class="dash-2col">
+      <div class="panel">
+        <div class="panel-head"><h3>⚡ Quick Actions</h3></div>
+        ${quick.length ? `<div class="quick-actions">${quick.map(([k, icon, label]) =>
+          `<button class="qa-btn" data-go="${esc(k)}"><span class="qa-ico">${icon || '▸'}</span>${esc(label)}</button>`).join('')}</div>`
+          : `<p class="empty">No pages available.</p>`}
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>🔐 Your Access</h3></div>
+        <div class="tbl-wrap"><table class="pg-table"><thead><tr><th>Module</th><th>You can</th></tr></thead><tbody>
+        ${grantRows.map(([label, acts]) => `<tr><td class="pg-mod">${esc(label)}</td>
+          <td>${acts.map(a => `<span class="pill">${esc(ACTIONS.find(x => x[0] === a) ? ACTIONS.find(x => x[0] === a)[1] : a)}</span>`).join(' ')}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+    </div>`;
+    viewDashboard.after = () => {
+      document.querySelectorAll('.qa-btn[data-go]').forEach(b => {
+        b.onclick = () => navigate(b.dataset.go);
+      });
+    };
+    return html;
+  }
+
   // ---- DASHBOARD ----
   function viewDashboard() {
     viewDashboard.after = null;
@@ -1321,6 +1430,7 @@
     if (user.role === 'center_head') return centerHeadDashboard();
     if (user.role === 'placement_officer') return placementDashboard();
     if (user.role === 'admission') return admissionDashboard();
+    if (user.role === SUBADMIN_ROLE) return subAdminDashboard();
     const students = Store.all('students');
     const nStu = students.length;
     const nIncomplete = incompleteStudents().length;
@@ -14577,6 +14687,221 @@
       </tr>`).join('')}</tbody></table></div>`
         : `<p class="empty" style="padding:18px 2px">No modules — this account opens the dashboard
            and its own pages only.</p>`}
+      <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
+    $('#cx').onclick = closeModal;
+  }
+
+  /* ================= Admin Management (Super Admin only) =================
+     The Super Admin's console for the restricted Admin accounts: create one,
+     grant or remove modules on the matrix, reset a password, switch an account
+     on or off, and read what it has been doing. Everything here acts on
+     role = subadmin accounts only. The server's escalation shield refuses any of
+     it to an Admin that reaches the API by hand, so this is the friendly face of
+     a rule that holds with or without it. */
+
+  /* What an Admin can be granted: every module except System (users, roles,
+     settings and the audit log stay with the Super Admin). The matrix and the
+     saved grant are both capped to this, so a stale ceiling cannot widen it. */
+  const ADMIN_GRANTABLE = MODULES.map(([k]) => k).filter(k => k !== 'system');
+  function adminCeiling() {
+    const full = roleCeiling('admin');
+    const out = {};
+    ADMIN_GRANTABLE.forEach(k => { if (full[k]) out[k] = full[k]; });
+    return out;
+  }
+  /** the last time this account actually signed in, from the audit log */
+  function adminLastLogin(uid) {
+    const rows = Store.all('auditlog').filter(r =>
+      String(r.actorId) === String(uid) && ((r.changes && r.changes.action) === 'login'));
+    if (!rows.length) return null;
+    rows.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+    return rows[0].at;
+  }
+
+  function viewAdminManagement() {
+    if (user.role !== 'admin') return accessDenied();
+    const html = `<div class="panel"><div class="panel-head"><h3>Admin Management</h3>
+        <div class="panel-tools">
+          <input class="search-box" id="amQ" placeholder="Search name / user id...">
+          <select class="filter-sel" id="amStatus"><option value="">Any Status</option>
+            <option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+          <button class="btn-primary" id="amAdd">+ Create Admin</button>
+        </div></div>
+      <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
+        Restricted administrators. Each one sees and does only the modules you grant — the sidebar,
+        the dashboard and the server all follow that grant. An Admin can never reach roles, settings,
+        the audit log, or another administrator's account. Remove a permission and the access is gone
+        the moment they reload.</p>
+      <div id="amStats" class="stat-grid" style="margin:0 0 16px"></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Name</th><th>User ID</th><th>Status</th><th>Modules granted</th><th>Last sign-in</th><th>Actions</th>
+      </tr></thead><tbody id="amBody"></tbody></table></div></div>`;
+
+    viewAdminManagement.after = () => {
+      const when = (iso) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso; } };
+      const rowsFor = () => {
+        const q = ($('#amQ').value || '').trim().toLowerCase();
+        const status = $('#amStatus').value;
+        return Store.all('users').filter(u => u.role === SUBADMIN_ROLE
+          && (!q || [u.name, u.username, u.email].some(v => String(v || '').toLowerCase().includes(q)))
+          && (!status || (userActive(u) ? 'Active' : 'Inactive') === status))
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      };
+      const draw = () => {
+        const rows = rowsFor();
+        const admins = Store.all('users').filter(u => u.role === SUBADMIN_ROLE);
+        $('#amStats').innerHTML = `${statCard('👥', admins.length, 'Admins')}
+          ${statCard('✅', admins.filter(userActive).length, 'Active', 'c2')}
+          ${statCard('🚫', admins.filter(u => !userActive(u)).length, 'Deactivated',
+            admins.some(u => !userActive(u)) ? 'c4' : 'c3')}`;
+        $('#amBody').innerHTML = rows.length ? rows.map(u => {
+          const perms = effectivePerms(u);
+          const nMod = MODULES.filter(([k]) => (perms[k] || []).length).length;
+          const active = userActive(u);
+          return `<tr class="${active ? '' : 'row-off'}">
+            <td><b>${esc(u.name || '—')}</b>${u.email ? `<br><small style="color:var(--muted)">${esc(u.email)}</small>` : ''}</td>
+            <td class="mono">${esc(u.username || '—')}</td>
+            <td><span class="pill ${active ? 'green' : 'red'}">${active ? 'Active' : 'Inactive'}</span></td>
+            <td>${nMod ? `<span class="pill blue">${nMod} module${nMod === 1 ? '' : 's'}</span>`
+              : '<small style="color:var(--muted)">none yet</small>'}</td>
+            <td style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${esc(when(adminLastLogin(u.id)))}</td>
+            <td><div class="row-actions">
+              <button class="btn-sm btn-edit" data-perm="${u.id}">🔐 Permissions</button>
+              <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
+              <button class="btn-sm btn-outline" data-reset="${u.id}">↺ Password</button>
+              <button class="btn-sm btn-outline" data-log="${u.id}">🕘 Activity</button>
+              <button class="btn-sm btn-outline" data-toggle="${u.id}">${active ? '🚫 Deactivate' : '✅ Activate'}</button>
+              <button class="btn-sm btn-del" data-del="${u.id}">Delete</button>
+            </div></td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="empty">No Admin accounts yet. Create one to grant scoped access.</td></tr>`;
+
+        $('#amBody').querySelectorAll('[data-perm]').forEach(b => b.onclick = () => adminPermissionsModal(b.dataset.perm, draw));
+        $('#amBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => userForm(b.dataset.edit, draw));
+        $('#amBody').querySelectorAll('[data-reset]').forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, draw));
+        $('#amBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => adminActivityModal(b.dataset.log));
+        $('#amBody').querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => toggleUser(b.dataset.toggle, draw));
+        $('#amBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => delConfirm('users', b.dataset.del, 'Admin account', draw));
+      };
+      ['amQ', 'amStatus'].forEach(id => {
+        const el = $('#' + id);
+        el[el.tagName === 'INPUT' ? 'oninput' : 'onchange'] = draw;
+      });
+      $('#amAdd').onclick = () => adminCreateForm(draw);
+      draw();
+    };
+    return html;
+  }
+
+  /* A new Admin starts with no access at all: access = restricted with an empty
+     grant, so it can sign in and see nothing until a module is ticked. */
+  function adminCreateForm(after) {
+    openModal('Create Admin', `<form id="f">
+      <div class="form-grid">
+        <div class="field"><label>Full Name</label><input name="name" required></div>
+        <div class="field"><label>User ID</label>
+          <input name="username" placeholder="what they sign in with" required></div>
+        ${fText('email', 'Email', '', 'type="email" placeholder="name@example.com"')}
+        ${fText('phone', 'Mobile', '', 'inputmode="numeric" maxlength="10"')}
+        <div class="field"><label>Password</label>
+          <input name="password" type="text" placeholder="${DEFAULT_PASSWORD}"></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
+        A new Admin starts with <b>no access</b>. After creating it, use <b>Permissions</b> to grant modules.</p>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Create Admin</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    bindPhoneInput(document.querySelector('#modalBody [name="phone"]'));
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const d = formData(e.target);
+      const username = (d.username || '').trim();
+      if (!username) { toast('The account needs a user id.', 'err'); return; }
+      if (Store.all('users').find(x => (x.username || '').toLowerCase() === username.toLowerCase())) {
+        toast(`User id "${username}" is already taken.`, 'err'); return;
+      }
+      if (typeof d.email === 'string') d.email = d.email.trim();
+      if (d.phone && !phoneValid(d.phone)) { toast(BAD_MOBILE, 'err'); return; }
+      if (!emailValid(d.email)) { toast(BAD_EMAIL, 'err'); return; }
+      Store.add('users', {
+        name: (d.name || '').trim(), username, email: d.email || '', phone: d.phone || '',
+        password: d.password || DEFAULT_PASSWORD, role: SUBADMIN_ROLE, status: 'Active',
+        access: 'restricted', permissions: {},
+      });
+      closeModal();
+      toast('Admin created. Open Permissions to grant modules.');
+      if (after) after();
+    };
+  }
+
+  /* The permission matrix for one Admin. Its ceiling is every module except
+     System, and an Admin is always Custom — there is no "Role Default", because
+     the whole point of the role is that each account is granted by hand. */
+  function adminPermissionsModal(uid, after) {
+    const u = Store.find('users', uid);
+    if (!u || u.role !== SUBADMIN_ROLE) { toast('That is not an Admin account.', 'err'); return; }
+    const ceiling = adminCeiling();
+    const current = userPerms(u) || {};
+    openModal('Permissions — ' + (u.name || u.username), `<form id="f">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">
+        <b>${esc(u.name || '—')}</b> · <span class="pill blue">Admin</span> ·
+        <span class="mono">${esc(u.username)}</span></p>
+      <h4 class="ro-sub">Module access — tick what this Admin may do</h4>
+      ${permGridHtml(ceiling, current, { note: 'The Admin sees only the modules ticked here.' })}
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save Permissions</button></div></form>`, true);
+    const read = bindPermGrid(ceiling, current);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const before = userPerms(u);
+      const perms = read();
+      Store.update('users', uid, { access: 'restricted', permissions: perms });
+      auditPerms('user', u.username, u.name || u.username, before || {}, perms);
+      closeModal();
+      toast(`${u.name || u.username}: ${plural(Object.keys(perms).length, 'module')} granted.`);
+      if (after) after(); else render();
+    };
+  }
+
+  function adminResetPassword(uid, after) {
+    const u = Store.find('users', uid); if (!u) return;
+    confirmAction('Reset Password',
+      `Set <b>${esc(u.name || u.username)}</b>'s password back to <b>${esc(DEFAULT_PASSWORD)}</b>?
+       They can change it after signing in.`, 'Reset Password', () => {
+        Store.update('users', uid, { password: DEFAULT_PASSWORD });
+        toast('Password reset.'); if (after) after();
+      });
+  }
+
+  /* An Admin's activity and sign-in history, read from the server-kept audit
+     log — sign-ins with their IP address, and every record it created, changed
+     or removed. Read-only; the log cannot be edited from anywhere. */
+  function adminActivityModal(uid) {
+    const u = Store.find('users', uid); if (!u) return;
+    const when = (iso) => { try { return new Date(iso).toLocaleString('en-IN'); } catch (e) { return iso; } };
+    const mine = Store.all('auditlog').filter(r => String(r.actorId) === String(uid))
+      .sort((a, b) => String(b.at || '').localeCompare(String(a.at || ''))).slice(0, 200);
+    const act = (r) => (r.changes && r.changes.action) || '';
+    const ip = (r) => (r.changes && r.changes.ip) || '—';
+    const logins = mine.filter(r => ['login', 'logout', 'login-failed'].includes(act(r)));
+    openModal('Activity — ' + (u.name || u.username), `
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">
+        Kept by the server, newest first, and not editable from here.
+        ${mine.length >= 200 ? 'Showing the latest 200 actions.' : ''}</p>
+      <h4 class="ro-sub">Sign-in history</h4>
+      ${logins.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Event</th><th>IP address</th></tr></thead>
+        <tbody>${logins.slice(0, 60).map(r => `<tr>
+          <td style="white-space:nowrap">${esc(when(r.at))}</td>
+          <td><span class="pill ${act(r) === 'login' ? 'green' : act(r) === 'login-failed' ? 'red' : 'blue'}">${esc(act(r))}</span></td>
+          <td class="mono">${esc(ip(r))}</td></tr>`).join('')}</tbody></table></div>`
+        : `<p class="empty">No sign-ins recorded yet.</p>`}
+      <h4 class="ro-sub" style="margin-top:16px">Actions</h4>
+      ${mine.length ? `<div class="tbl-wrap"><table><thead><tr><th>When</th><th>Did</th><th>To</th></tr></thead>
+        <tbody>${mine.map(r => `<tr>
+          <td style="white-space:nowrap">${esc(when(r.at))}</td>
+          <td>${esc(r.summary || '—')}</td>
+          <td>${esc(r.subjectName || r.subjectKey || '—')}</td></tr>`).join('')}</tbody></table></div>`
+        : `<p class="empty">Nothing recorded yet.</p>`}
       <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`, true);
     $('#cx').onclick = closeModal;
   }

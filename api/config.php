@@ -92,7 +92,7 @@ function db_config(): array
 /* Bump when the demo data in seed_data() changes. It rides along in the
    schema signature, so an install still carrying the previous demo set
    re-runs init_db() once and picks the new one up. */
-const SEED_REVISION = '2026-08-21-mba-only';
+const SEED_REVISION = '2026-09-08-superadmin-rbac';
 
 /* Every staff table records the same things about a person, because one
    Employees form fills all of them. Written once so the six cannot drift apart,
@@ -358,7 +358,15 @@ const ID_PREFIX = [
 /**
  * Role-based access control.
  *
- *   ADMIN        full access
+ *   ADMIN        full access — the Super Admin. Displayed as "Super Admin";
+ *                the internal key stays `admin` so every rule that already
+ *                grants it everything keeps meaning what it always did.
+ *   SUBADMIN     the restricted Admin. Its ceiling is the Super Admin's, but it
+ *                starts with nothing: every account is `access = restricted` and
+ *                sees only the modules and actions the Super Admin has ticked.
+ *                It can never reach roles, the audit log, settings, or another
+ *                administrator's account — the escalation shield in
+ *                guard_request() enforces that, not merely the hidden menu.
  *   ACCOUNTANT   full access to the finance modules
  *   CENTER_HEAD  view / search / filter / report / export across the whole CMS,
  *                and nothing else — never create, edit, delete or approve
@@ -373,8 +381,14 @@ const ID_PREFIX = [
  * Every rule below is enforced in api/index.php. The UI hides the buttons as
  * well, but the server is the gate: a hand-made POST/PUT/DELETE is refused.
  */
-const ROLES = ['admin', 'accountant', 'center_head', 'placement_officer',
+const ROLES = ['admin', 'subadmin', 'accountant', 'center_head', 'placement_officer',
                'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
+
+/* The administrator family, the Admin's forbidden tables and its read map live
+   in api/index.php beside the gate that reads them — never here — because a
+   Hostinger deploy syncs file by file: index.php referencing a constant this
+   file had not delivered yet would fatal the whole site for that window. See
+   ADMIN_FAMILY / SUBADMIN_* there. */
 
 /* Requests that may arrive without a token, because they are how one is
    obtained or are deliberately public. Everything else is refused. */

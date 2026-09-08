@@ -605,6 +605,77 @@ function placement_officer_may_read(string $col): bool
         || in_array($col, PLACEMENT_READABLE, true);
 }
 
+/* The two administrator roles. The Super Admin (`admin`) may do anything; the
+   Admin (`subadmin`) borrows that ceiling but is held to what it has been
+   granted. These live here, beside the gate that reads them, and not in
+   config.php: a Hostinger deploy syncs file by file, so a constant this file
+   uses has to arrive in this file — index.php referencing one config.php had
+   not delivered yet would fatal the whole site for the length of that window. */
+const ADMIN_FAMILY = ['admin', 'subadmin'];
+const SUPER_ADMIN_ROLE = 'admin';
+const ADMIN_ROLE = 'subadmin';
+
+/* The tables the Admin may never reach, whatever it has been granted: roles and
+   the audit log are how access itself is decided, and settings are the system's
+   own switches — all three stay with the Super Admin. */
+const SUBADMIN_FORBIDDEN = ['roles', 'auditlog', 'settings'];
+
+/* What an Admin may read. The academic directory here is reference every page
+   leans on (names, courses, the timetable) and is left readable; everything
+   sensitive — money, marks, placement, the admission queue, staff files — is
+   shown only when the module that owns it has been granted. Reads are refused
+   in guard_request and emptied in the bootstrap, not merely hidden in the menu. */
+const SUBADMIN_ALWAYS_READ = ['roles', 'settings', 'events', 'users', 'students',
+                              'faculty', 'coordinators', 'admissions', 'courses',
+                              'syllabus', 'timetable'];
+/** module key => the collections granting that module lets the Admin read */
+const SUBADMIN_MODULE_READS = [
+    'students'     => ['submissions'],
+    'fees'         => ['fees', 'fixedfees', 'payments'],
+    'assets'       => ['assets'],
+    'staff'        => ['accountants', 'centerheads', 'placementofficers'],
+    'marks'        => ['marks'],
+    'attendance'   => ['attendance'],
+    'placement'    => ['companies', 'drives', 'applications', 'interviews',
+                       'offers', 'placementevents', 'placementofficers'],
+    'library'      => ['books', 'issues'],
+    'requisitions' => ['requisitions'],
+];
+
+/** the restricted Admin */
+function is_sub_admin(): bool
+{
+    return current_role() === ADMIN_ROLE;
+}
+
+/** either administrator — the Super Admin or a restricted Admin */
+function is_admin_family(): bool
+{
+    return in_array(current_role(), ADMIN_FAMILY, true);
+}
+
+/**
+ * May the restricted Admin read this collection?
+ *
+ * The academic directory is reference and always readable; everything else is
+ * shown only when a module the Admin holds (with View) covers it. This is the
+ * server side of "an Admin without Fees sees no fee data" — refused here and
+ * emptied in the bootstrap, never merely hidden in the sidebar.
+ */
+function subadmin_may_read(string $col): bool
+{
+    if (in_array($col, SUBADMIN_ALWAYS_READ, true)) {
+        return true;
+    }
+    $perms = effective_perms();
+    foreach (SUBADMIN_MODULE_READS as $module => $cols) {
+        if (in_array($col, $cols, true) && in_array('view', $perms[$module] ?? [], true)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * A stored permission set, in whichever shape it was saved, as
  * module => list of actions.
@@ -721,8 +792,17 @@ function effective_perms(): array
         return $perms = $ceiling;              // never narrowed, never lost
     }
     $roleRow = role_record($role);
-    $fromRole = $roleRow ? read_perm_set($roleRow['permissions'] ?? null) : null;
-    $own = ((string) ($u['access'] ?? 'full') === 'restricted')
+    /* The Admin narrows per account, never at the role level: its template is
+       deliberately empty, and an empty template read as a restriction would zero
+       every Admin. So the role never narrows here — the per-user grant does. */
+    $fromRole = ($role === ADMIN_ROLE || !$roleRow)
+        ? null
+        : read_perm_set($roleRow['permissions'] ?? null);
+    /* The Admin is always narrowed by its own grant, even if the row somehow
+       says `full`: its ceiling is the Super Admin's, so a missing override must
+       mean "nothing", never "everything". An empty grant intersects to nothing;
+       that is what makes a brand-new Admin start with no access at all. */
+    $own = ((string) ($u['access'] ?? 'full') === 'restricted' || $role === ADMIN_ROLE)
         ? (read_perm_set($u['permissions'] ?? null) ?? [])
         : null;
     $out = [];
@@ -970,6 +1050,16 @@ const STAFF_PUBLIC_FIELDS = ['id', 'empId', 'name', 'designation', 'department',
 function guard_role_write(string $resource, string $method, ?string $id): void
 {
     $role = current_role();
+    /* The Admin may reach any collection its granted modules cover — the module
+       gate (guard_module_write) and the escalation shield decide the rest — but
+       never the three tables that decide access itself. */
+    if ($role === ADMIN_ROLE) {
+        if (!in_array($resource, SUBADMIN_FORBIDDEN, true)) {
+            return;
+        }
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the Super Admin manages roles, settings and the audit log.'], 403);
+    }
     $allowed = ROLE_WRITABLE[$role] ?? [];
     if (in_array('*', $allowed, true) || in_array($resource, $allowed, true)) {
         return;
@@ -1016,6 +1106,14 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         send_json(['error' => 'forbidden',
                    'message' => 'Your role cannot read this.'], 403);
     }
+    /* The Admin reads only what its granted modules cover. Everything sensitive
+       it was not given — money, marks, placement, the admission queue, staff
+       files — is refused here, not merely left out of the menu. */
+    if (!$isWrite && is_sub_admin() && isset(COLLECTIONS[$resource])
+        && !subadmin_may_read($resource)) {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Your account has not been granted access to this.'], 403);
+    }
     if ($isWrite && !in_array($resource, ['login', 'logout', 'change-password'], true)) {
         guard_module_write($resource, $method);
     }
@@ -1038,12 +1136,39 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         send_json(['error' => 'forbidden',
                    'message' => 'Only the administrator manages roles and permissions.'], 403);
     }
+    /* The escalation shield on the login table. Only the Super Admin creates or
+       changes an administrator, assigns a role, or hands out a permission. A
+       non-Super-Admin may still create a student login — the admissions desk and
+       an Admin granted Students both do — so a plain `role = student` is let
+       through, but access, permissions, any other role, and the status field are
+       refused, and an existing administrator's account may not be touched at all,
+       whatever the request carries. */
     if ($isWrite && $resource === 'users' && current_role() !== 'admin') {
-        $body = body();
-        foreach (['access', 'permissions', 'role', 'status'] as $field) {
-            if (array_key_exists($field, $body)) {
+        // editing or deleting somebody: an administrator's account is off limits
+        if ($id !== null) {
+            $target = fetch_one('SELECT ' . qi('role') . ' AS role FROM ' . qi('users')
+                . ' WHERE ' . qi('id') . ' = ?', [$id]);
+            if ($target && in_array((string) ($target['role'] ?? ''), ADMIN_FAMILY, true)) {
                 send_json(['error' => 'forbidden',
-                           'message' => 'Only the administrator can change roles or permissions.'], 403);
+                           'message' => 'Only the Super Admin can change an administrator account.'], 403);
+            }
+        }
+        $rows = body();
+        $rows = (array_is_list($rows) && $rows !== []) ? $rows : [$rows];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            foreach (['access', 'permissions', 'status'] as $field) {
+                if (array_key_exists($field, $r)) {
+                    send_json(['error' => 'forbidden',
+                               'message' => 'Only the Super Admin can change roles or permissions.'], 403);
+                }
+            }
+            // a login it creates is a student's; it does not mint staff or admins
+            if (array_key_exists('role', $r) && (string) ($r['role'] ?? '') !== 'student') {
+                send_json(['error' => 'forbidden',
+                           'message' => 'Only the Super Admin can assign this role.'], 403);
             }
         }
     }
@@ -1062,21 +1187,25 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
             send_json(['error' => 'forbidden',
                        'message' => 'The curriculum is not part of the accounts office.'], 403);
         }
-        if ($isWrite && !in_array($role, SYLLABUS_WRITE_ROLES, true)) {
+        if ($isWrite && !in_array($role, SYLLABUS_WRITE_ROLES, true) && !is_admin_family()) {
             send_json(['error' => 'forbidden',
                        'message' => 'Only the admin can change the curriculum.'], 403);
         }
     }
 
-    if (in_array($resource, FINANCE_COLLECTIONS, true)) {
+    /* The area rules below name the roles a module belongs to. An administrator
+       — Super Admin or a granted Admin — is let past them so the per-account
+       permission gate above is what actually decides; for the Admin a module it
+       was not granted was already refused there. */
+    if (in_array($resource, FINANCE_COLLECTIONS, true) && !is_admin_family()) {
         if ($isWrite ? !may_touch_finance() : !may_read_finance()) {
             send_json(['error' => 'forbidden'], 403);
         }
     }
-    if ($isWrite && in_array($resource, FINANCE_WRITE_ONLY, true) && !may_touch_finance()) {
+    if ($isWrite && in_array($resource, FINANCE_WRITE_ONLY, true) && !may_touch_finance() && !is_admin_family()) {
         send_json(['error' => 'forbidden'], 403);
     }
-    if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff()) {
+    if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff() && !is_admin_family()) {
         send_json(['error' => 'forbidden'], 403);
     }
 
@@ -1098,8 +1227,9 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         }
     }
 
-    // attendance is registered by the roles allowed to hold a class
-    if ($resource === 'attendance' && $isWrite && !may_mark_attendance()) {
+    // attendance is registered by the roles allowed to hold a class — and by an
+    // Admin granted the Attendance module (the module gate above vetted that)
+    if ($resource === 'attendance' && $isWrite && !may_mark_attendance() && !is_admin_family()) {
         send_json([
             'error'   => 'forbidden',
             'message' => current_role() === 'faculty'
@@ -1150,14 +1280,14 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     // was a UI convention: the Students page simply hid its buttons, while the
     // API accepted a write from any signed-in role.
     if ($resource === 'students' && $isWrite
-        && !in_array(current_role(), ['admin', 'admission'], true)) {
+        && !in_array(current_role(), ['admin', 'admission'], true) && !is_admin_family()) {
         send_json([
             'error'   => 'forbidden',
             'message' => 'Only the administrator can add, edit or delete a student record.',
         ], 403);
     }
 
-    if (in_array($resource, PLACEMENT_COLLECTIONS, true)) {
+    if (in_array($resource, PLACEMENT_COLLECTIONS, true) && !is_admin_family()) {
         $isStudent = current_role() === 'student';
         $studentMayRead = !$isWrite && $isStudent
             && in_array($resource, array_merge(PLACEMENT_STUDENT_OPEN, PLACEMENT_STUDENT_OWN), true);
@@ -2107,9 +2237,13 @@ function api_bootstrap(): void
    this one. */
 function bootstrap_data(): array
 {
-    $finance = may_read_finance();
-    $staff = may_touch_staff();
-    $placement = may_read_placement();
+    /* An Admin is let through the area switches below so a module it *was*
+       granted is not emptied by a rule meant for other roles; the per-account
+       read gate right after decides what it actually receives. */
+    $isSub = is_sub_admin();
+    $finance = may_read_finance() || $isSub;
+    $staff = may_touch_staff() || $isSub;
+    $placement = may_read_placement() || $isSub;
     $isPo = is_placement_officer();
     $out = [];
     $isAdmin = current_role() === 'admin';
@@ -2119,6 +2253,12 @@ function bootstrap_data(): array
            only which boxes are ticked for which role. The audit log does name
            people, so it goes to the admin alone. */
         if (!role_may_read($col)) {
+            $out[$col] = [];
+            continue;
+        }
+        /* The Admin sees only the collections its granted modules cover; the
+           rest arrive empty, so no unauthorised data reaches the page at all. */
+        if ($isSub && !subadmin_may_read($col)) {
             $out[$col] = [];
             continue;
         }

@@ -256,6 +256,11 @@ function init_db(): void
     db()->exec('UPDATE ' . qi('courses') . ' SET ' . qi('section') . "='A'
                 WHERE " . qi('section') . ' IS NULL OR ' . qi('section') . "=''");
 
+    /* The Admin role row, backfilled on every install that lacks it — run
+       outside the demo-seed gate so a live database created before this
+       release gains it on the next deploy. */
+    seed_admin_role();
+
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
        with. On a database that has been used, a deleted account stays deleted. */
@@ -338,6 +343,45 @@ function seed_staff_login(string $role, string $table, string $username): void
 }
 
 /**
+ * The Admin role. Seeded as a real row so it is a first-class role and not a
+ * one-off in the code: `base = admin` hands it the Super Admin's ceiling and
+ * menu shape, `permissions = NULL` leaves the role itself un-narrowed (every
+ * Admin account carries its own grant), and `builtin = 1` keeps the Roles
+ * screen from letting anyone rename or delete it.
+ *
+ * Idempotent, and run on every init so a database created before this release
+ * gains the row on the next deploy — but only when it is absent, so a Super
+ * Admin who edited its description is never overwritten.
+ */
+function seed_admin_role(): void
+{
+    $has = fetch_one('SELECT 1 AS x FROM ' . qi('roles') . ' WHERE ' . qi('key') . " = 'subadmin'");
+    if ($has) {
+        return;
+    }
+    upsert('roles', [
+        'id'          => next_id('roles'),
+        'key'         => 'subadmin',
+        'label'       => 'Admin',
+        'base'        => 'admin',
+        'builtin'     => '1',
+        'status'      => 'Active',
+        'description' => 'Restricted administrator. Sees and does only what the Super Admin grants.',
+        'permissions' => null,
+    ]);
+}
+
+/* A marker for migrations that live in THIS file rather than in COLLECTIONS or
+   SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
+   so config.php can arrive before db.php: the old db.php would run init_db,
+   mark the new signature ready, and the backfill that only the new db.php
+   carries — seed_admin_role() — would never run. Folding this into the
+   signature means the signature also moves when db.php itself changes, so the
+   new db.php always gets its one pass whichever file lands first. Bump it
+   whenever a backfill is added or changed here. */
+const DB_MIGRATION_REV = '2026-09-08-admin-role';
+
+/**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
  * because seeding fills empty tables only: without it, a table emptied on
  * purpose stays empty for good, and a rewritten demo set never reaches a
@@ -346,7 +390,7 @@ function seed_staff_login(string $role, string $table, string $username): void
  */
 function schema_signature(): string
 {
-    return substr(md5(json_encode(COLLECTIONS) . '|' . SEED_REVISION), 0, 16);
+    return substr(md5(json_encode(COLLECTIONS) . '|' . SEED_REVISION . '|' . DB_MIGRATION_REV), 0, 16);
 }
 
 /** Has this database ever been seeded, or written to at all? */
