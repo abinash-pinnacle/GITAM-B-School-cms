@@ -281,6 +281,20 @@
      one place a role is defined. The student is the one role left out: a
      student is enrolled, not employed. */
   function employeeRoles() { return ROLE_LIST.filter(r => r !== 'student'); }
+  /* Custom ACCESS ROLES the Super Admin has created (Dean Placement, Placement
+     Officer, Placement Coordinator, Admin, …) — offered on the Employees form
+     alongside the built-in roles so an employee can be put on one, but grouped
+     apart so a custom "Placement Officer" is not confused with the built-in. */
+  function customAccessRoleKeys() {
+    return allRoleKeys().filter(r => !BUILTIN_ROLES.includes(r) && r !== 'student');
+  }
+  /** every role an employee can be assigned, built-in first then access roles */
+  function roleOptionsForEmployee(sel) {
+    const opt = (r) => `<option value="${esc(r)}" ${r === sel ? 'selected' : ''}>${esc(roleLabel(r))}</option>`;
+    const custom = customAccessRoleKeys();
+    return employeeRoles().map(opt).join('')
+      + (custom.length ? `<optgroup label="Access Roles">${custom.map(opt).join('')}</optgroup>` : '');
+  }
   /* Records written before the register carried a role are faculty — that is
      the only kind of employee it could hold. */
   function employeeRole(f) { return (f && f.role) || 'faculty'; }
@@ -5270,8 +5284,7 @@
       <div class="panel-tools">
         <input class="search-box" id="facSearch" placeholder="Search name / id / role / dept...">
         <select class="filter-sel" id="facRole"><option value="">All Roles</option>
-          ${employeeRoles().map(r =>
-            `<option value="${r}">${esc(roleLabel(r))}</option>`).join('')}</select>
+          ${roleOptionsForEmployee('')}</select>
         <select class="filter-sel" id="facDept"><option value="">All Departments</option>
           ${employeeValues('department').map(d => `<option>${esc(d)}</option>`).join('')}</select>
         <select class="filter-sel" id="facDesig"><option value="">All Designations</option>
@@ -5874,9 +5887,7 @@
           ${fText('per_middleName', 'Middle Name', per.middleName || nameParts.middle)}
           ${fText('per_lastName', 'Last Name', per.lastName || nameParts.last)}
           <div class="field"><label>Employee Role</label>
-            <select name="role">${employeeRoles().map(r =>
-              `<option value="${r}" ${r === tableRole(col, f) ? 'selected' : ''}>${esc(roleLabel(r))}</option>`
-            ).join('')}</select></div>
+            <select name="role">${roleOptionsForEmployee(tableRole(col, f))}</select></div>
           <div class="field"><label>Department</label>
             <select name="department"><option value=""></option>${
               listOptions('department', f.department || '', true)}</select></div>
@@ -6159,7 +6170,8 @@
       /* One answer, in two places: the register records what the person is and
          the login records what they may do, and the form is the only thing that
          sets either — so they cannot disagree. */
-      const role = employeeRoles().includes(d.role) ? d.role : tableRole(col, f);
+      // any real role the picker offered — built-in or a custom access role
+      const role = allRoleKeys().includes(d.role) ? d.role : tableRole(col, f);
       d.role = role;
       // a user id nobody else holds, from the employee id, unless one was typed
       const uid = username || freeUsername(
