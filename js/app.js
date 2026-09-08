@@ -298,11 +298,17 @@
   function customAccessRoleKeys() {
     return allRoleKeys().filter(r => !BUILTIN_ROLES.includes(r) && r !== 'student');
   }
-  /** every role an employee can be assigned, built-in first then access roles */
+  /* Built-in roles that a custom ACCESS ROLE now supersedes by the same name, so
+     showing both just confuses (two "Placement Officer"). The built-in is hidden
+     from the picker unless the employee being edited is already on it — so no
+     existing account silently loses its role. */
+  const SUPERSEDED_BUILTIN_ROLES = ['placement_officer'];
+  /** every role an employee can be assigned, standard roles then access roles */
   function roleOptionsForEmployee(sel) {
     const opt = (r) => `<option value="${esc(r)}" ${r === sel ? 'selected' : ''}>${esc(roleLabel(r))}</option>`;
+    const builtins = employeeRoles().filter(r => !SUPERSEDED_BUILTIN_ROLES.includes(r) || r === sel);
     const custom = customAccessRoleKeys();
-    return employeeRoles().map(opt).join('')
+    return `<optgroup label="Standard Roles">${builtins.map(opt).join('')}</optgroup>`
       + (custom.length ? `<optgroup label="Access Roles">${custom.map(opt).join('')}</optgroup>` : '');
   }
   /* Records written before the register carried a role are faculty — that is
