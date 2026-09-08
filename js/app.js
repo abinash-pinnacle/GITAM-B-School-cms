@@ -912,24 +912,40 @@
      server. */
   function hasCustomAccess(u) {
     // the Super Admin holds everything; a student is on the student portal — the
-    // module grid is for staff logins the Super Admin puts on custom access
+    // module grid is for staff logins the Super Admin puts on custom access, and
+    // for custom ACCESS ROLES built on the admin ceiling (e.g. Placement Team)
     if (!u || u.role === 'admin' || u.role === 'student') return false;
-    return u.role === SUBADMIN_ROLE || (u.access || 'full') === 'restricted';
+    return u.role === SUBADMIN_ROLE || (u.access || 'full') === 'restricted'
+      || baseRoleOf(u.role) === 'admin';
   }
 
   /* ---------- what this account may actually do ----------
      A custom-access account is granted from the whole module range (the Super
-     Admin's ceiling) and held to exactly what was ticked, with no role template
-     in the way — deny by default. An account on its role default keeps that
-     role's ceiling and template, exactly as before, so nothing changes for
-     anyone the Super Admin has not put on custom access. */
+     Admin's ceiling) and held to one grant — deny by default. The grant is the
+     per-account override when the account is on custom access (the Admin, or
+     access = restricted); otherwise it is the access role's own template, shared
+     live by every user on that role. An account on its plain role default keeps
+     that role's ceiling and template exactly as before. */
   function effectivePerms(u) {
     if (!u) return {};
     if (u.role === 'admin') return roleCeiling('admin');   // never narrowed
-    const custom = hasCustomAccess(u);
-    const ceiling = custom ? roleCeiling('admin') : roleCeiling(baseRoleOf(u.role));
-    const role = custom ? null : rolePerms(u.role);
-    const own = custom ? (userPerms(u) || {}) : userPerms(u);
+    if (hasCustomAccess(u)) {
+      const ceiling = roleCeiling('admin');
+      const byUser = u.role === SUBADMIN_ROLE || (u.access || 'full') === 'restricted';
+      const r = byUser ? null : roleRow(u.role);
+      const grant = byUser
+        ? (userPerms(u) || {})
+        : (readPermSet(r && r.permissions) || {});
+      const out = {};
+      Object.keys(ceiling).forEach(m => {
+        const acts = ceiling[m].filter(a => (grant[m] || []).includes(a));
+        if (acts.length) out[m] = acts;
+      });
+      return out;
+    }
+    const ceiling = roleCeiling(baseRoleOf(u.role));
+    const role = rolePerms(u.role);
+    const own = userPerms(u);
     const out = {};
     Object.keys(ceiling).forEach(m => {
       let acts = ceiling[m];
@@ -13741,7 +13757,14 @@
         }).join('') : `<tr><td colspan="6" class="empty">No roles match.</td></tr>`;
 
         $('#rlBody').querySelectorAll('[data-perm]').forEach(b =>
-          b.onclick = () => rolePermsModal(b.dataset.perm, draw));
+          b.onclick = () => {
+            const k = b.dataset.perm;
+            // a custom ACCESS ROLE on the Super Admin ceiling (Dean Placement,
+            // Placement Officer, …) gets the No/View/Full/Custom editor; the
+            // Admin role is managed per-user, and other roles keep the matrix
+            if (k !== SUBADMIN_ROLE && baseRoleOf(k) === 'admin') roleAccessControlModal(k, draw);
+            else rolePermsModal(k, draw);
+          });
         $('#rlBody').querySelectorAll('[data-copy]').forEach(b =>
           b.onclick = () => roleForm(null, draw, b.dataset.copy));
         $('#rlBody').querySelectorAll('[data-edit]').forEach(b =>
@@ -14916,6 +14939,91 @@
       if (after) after(); else render();
     };
   }
+  /* The template editor for a custom ACCESS ROLE built on the Super Admin ceiling
+     — Dean Placement, Placement Officer, Placement Coordinator, and any the Super
+     Admin creates. Same No/View/Full/Custom grid as a user's Access Control, but
+     it saves the ROLE's template, which every user on that role shares live, so
+     one change moves them all. Deny by default: a module left at No Access is
+     hidden and blocked for the whole role. */
+  function roleAccessControlModal(roleKey, after) {
+    const r = roleRow(roleKey);
+    if (!r) { toast('Role not found.', 'err'); return; }
+    const ceiling = adminCeiling();
+    const rows = MODULES.filter(([k]) => ceiling[k]);
+    const current = readPermSet(r.permissions) || {};
+    const modRow = ([key, label]) => {
+      const ceilActs = ceiling[key];
+      const acts = current[key] || [];
+      const lvl = accessLevelOf(acts, ceilActs);
+      return `<div class="ac-mod" data-mod="${key}" data-name="${esc(label.toLowerCase())}">
+        <div class="ac-mod-head">
+          <span class="ac-mod-name">${esc(label)}</span>
+          <select class="ac-level" data-mod="${key}">
+            ${ACCESS_LEVELS.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ac-actions ${lvl === 'custom' ? '' : 'hidden'}" data-mod="${key}">
+          ${ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([a, al]) =>
+            `<label class="ac-act"><input type="checkbox" data-p="${key}:${a}" ${acts.includes(a) ? 'checked' : ''}> ${al}</label>`).join('')}
+        </div></div>`;
+    };
+    const nUsers = Store.all('users').filter(u => u.role === roleKey).length;
+    openModal('Access — ' + roleLabel(roleKey), `<form id="f">
+      <p class="ac-sub">Access role <b>${esc(roleLabel(roleKey))}</b> · applies to
+        <b>${nUsers}</b> user${nUsers === 1 ? '' : 's'} — a change here moves every one of them.</p>
+      <div class="ac-tools">
+        <input class="search-box" id="acSearch" placeholder="Search modules...">
+        <button type="button" class="btn-outline btn-sm" id="acFull">All Full</button>
+        <button type="button" class="btn-outline btn-sm" id="acView">All View</button>
+        <button type="button" class="btn-outline btn-sm" id="acNone">All None</button>
+      </div>
+      <div id="acList" class="ac-list">${rows.map(modRow).join('')}</div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Deny by default: a module left at
+        No Access is hidden and blocked for every user on this role. Full includes Delete.</p>
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save Permissions</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    const setLevel = (mod, lvl) => {
+      const sel = document.querySelector(`.ac-level[data-mod="${mod}"]`); if (sel) sel.value = lvl;
+      const box = document.querySelector(`.ac-actions[data-mod="${mod}"]`);
+      box.classList.toggle('hidden', lvl !== 'custom');
+      if (lvl !== 'custom') {
+        const acts = actsForLevel(lvl, ceiling[mod], mod);
+        box.querySelectorAll('[data-p]').forEach(cb => { cb.checked = acts.includes(cb.dataset.p.split(':')[1]); });
+      }
+    };
+    document.querySelectorAll('.ac-level').forEach(sel => sel.onchange = () => setLevel(sel.dataset.mod, sel.value));
+    document.querySelectorAll('.ac-actions [data-p]').forEach(cb => cb.onchange = () => {
+      const [mod, a] = cb.dataset.p.split(':');
+      if (a !== 'view' && cb.checked) { const v = document.querySelector(`[data-p="${mod}:view"]`); if (v) v.checked = true; }
+      if (a === 'view' && !cb.checked) document.querySelectorAll(`.ac-actions[data-mod="${mod}"] [data-p]`).forEach(x => { x.checked = false; });
+    });
+    $('#acFull').onclick = () => rows.forEach(([k]) => setLevel(k, 'full'));
+    $('#acView').onclick = () => rows.forEach(([k]) => setLevel(k, 'view'));
+    $('#acNone').onclick = () => rows.forEach(([k]) => setLevel(k, 'none'));
+    $('#acSearch').oninput = () => {
+      const q = ($('#acSearch').value || '').trim().toLowerCase();
+      document.querySelectorAll('#acList .ac-mod').forEach(el =>
+        el.classList.toggle('hidden', !!q && !el.dataset.name.includes(q)));
+    };
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const before = readPermSet(r.permissions) || {};
+      const perms = {};
+      rows.forEach(([k]) => {
+        const lvl = document.querySelector(`.ac-level[data-mod="${k}"]`).value;
+        const acts = actsForLevel(lvl, ceiling[k], k);
+        if (acts.length) perms[k] = acts;
+      });
+      Store.update('roles', r.id, { permissions: perms });
+      auditPerms('role', roleKey, roleLabel(roleKey), before, perms);
+      closeModal();
+      toast(`${roleLabel(roleKey)}: ${plural(Object.keys(perms).length, 'module')} — applies to all its users.`);
+      if (after) after(); else render();
+    };
+  }
+
   /** the last time this account actually signed in, from the audit log */
   function adminLastLogin(uid) {
     const rows = Store.all('auditlog').filter(r =>

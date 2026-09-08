@@ -260,6 +260,7 @@ function init_db(): void
        outside the demo-seed gate so a live database created before this
        release gains it on the next deploy. */
     seed_admin_role();
+    seed_placement_roles();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -371,6 +372,47 @@ function seed_admin_role(): void
     ]);
 }
 
+/**
+ * The placement-department ACCESS roles: Dean Placement, Placement Officer and
+ * Placement Coordinator. Each is a custom access role built on the Super Admin's
+ * ceiling (base = admin), so any module can be assigned to it, and starts with
+ * `permissions = NULL` which reads as deny-by-default — the role sees nothing
+ * until the Super Admin ticks modules on it. The grant is the role template,
+ * shared live by every user assigned the role, so changing it moves them all;
+ * an individual user can still be given a per-account override on top.
+ *
+ * These are access roles, distinct from the built-in `placement_officer` role
+ * (the placement-cell designation), which is left untouched. Keys are chosen not
+ * to collide with it. Idempotent and run on every init, each seeded only when
+ * absent, so an edited template is never wiped.
+ */
+function seed_placement_roles(): void
+{
+    $roles = [
+        ['dean_placement', 'Dean Placement',
+         'Placement department head. No access until the Super Admin assigns modules.'],
+        ['plmt_officer', 'Placement Officer',
+         'Placement officer access role. No access until the Super Admin assigns modules.'],
+        ['plmt_coordinator', 'Placement Coordinator',
+         'Placement coordinator access role. No access until the Super Admin assigns modules.'],
+    ];
+    foreach ($roles as [$key, $label, $desc]) {
+        if (fetch_one('SELECT 1 AS x FROM ' . qi('roles') . ' WHERE ' . qi('key') . ' = ?', [$key])) {
+            continue;
+        }
+        upsert('roles', [
+            'id'          => next_id('roles'),
+            'key'         => $key,
+            'label'       => $label,
+            'base'        => 'admin',
+            'builtin'     => '1',
+            'status'      => 'Active',
+            'description' => $desc,
+            'permissions' => null,
+        ]);
+    }
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -379,7 +421,7 @@ function seed_admin_role(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-08-admin-role';
+const DB_MIGRATION_REV = '2026-09-08-placement-roles';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

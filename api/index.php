@@ -690,13 +690,17 @@ function is_admin_family(): bool
 }
 
 /**
- * An account whose access is decided entirely by its own per-module grant, not
- * by its role. That is the Admin, and now any account the Super Admin has put on
- * custom access (access = restricted) — a Faculty, an Accountant, anyone. Such an
- * account is granted from the whole range of modules and held to exactly what was
- * ticked: the older per-role rules step aside for it and the module gate decides,
- * so "give this one person Fees and nothing else" works whatever their role is.
- * The Super Admin itself is never this — it holds everything unconditionally.
+ * An account whose access is decided entirely by a per-module grant, not by a
+ * built-in role's fixed behaviour. Three kinds qualify:
+ *   - the Admin (subadmin);
+ *   - anyone the Super Admin put on custom access (access = restricted), whatever
+ *     their role — a Faculty, an Accountant;
+ *   - anyone on a custom ACCESS ROLE built on the Super Admin's ceiling
+ *     (base = admin), such as "Placement Team" — the grant is the role's own
+ *     template, shared by every user on that role and deny-by-default.
+ * For all three the whole module range is grantable, the older per-role rules
+ * step aside, and the module gate decides. The Super Admin itself never qualifies
+ * — it holds everything — and a student is on the student portal, not the grid.
  */
 function has_custom_access(): bool
 {
@@ -705,12 +709,12 @@ function has_custom_access(): bool
         return false;
     }
     $role = (string) ($u['role'] ?? '');
-    // the Super Admin holds everything; a student is on the student portal, never
-    // the module grid — neither is a custom-access account
     if ($role === SUPER_ADMIN_ROLE || $role === 'student') {
         return false;
     }
-    return $role === ADMIN_ROLE || (string) ($u['access'] ?? 'full') === 'restricted';
+    return $role === ADMIN_ROLE
+        || (string) ($u['access'] ?? 'full') === 'restricted'
+        || base_role($role) === SUPER_ADMIN_ROLE;   // a custom access role on the admin ceiling
 }
 
 /**
@@ -849,20 +853,36 @@ function effective_perms(): array
     if ($role === SUPER_ADMIN_ROLE) {
         return $perms = role_ceiling('admin');   // never narrowed, never lost
     }
-    /* A custom-access account is granted from the whole range of modules — its
-       ceiling is the Super Admin's — and held to exactly what was ticked, with no
-       role template in the way. An account left on its role default keeps that
-       role's ceiling and its template, exactly as before, so nothing changes for
-       anyone the Super Admin has not put on custom access. */
-    $custom = has_custom_access();
-    $ceiling = $custom ? role_ceiling('admin') : role_ceiling(base_role($role));
     $roleRow = role_record($role);
-    $fromRole = ($custom || !$roleRow) ? null : read_perm_set($roleRow['permissions'] ?? null);
-    /* On custom access the grant is the whole story, and a missing grant means
-       "nothing", never "everything" — an empty set intersects to nothing, which
-       is what makes deny-by-default hold and a brand-new custom account start
-       with no access at all. */
-    $own = $custom ? (read_perm_set($u['permissions'] ?? null) ?? []) : null;
+    if (has_custom_access()) {
+        /* Granted from the whole module range (the Super Admin's ceiling) and
+           held to one grant — deny by default, a missing grant meaning nothing.
+           The grant is the per-account override when the account is on custom
+           access (the Admin, or anyone set to access = restricted); otherwise it
+           is the access role's own template, shared live by every user on that
+           role. `?? []` is what makes "no grant" mean "no access". */
+        $ceiling = role_ceiling('admin');
+        $byUser = $role === ADMIN_ROLE || (string) ($u['access'] ?? 'full') === 'restricted';
+        $grant = $byUser
+            ? (read_perm_set($u['permissions'] ?? null) ?? [])
+            : (($roleRow ? read_perm_set($roleRow['permissions'] ?? null) : null) ?? []);
+        $out = [];
+        foreach ($ceiling as $key => $acts) {
+            $a = array_values(array_intersect($acts, $grant[$key] ?? []));
+            if ($a) {
+                $out[$key] = $a;
+            }
+        }
+        return $perms = $out;
+    }
+    /* Not custom access: the account keeps its role's ceiling, its role template
+       and any per-user override, exactly as before — nothing changes for anyone
+       the Super Admin has not put on a custom access role or custom access. */
+    $ceiling = role_ceiling(base_role($role));
+    $fromRole = $roleRow ? read_perm_set($roleRow['permissions'] ?? null) : null;
+    $own = (string) ($u['access'] ?? 'full') === 'restricted'
+        ? (read_perm_set($u['permissions'] ?? null) ?? [])
+        : null;
     $out = [];
     foreach ($ceiling as $key => $acts) {
         if ($fromRole !== null) {
