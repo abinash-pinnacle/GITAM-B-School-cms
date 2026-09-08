@@ -481,32 +481,49 @@
   const EMP_ATTENDANCE_URL = 'https://pinnacle.myattendance.co.in/emp/add_attendance';
   const EMP_ATTENDANCE = [NAV_LINK, '🕐', 'My Attendance', EMP_ATTENDANCE_URL];
   const MENU = {
+    /* Grouped strictly by module, one section per module, so a restricted Admin
+       granted a single module sees exactly that module's pages under one heading
+       and nothing that belongs to another — an empty section is dropped in
+       menuFor(). The Super Admin, holding everything, sees them all in order.
+       Every row's page must belong (via moduleOfView) to the module its section
+       names, or a grant would light the wrong heading. */
     admin: [
-      ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['students','🎓','Students'],
-      ['batchsem','🎯','Semester Update'], ['submissions','📝','Admission Forms'],
-      ['faculty','🧑‍💼','Employees'],
+      ['dashboard','📊','Dashboard'],
+      [NAV_SECTION,'','Students'],
+      ['students','🎓','Students'], ['batchsem','🎯','Semester Update'],
+      ['submissions','📝','Admission Forms'],
+      [NAV_SECTION,'','Faculty & Staff'],
+      ['faculty','🧑‍💼','Employees'], ['accountants','🧑‍💼','Accountants'],
+      ['placementofficers','🧑‍💼','Placement Officers'],
+      [NAV_SECTION,'','Courses & Curriculum'],
       ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
-      ['assignments','🗂️','Assignments'], ['attendance','✅','Attendance'],
-      ['attrecords','🗂️','Attendance Records'],
-      ['marks','📝','Marks & Results'], ['timetable','🗓️','Timetable'], ['library','📖','Library'], ['reports','📊','Library Reports'], ['fees','💳','Fees'],
-      ['accounts','🔑','Login Accounts'],
-      // the accounts-office modules — the admin gets every one of them
-      [NAV_SECTION,'','Finance'],
-      ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'], ['fixedfee','📋','Fixed Fee'],
+      ['assignments','🗂️','Assignments'], ['timetable','🗓️','Timetable'],
+      [NAV_SECTION,'','Attendance'],
+      ['attendance','✅','Attendance'], ['attrecords','🗂️','Attendance Records'],
+      [NAV_SECTION,'','Marks & Results'],
+      ['marks','📝','Marks & Results'],
+      [NAV_SECTION,'','Fees & Finance'],
+      ['fees','💳','Fees'], ['finstudents','🎓','Student List'], ['fixedfee','📋','Fixed Fee'],
       ['semfee','📆','Semester-wise Fee'], ['feecollect','💰','Fee Collection'],
-      ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'], ['requisitions','📦','Requisitions'],
-      ['finreports','📈','Financial Reports'], ['accountants','🧑‍💼','Accountants'],
-      // the placement cell — the admin gets every one of these too, with full rights
-      [NAV_SECTION,'','Placement'],
+      ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'],
+      ['finreports','📈','Financial Reports'],
+      [NAV_SECTION,'','Assets'],
+      ['assets','🏢','Asset List'],
+      [NAV_SECTION,'','Requisitions'],
+      ['requisitions','📦','Requisitions'],
+      [NAV_SECTION,'','Library'],
+      ['library','📖','Library'], ['reports','📊','Library Reports'],
+      [NAV_SECTION,'','Placement Cell'],
       ['plstudents','🎓','Placement Students'], ['companies','🏢','Companies'],
       [NAV_GROUP,'🚀','Placement Drives','drives',DRIVE_TYPES],
-      ['applications','📨','Applications'],
-      ['interviews','🎤','Interviews'], ['placements','🏆','Selections'],
-      ['offers','📜','Offers'], ['plcalendar','📅','Placement Calendar'],
-      ['plreports','📊','Placement Reports'], ['placementofficers','🧑‍💼','Placement Officers'],
-      ['usersettings','⚙️','User Management'], ['roles','🛡️','Roles & Permissions'],
-      ['adminmgmt','👥','Admin Management'],
-      [NAV_SECTION,'','Staff'],
+      ['applications','📨','Applications'], ['interviews','🎤','Interviews'],
+      ['placements','🏆','Selections'], ['offers','📜','Offers'],
+      ['plcalendar','📅','Placement Calendar'], ['plreports','📊','Placement Reports'],
+      [NAV_SECTION,'','Events & Notices'],
+      ['events','📅','Events'],
+      [NAV_SECTION,'','System'],
+      ['accounts','🔑','Login Accounts'], ['usersettings','⚙️','User Management'],
+      ['roles','🛡️','Roles & Permissions'], ['adminmgmt','👥','Admin Management'],
       EMP_ATTENDANCE,
     ],
     // manages the placement cell end to end; read-only on the student records it recruits from
@@ -751,7 +768,7 @@
     // `settings` rides in these two writes for the reference lists they extend
     // (specialisations, designations, departments) — the server pins a
     // non-admin's settings write down to those lists, not the system switches
-    ['students',     'Students',                    ['students', 'stuprofile', 'batchsem'],
+    ['students',     'Students',                    ['students', 'stuprofile', 'batchsem', 'submissions'],
                                                     ['students', 'users', 'settings']],
     ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                                                     ['faculty', 'accountants', 'centerheads', 'placementofficers',
