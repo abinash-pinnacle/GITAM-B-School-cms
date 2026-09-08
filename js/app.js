@@ -444,6 +444,20 @@
     return out;
   }
 
+  /* Re-read the signed-in account from the store after a live refresh, so a
+     permission the Super Admin just assigned or removed — or a role change —
+     takes effect on this session at the next poll instead of only after a fresh
+     login. `user` is otherwise a snapshot taken at sign-in, and effectivePerms()
+     reads it, so without this a user's own access change never reached them.
+     The token lives in the store alone, so it is dropped here as it is at login. */
+  function refreshSessionUser() {
+    if (!user) return;
+    const fresh = Store.find('users', user.id);
+    if (!fresh) return;                    // deleted mid-session — the next request 401s
+    user = Object.assign({}, fresh);
+    delete user.token;
+  }
+
   function startLivePolling() {
     stopLivePolling();
     liveSig = dataSignature();
@@ -465,8 +479,12 @@
              failed. Fall back to the old way — pull everything, redraw only if
              the fingerprint moved. Heavier, but never a stale page. */
           await Store.load();
+          refreshSessionUser();
           const sig = dataSignature();
-          if (sig !== liveSig && user) { liveSig = sig; render(); }
+          // rebuild the sidebar too, not just the page — a permission the Super
+          // Admin just assigned or removed changes which modules this account may
+          // see, and navigate() is not what brought us here, so nothing else would
+          if (sig !== liveSig && user) { liveSig = sig; buildNav(); render(); }
           return;
         }
         if (liveServerSig === undefined) {    // first reading is only a baseline
@@ -476,7 +494,10 @@
         if (srvSig !== liveServerSig) {        // something changed — now the full pull earns its keep
           liveServerSig = srvSig;
           await Store.load();
-          if (user) render();
+          refreshSessionUser();
+          // the sidebar follows the current permissions too — an assignment made
+          // elsewhere shows up (or disappears) here without a full reload
+          if (user) { buildNav(); render(); }
         }
       } catch (e) { /* a server hiccup — try again next tick */ }
     }, 12000);
