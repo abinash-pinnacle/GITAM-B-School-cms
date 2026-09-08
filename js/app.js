@@ -159,7 +159,9 @@
      row (roleLabel) — it is offered wherever custom roles are. */
   const ROLE_LABEL = {
     admin: 'Super Admin', accountant: 'Accountant', center_head: 'Center Head',
-    placement_officer: 'Placement Officer', course_coordinator: 'Course Coordinator',
+    // the built-in placement-cell role, relabelled so it never reads as a second
+    // "Placement Officer" beside the custom access role of that name
+    placement_officer: 'Placement Officer (Cell)', course_coordinator: 'Course Coordinator',
     admission: 'Admission Officer',
     faculty: 'Faculty', librarian: 'Librarian', student: 'Student',
   };
