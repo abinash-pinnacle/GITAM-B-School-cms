@@ -617,8 +617,38 @@ const ADMIN_ROLE = 'subadmin';
 
 /* The tables the Admin may never reach, whatever it has been granted: roles and
    the audit log are how access itself is decided, and settings are the system's
-   own switches — all three stay with the Super Admin. */
+   own switches — all three stay with the Super Admin. The one exception is the
+   handful of operational reference lists below, which live in `settings` but are
+   ordinary staff/student data an Admin extends while managing people. */
 const SUBADMIN_FORBIDDEN = ['roles', 'auditlog', 'settings'];
+
+/* Reference lists a staff or student manager grows on the fly — designations,
+   departments, specialisations, who a person reports to. They sit in `settings`
+   but are not the system's switches, so an Admin granted Staff or Students may
+   add to them; every other setting stays with the Super Admin. */
+const OPERATIONAL_LIST_SETTINGS = ['designationList', 'departmentList',
+                                   'specialisationList', 'reportingToList'];
+
+/** may an Admin write this settings row? Only the operational lists above. */
+function subadmin_setting_write_ok(string $method, ?string $id): bool
+{
+    if ($id !== null) {
+        $row = fetch_one('SELECT ' . qi('name') . ' AS name FROM ' . qi('settings')
+            . ' WHERE ' . qi('id') . ' = ?', [$id]);
+        // a new row under an id that does not exist yet is judged by its body
+        if ($row !== null) {
+            return in_array((string) ($row['name'] ?? ''), OPERATIONAL_LIST_SETTINGS, true);
+        }
+    }
+    $body = body();
+    $rows = (is_array($body) && array_is_list($body) && $body !== []) ? $body : [$body];
+    foreach ($rows as $r) {
+        if (!is_array($r) || !in_array((string) ($r['name'] ?? ''), OPERATIONAL_LIST_SETTINGS, true)) {
+            return false;
+        }
+    }
+    return $rows !== [];
+}
 
 /* What an Admin may read. The academic directory here is reference every page
    leans on (names, courses, the timetable) and is left readable; everything
@@ -1052,13 +1082,21 @@ function guard_role_write(string $resource, string $method, ?string $id): void
     $role = current_role();
     /* The Admin may reach any collection its granted modules cover — the module
        gate (guard_module_write) and the escalation shield decide the rest — but
-       never the three tables that decide access itself. */
+       never the three tables that decide access itself. The one give: it may add
+       to the operational reference lists that happen to live in `settings`. */
     if ($role === ADMIN_ROLE) {
+        if ($resource === 'settings') {
+            if (subadmin_setting_write_ok($method, $id)) {
+                return;
+            }
+            send_json(['error' => 'forbidden',
+                       'message' => 'Only the Super Admin changes system settings.'], 403);
+        }
         if (!in_array($resource, SUBADMIN_FORBIDDEN, true)) {
             return;
         }
         send_json(['error' => 'forbidden',
-                   'message' => 'Only the Super Admin manages roles, settings and the audit log.'], 403);
+                   'message' => 'Only the Super Admin manages roles and the audit log.'], 403);
     }
     $allowed = ROLE_WRITABLE[$role] ?? [];
     if (in_array('*', $allowed, true) || in_array($resource, $allowed, true)) {
@@ -1136,14 +1174,16 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         send_json(['error' => 'forbidden',
                    'message' => 'Only the administrator manages roles and permissions.'], 403);
     }
-    /* The escalation shield on the login table. Only the Super Admin creates or
-       changes an administrator, assigns a role, or hands out a permission. A
-       non-Super-Admin may still create a student login — the admissions desk and
-       an Admin granted Students both do — so a plain `role = student` is let
-       through, but access, permissions, any other role, and the status field are
-       refused, and an existing administrator's account may not be touched at all,
-       whatever the request carries. */
+    /* The escalation shield on the login table. Two lines are absolute for
+       everyone but the Super Admin: nobody hands out access or permissions, and
+       nobody creates, becomes, or edits an administrator (Super Admin or Admin).
+       Within that, who may create which ordinary login is a question the module
+       gate above already answered — an Admin granted Staff creates the employee
+       logins that go with the people it manages; the admissions desk creates
+       students and only students. So the role being assigned is checked against
+       the admin family (always refused) and, for the desk, against `student`. */
     if ($isWrite && $resource === 'users' && current_role() !== 'admin') {
+        $subAdmin = is_sub_admin();
         // editing or deleting somebody: an administrator's account is off limits
         if ($id !== null) {
             $target = fetch_one('SELECT ' . qi('role') . ' AS role FROM ' . qi('users')
@@ -1159,16 +1199,32 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
             if (!is_array($r)) {
                 continue;
             }
-            foreach (['access', 'permissions', 'status'] as $field) {
-                if (array_key_exists($field, $r)) {
+            // access and permissions are the escalation vectors — never for anyone
+            // but the Super Admin, whatever else the request is doing
+            if (array_key_exists('access', $r) || array_key_exists('permissions', $r)) {
+                send_json(['error' => 'forbidden',
+                           'message' => 'Only the Super Admin can change roles or permissions.'], 403);
+            }
+            if (array_key_exists('role', $r)) {
+                $newRole = (string) ($r['role'] ?? '');
+                // nobody but the Super Admin creates or promotes an administrator
+                if (in_array($newRole, ADMIN_FAMILY, true)) {
                     send_json(['error' => 'forbidden',
-                               'message' => 'Only the Super Admin can change roles or permissions.'], 403);
+                               'message' => 'Only the Super Admin can assign an administrator role.'], 403);
+                }
+                // the admissions desk mints students and nothing else; an Admin
+                // mints whatever its granted modules manage (the module gate
+                // already vetted that), so it is held only to the family rule above
+                if (!$subAdmin && $newRole !== 'student') {
+                    send_json(['error' => 'forbidden',
+                               'message' => 'Your role can only create student logins.'], 403);
                 }
             }
-            // a login it creates is a student's; it does not mint staff or admins
-            if (array_key_exists('role', $r) && (string) ($r['role'] ?? '') !== 'student') {
+            // the desk does not switch accounts on and off either; an Admin may,
+            // for the staff and students it manages
+            if (!$subAdmin && array_key_exists('status', $r)) {
                 send_json(['error' => 'forbidden',
-                           'message' => 'Only the Super Admin can assign this role.'], 403);
+                           'message' => 'Only the Super Admin can change an account\'s status.'], 403);
             }
         }
     }

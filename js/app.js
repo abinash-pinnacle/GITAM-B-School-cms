@@ -748,11 +748,14 @@
      server is what actually refuses a change; these let the screen agree with
      it instead of offering a button that always fails. */
   const MODULES = [
+    // `settings` rides in these two writes for the reference lists they extend
+    // (specialisations, designations, departments) — the server pins a
+    // non-admin's settings write down to those lists, not the system switches
     ['students',     'Students',                    ['students', 'stuprofile', 'batchsem'],
-                                                    ['students', 'users']],
+                                                    ['students', 'users', 'settings']],
     ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                                                     ['faculty', 'accountants', 'centerheads', 'placementofficers',
-                                                     'coordinators', 'admissions', 'users']],
+                                                     'coordinators', 'admissions', 'users', 'settings']],
     ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable'],
                                                     ['courses', 'syllabus', 'timetable']],
     ['attendance',   'Attendance',                  ['attendance', 'attrecords'],
@@ -5738,7 +5741,10 @@
     /* Logins are the admin's to set. An accountant opening their own record
        from the accounts page sees the same fields they always saw — everything
        except the block that would let them change their own password. */
-    const withLogin = user.role === 'admin';
+    /* The Super Admin, and an Admin granted Staff, set the employee's login here.
+       A new employee always gets one on save either way; showing the section
+       just lets them choose the user id and password instead of the defaults. */
+    const withLogin = user.role === 'admin' || user.role === SUBADMIN_ROLE;
     const per = stuPart(f, 'personal');
     const other = stuPart(f, 'otherInfo');
     const addr = stuPart(f, 'addressInfo');
