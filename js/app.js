@@ -5427,19 +5427,29 @@
   /* Faculty (stored by id) plus any non-faculty names the admin has added
      (stored as the name itself). The person being edited is left out — nobody
      reports to themselves, and a chain that loops has no top. */
+  /** a staff record by id across every staff table, or null */
+  function staffById(id) {
+    if (!id) return null;
+    for (const col of STAFF_TABLES) {
+      const r = Store.find(col, id);
+      if (r) return r;
+    }
+    return null;
+  }
   function reportingToOptions(selected, excludeId) {
-    const faculty = Store.all('faculty')
-      .filter(f => f.id !== excludeId)
-      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    // every employee, from all staff tables — not faculty alone
+    const staff = [];
+    STAFF_TABLES.forEach(col => Store.all(col).forEach(f => { if (f.id !== excludeId) staff.push(f); }));
+    staff.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     const others = listValues('reportingTo');
     return `<option value="">— None —</option>`
-      + (faculty.length ? `<optgroup label="Faculty">` + faculty.map(f =>
+      + (staff.length ? `<optgroup label="Employees">` + staff.map(f =>
           `<option value="${esc(f.id)}" ${f.id === selected ? 'selected' : ''}>${esc(f.name)}${
             f.designation ? ' · ' + esc(f.designation) : ''}</option>`).join('') + `</optgroup>` : '')
       + (others.length ? `<optgroup label="Other">` + others.map(n =>
           `<option value="${esc(n)}" ${n === selected ? 'selected' : ''}>${esc(n)}</option>`).join('')
           + `</optgroup>` : '')
-      + listExtraOpts('Add someone not in the faculty list...');
+      + listExtraOpts('Add someone not in the employee list...');
   }
 
   /**
@@ -5476,7 +5486,8 @@
         if (!raw) { select.value = prev; return; }
         const idx = list.findIndex(n => n.toLowerCase() === raw.toLowerCase());
         if (idx === -1) { toast(`"${raw}" is not one of the added names.`, 'err'); select.value = prev; return; }
-        const inUse = Store.all('faculty').filter(f => f.reportingTo === list[idx]).length;
+        const inUse = STAFF_TABLES.reduce((n, col) =>
+          n + Store.all(col).filter(f => f.reportingTo === list[idx]).length, 0);
         if (inUse) {
           toast(`"${list[idx]}" is used by ${inUse} record(s) — change those first.`, 'err');
           select.value = prev; return;
@@ -5498,7 +5509,7 @@
   /** Who a faculty member reports to: a linked faculty name, or a plain name. */
   function reportingToName(f) {
     if (!f || !f.reportingTo) return '';
-    const boss = Store.find('faculty', f.reportingTo);
+    const boss = staffById(f.reportingTo);   // any staff table, not faculty alone
     return boss ? boss.name : f.reportingTo;
   }
 
@@ -5533,7 +5544,7 @@
         ${infoRow('Department', esc(f.department || '—'))}
         ${infoRow('Designation', esc(f.designation || '—'))}
         ${infoRow('Category', esc(f.category || '—'))}
-        ${infoRow('Reporting To', esc(f.reportingTo ? facultyName(f.reportingTo) : '—'))}
+        ${infoRow('Reporting To', esc(reportingToName(f) || '—'))}
         ${infoRow('Mobile No', esc(f.phone || '—'))}
         ${infoRow('Email ID', esc(f.email || '—'))}
         ${infoRow('Status', `<span class="pill ${(f.status || 'Active') === 'Active' ? 'green' : 'red'}">${
@@ -11506,8 +11517,13 @@
     reportingTo: {
       setting: 'reportingToList', defaults: [],
       prompt: 'Name of the person reported to (e.g. Director — Dr. S. Rath):',
-      used: () => Store.all('faculty').map(f => f.reportingTo)
-        .filter(v => v && !Store.find('faculty', v)),
+      // the custom-typed names in use: every staff row's reportingTo that is not
+      // itself a staff id (a staff id is a person already in the list above)
+      used: () => {
+        const vals = [];
+        STAFF_TABLES.forEach(col => Store.all(col).forEach(f => { if (f.reportingTo) vals.push(f.reportingTo); }));
+        return vals.filter(v => !staffById(v));
+      },
     },
   };
   // one live array per list — bindListAddNew keeps a reference, so rebuild in place
