@@ -219,6 +219,10 @@
        admission officer approve, reject, recover or correct a form instead of
        the write being blocked in the browser and never sent. */
     if (base === 'admission') allow.submissions = ['add', 'update'];
+    /* The operational reference lists live in `settings`; a custom-access account
+       grows them from whatever form it has, and the server pins the write to the
+       safe list names. Grant it here so saveList is not blocked before it sends. */
+    if (hasCustomAccess(user)) allow.settings = ['add', 'update'];
     Store.setReadOnly(true, allow);
   }
   /** true for a role that may look at the master data but never change it */
@@ -616,8 +620,28 @@
      pages, so they survive the filter; a section left with nothing under it is
      dropped afterwards. */
   function menuFor(u) {
-    const role = typeof u === 'string' ? u : baseRoleOf((u || {}).role);
-    let items = rawMenu(role);
+    const uObj = typeof u === 'string' ? null : (u || {});
+    const custom = uObj && hasCustomAccess(uObj);
+    /* A custom-access account borrows the admin menu — every module grouped under
+       its own heading — so any module the Super Admin grants it appears where it
+       belongs. Its own role's personal pages (Profile above all) are kept, since
+       the admin menu carries none of them. */
+    const role = custom ? 'admin' : (typeof u === 'string' ? u : baseRoleOf(uObj.role));
+    let items = rawMenu(role).slice();
+    if (custom) {
+      const have = new Set(items.map(([k]) => k));
+      const personal = [];
+      rawMenu(baseRoleOf(uObj.role)).forEach(row => {
+        const k = row[0];
+        if (ALWAYS_ALLOWED.includes(k) && k !== 'dashboard' && !have.has(k)) {
+          personal.push(row);
+          have.add(k);
+        }
+      });
+      // under their own "Account" heading, not tacked onto whatever section
+      // happened to be last (System, which is empty for a custom-access account)
+      if (personal.length) items = items.concat([[NAV_SECTION, '', 'Account']], personal);
+    }
     const allowed = (key) => {
       if (ALWAYS_ALLOWED.includes(key)) return true;
       const m = moduleOfView(key);
@@ -729,8 +753,13 @@
     if (view === 'facprofile') return canView('faculty');
     const m = moduleOfView(view);
     if (m && !can(m, 'view')) return false;
-    return rawMenu(baseRoleOf(user.role)).some(([k, , , url]) =>
-      k === view || (k === NAV_GROUP && url === view));
+    /* A custom-access account is checked against the admin menu — the one that
+       carries every module's pages — so a page in a module it was granted opens,
+       even though its own role's menu never listed that page. */
+    const menuRole = hasCustomAccess(user) ? 'admin' : baseRoleOf(user.role);
+    return rawMenu(menuRole).some(([k, , , url]) =>
+      k === view || (k === NAV_GROUP && url === view))
+      || (hasCustomAccess(user) && rawMenu(baseRoleOf(user.role)).some(([k]) => k === view));
   }
 
   const VIEW_KEY = 'nmiet_view';
@@ -765,14 +794,11 @@
      server is what actually refuses a change; these let the screen agree with
      it instead of offering a button that always fails. */
   const MODULES = [
-    // `settings` rides in these two writes for the reference lists they extend
-    // (specialisations, designations, departments) — the server pins a
-    // non-admin's settings write down to those lists, not the system switches
     ['students',     'Students',                    ['students', 'stuprofile', 'batchsem', 'submissions'],
-                                                    ['students', 'users', 'settings']],
+                                                    ['students', 'users', 'submissions']],
     ['staff',        'Faculty & Staff',             ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                                                     ['faculty', 'accountants', 'centerheads', 'placementofficers',
-                                                     'coordinators', 'admissions', 'users', 'settings']],
+                                                     'coordinators', 'admissions', 'users']],
     ['academics',    'Courses & Curriculum',        ['courses', 'syllabus', 'assignments', 'timetable'],
                                                     ['courses', 'syllabus', 'timetable']],
     ['attendance',   'Attendance',                  ['attendance', 'attrecords'],
@@ -879,17 +905,31 @@
     if ((u.access || 'full') !== 'restricted' && u.role !== SUBADMIN_ROLE) return null;
     return readPermSet(u.permissions) || {};
   }
+  /* An account whose access is decided entirely by its own per-module grant, not
+     its role: the Admin, and any account the Super Admin has put on custom access
+     (access = restricted) — a Faculty, an Accountant, anyone. The Super Admin
+     itself is never this; it holds everything. Mirrors has_custom_access() on the
+     server. */
+  function hasCustomAccess(u) {
+    // the Super Admin holds everything; a student is on the student portal — the
+    // module grid is for staff logins the Super Admin puts on custom access
+    if (!u || u.role === 'admin' || u.role === 'student') return false;
+    return u.role === SUBADMIN_ROLE || (u.access || 'full') === 'restricted';
+  }
 
   /* ---------- what this account may actually do ----------
-     ceiling ∩ role template ∩ user override. The override wins over the
-     template — that is the priority, and it is the same everywhere — but both
-     are capped by the ceiling, so neither can hand out more than the code has. */
+     A custom-access account is granted from the whole module range (the Super
+     Admin's ceiling) and held to exactly what was ticked, with no role template
+     in the way — deny by default. An account on its role default keeps that
+     role's ceiling and template, exactly as before, so nothing changes for
+     anyone the Super Admin has not put on custom access. */
   function effectivePerms(u) {
     if (!u) return {};
-    const ceiling = roleCeiling(baseRoleOf(u.role));
-    if (u.role === 'admin') return ceiling;      // never narrowed, never lost
-    const role = rolePerms(u.role);
-    const own = userPerms(u);
+    if (u.role === 'admin') return roleCeiling('admin');   // never narrowed
+    const custom = hasCustomAccess(u);
+    const ceiling = custom ? roleCeiling('admin') : roleCeiling(baseRoleOf(u.role));
+    const role = custom ? null : rolePerms(u.role);
+    const own = custom ? (userPerms(u) || {}) : userPerms(u);
     const out = {};
     Object.keys(ceiling).forEach(m => {
       let acts = ceiling[m];
@@ -1443,6 +1483,10 @@
   // ---- DASHBOARD ----
   function viewDashboard() {
     viewDashboard.after = null;
+    // a custom-access account — the Admin or anyone the Super Admin put on custom
+    // access — gets the permission-built dashboard: only the cards, actions and
+    // access summary for the modules it was actually granted
+    if (hasCustomAccess(user)) return subAdminDashboard();
     if (user.role === 'student') return studentDashboard();
     if (user.role === 'faculty') return facultyDashboard();
     if (user.role === 'librarian') return librarianDashboard();
@@ -14465,6 +14509,9 @@
           const own = userPerms(u);
           const ceiling = roleCeiling(baseRoleOf(u.role));
           const isAdmin = u.role === 'admin';
+          // Access Control is for staff logins; the Super Admin holds everything
+          // and a student is on the student portal, not the module grid
+          const noAccessCtl = isAdmin || u.role === 'student';
           const active = userActive(u);
           return `<tr class="${active ? '' : 'row-off'}">
             <td><b>${esc(u.name || '—')}</b>${u.id === user.id
@@ -14479,7 +14526,7 @@
                       : esc(permSummary(own || rolePerms(u.role), ceiling))}</td>
             <td><div class="row-actions">
               <button class="btn-sm btn-outline" data-view="${u.id}">👁 Access</button>
-              ${isAdmin ? '' : `<button class="btn-sm btn-edit" data-perm="${u.id}">Permissions</button>`}
+              ${noAccessCtl ? '' : `<button class="btn-sm btn-edit" data-perm="${u.id}">Access Control</button>`}
               <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
               ${u.id === user.id ? '' : `<button class="btn-sm btn-outline" data-toggle="${u.id}">${
                 active ? '🚫 Deactivate' : '✅ Activate'}</button>
@@ -14490,7 +14537,7 @@
         $('#usBody').querySelectorAll('[data-view]').forEach(b =>
           b.onclick = () => accessReportModal(b.dataset.view));
         $('#usBody').querySelectorAll('[data-perm]').forEach(b =>
-          b.onclick = () => permissionsModal(b.dataset.perm, draw));
+          b.onclick = () => accessControlModal(b.dataset.perm, draw));
         $('#usBody').querySelectorAll('[data-edit]').forEach(b =>
           b.onclick = () => userForm(b.dataset.edit, draw));
         $('#usBody').querySelectorAll('[data-toggle]').forEach(b =>
@@ -14722,15 +14769,152 @@
      it to an Admin that reaches the API by hand, so this is the friendly face of
      a rule that holds with or without it. */
 
-  /* What an Admin can be granted: every module except System (users, roles,
-     settings and the audit log stay with the Super Admin). The matrix and the
+  /* What a custom-access account can be granted: every module except System
+     (users, roles, settings and the audit log stay with the Super Admin) and
+     except Reports, which has no page of its own in this menu. The grid and the
      saved grant are both capped to this, so a stale ceiling cannot widen it. */
-  const ADMIN_GRANTABLE = MODULES.map(([k]) => k).filter(k => k !== 'system');
+  const ADMIN_GRANTABLE = MODULES.map(([k]) => k).filter(k => k !== 'system' && k !== 'reports');
   function adminCeiling() {
     const full = roleCeiling('admin');
     const out = {};
     ADMIN_GRANTABLE.forEach(k => { if (full[k]) out[k] = full[k]; });
     return out;
+  }
+
+  /* ============ Access Control (any staff login) ============
+     The Super Admin opens a user and decides, module by module, exactly what it
+     may do: No Access / View Only / Full Access / Custom. Full Access includes
+     Delete and everything the module supports; No Access hides the module
+     entirely. It is the per-account override (access = restricted) and wins over
+     the role; "Role Default" puts the account back on its role. Super Admin only,
+     and the server enforces every choice again on its own — this is the face of
+     the rule, not the rule. */
+  const ACCESS_LEVELS = [['none', 'No Access'], ['view', 'View Only'],
+                         ['full', 'Full Access'], ['custom', 'Custom']];
+  function accessLevelOf(acts, ceilActs) {
+    acts = acts || [];
+    if (!acts.length) return 'none';
+    if (ceilActs.length && ceilActs.every(a => acts.includes(a))) return 'full';
+    if (acts.length === 1 && acts[0] === 'view') return 'view';
+    return 'custom';
+  }
+  function actsForLevel(lvl, ceilActs, mod) {
+    if (lvl === 'full') return ceilActs.slice();
+    if (lvl === 'view') return ceilActs.includes('view') ? ['view'] : [];
+    if (lvl === 'none') return [];
+    // custom: read the ticked boxes, capped to what the module supports
+    return ACTION_KEYS.filter(a => {
+      const cb = document.querySelector(`[data-p="${mod}:${a}"]`);
+      return cb && cb.checked && ceilActs.includes(a);
+    });
+  }
+  function accessControlModal(uid, after) {
+    const u = Store.find('users', uid);
+    if (!u) return;
+    if (u.role === 'admin') { toast('The Super Admin holds everything and is never narrowed.', 'err'); return; }
+    const ceiling = adminCeiling();
+    const rows = MODULES.filter(([k]) => ceiling[k]);
+    const own = userPerms(u);                 // current custom grant, or null
+    const roleLbl = roleLabel(u.role);
+    const alwaysCustom = u.role === SUBADMIN_ROLE;  // the Admin has no role default
+    const current = own || {};
+
+    const modRow = ([key, label]) => {
+      const ceilActs = ceiling[key];
+      const acts = current[key] || [];
+      const lvl = own ? accessLevelOf(acts, ceilActs) : 'none';
+      return `<div class="ac-mod" data-mod="${key}" data-name="${esc(label.toLowerCase())}">
+        <div class="ac-mod-head">
+          <span class="ac-mod-name">${esc(label)}</span>
+          <select class="ac-level" data-mod="${key}">
+            ${ACCESS_LEVELS.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ac-actions ${lvl === 'custom' ? '' : 'hidden'}" data-mod="${key}">
+          ${ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([a, al]) =>
+            `<label class="ac-act"><input type="checkbox" data-p="${key}:${a}" ${acts.includes(a) ? 'checked' : ''}> ${al}</label>`).join('')}
+        </div>
+      </div>`;
+    };
+
+    openModal('Access Control — ' + (u.name || u.username), `<form id="f">
+      <p class="ac-sub"><b>${esc(u.name || '—')}</b> · ${esc(roleLbl)} · <span class="mono">${esc(u.username)}</span></p>
+      ${alwaysCustom ? `<p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">
+        The Admin has no default of its own — set each module below.</p>`
+        : `<div class="chk-grid ac-src">
+        <label class="chk"><input type="radio" name="access" value="full" ${own ? '' : 'checked'}>
+          <b>Role Default</b> — follows the ${esc(roleLbl)} role</label>
+        <label class="chk"><input type="radio" name="access" value="restricted" ${own ? 'checked' : ''}>
+          <b>Custom Access</b> — you decide, module by module (wins over the role)</label>
+      </div>`}
+      <div class="ac-tools">
+        <input class="search-box" id="acSearch" placeholder="Search modules...">
+        <button type="button" class="btn-outline btn-sm" id="acFull">All Full</button>
+        <button type="button" class="btn-outline btn-sm" id="acView">All View</button>
+        <button type="button" class="btn-outline btn-sm" id="acNone">All None</button>
+      </div>
+      <div id="acList" class="ac-list">${rows.map(modRow).join('')}</div>
+      <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Full Access includes every action the
+        module supports, Delete included. No Access hides the module — menu, pages and API.</p>
+      <div class="form-actions">
+        <button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save Changes</button></div></form>`, true);
+
+    $('#cx').onclick = closeModal;
+    const setLevel = (mod, lvl) => {
+      const sel = document.querySelector(`.ac-level[data-mod="${mod}"]`); if (sel) sel.value = lvl;
+      const box = document.querySelector(`.ac-actions[data-mod="${mod}"]`);
+      box.classList.toggle('hidden', lvl !== 'custom');
+      if (lvl !== 'custom') {
+        const acts = actsForLevel(lvl, ceiling[mod], mod);
+        box.querySelectorAll('[data-p]').forEach(cb => { cb.checked = acts.includes(cb.dataset.p.split(':')[1]); });
+      }
+    };
+    document.querySelectorAll('.ac-level').forEach(sel => sel.onchange = () => setLevel(sel.dataset.mod, sel.value));
+    document.querySelectorAll('.ac-actions [data-p]').forEach(cb => cb.onchange = () => {
+      const [mod, a] = cb.dataset.p.split(':');
+      if (a !== 'view' && cb.checked) { const v = document.querySelector(`[data-p="${mod}:view"]`); if (v) v.checked = true; }
+      if (a === 'view' && !cb.checked) document.querySelectorAll(`.ac-actions[data-mod="${mod}"] [data-p]`).forEach(x => { x.checked = false; });
+    });
+    $('#acFull').onclick = () => rows.forEach(([k]) => setLevel(k, 'full'));
+    $('#acView').onclick = () => rows.forEach(([k]) => setLevel(k, 'view'));
+    $('#acNone').onclick = () => rows.forEach(([k]) => setLevel(k, 'none'));
+    $('#acSearch').oninput = () => {
+      const q = ($('#acSearch').value || '').trim().toLowerCase();
+      document.querySelectorAll('#acList .ac-mod').forEach(el =>
+        el.classList.toggle('hidden', !!q && !el.dataset.name.includes(q)));
+    };
+    const syncSrc = () => {
+      if (alwaysCustom) return;
+      const custom = document.querySelector('[name="access"][value="restricted"]').checked;
+      $('#acList').style.opacity = custom ? '1' : '.5';
+      document.querySelectorAll('#acList select, #acList input, #acFull, #acView, #acNone').forEach(el => { el.disabled = !custom; });
+    };
+    if (!alwaysCustom) document.querySelectorAll('[name="access"]').forEach(r => r.onchange = syncSrc);
+    syncSrc();
+
+    $('#f').onsubmit = (e) => {
+      e.preventDefault();
+      const custom = alwaysCustom || document.querySelector('[name="access"][value="restricted"]').checked;
+      const before = userPerms(u);
+      if (!custom) {
+        Store.update('users', uid, { access: 'full', permissions: {} });
+        auditPerms('user', u.username, u.name || u.username, before, {});
+        closeModal(); toast(`${u.name || u.username} follows ${roleLbl}.`);
+        if (after) after(); else render();
+        return;
+      }
+      const perms = {};
+      rows.forEach(([k]) => {
+        const lvl = document.querySelector(`.ac-level[data-mod="${k}"]`).value;
+        const acts = actsForLevel(lvl, ceiling[k], k);
+        if (acts.length) perms[k] = acts;
+      });
+      Store.update('users', uid, { access: 'restricted', permissions: perms });
+      auditPerms('user', u.username, u.name || u.username, before || {}, perms);
+      closeModal(); toast(`${u.name || u.username}: ${plural(Object.keys(perms).length, 'module')} granted.`);
+      if (after) after(); else render();
+    };
   }
   /** the last time this account actually signed in, from the audit log */
   function adminLastLogin(uid) {
@@ -14798,7 +14982,7 @@
             </div></td></tr>`;
         }).join('') : `<tr><td colspan="6" class="empty">No Admin accounts yet. Create one to grant scoped access.</td></tr>`;
 
-        $('#amBody').querySelectorAll('[data-perm]').forEach(b => b.onclick = () => adminPermissionsModal(b.dataset.perm, draw));
+        $('#amBody').querySelectorAll('[data-perm]').forEach(b => b.onclick = () => accessControlModal(b.dataset.perm, draw));
         $('#amBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => userForm(b.dataset.edit, draw));
         $('#amBody').querySelectorAll('[data-reset]').forEach(b => b.onclick = () => adminResetPassword(b.dataset.reset, draw));
         $('#amBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => adminActivityModal(b.dataset.log));

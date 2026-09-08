@@ -461,17 +461,13 @@ const ROLE_CARVE_OUTS = [
    'restricted' may open its ticked modules and change nothing else — which is
    checked here, not only hidden in the menu. */
 const MODULES = [
-    /* `settings` is in these two writes for the reference lists they extend on
-       the fly (specialisations, designations, departments). It is not a free
-       hand over the system switches: guard_role_write pins a non-admin's
-       settings write down to OPERATIONAL_LIST_SETTINGS. */
     'students'    => ['label' => 'Students',
                       'views' => ['students', 'stuprofile', 'batchsem', 'submissions'],
-                      'write' => ['students', 'users', 'submissions', 'settings']],
+                      'write' => ['students', 'users', 'submissions']],
     'staff'       => ['label' => 'Faculty & Staff',
                       'views' => ['faculty', 'facprofile', 'accountants', 'placementofficers'],
                       'write' => ['faculty', 'accountants', 'centerheads', 'placementofficers',
-                                  'coordinators', 'admissions', 'users', 'settings']],
+                                  'coordinators', 'admissions', 'users']],
     'academics'   => ['label' => 'Courses & Curriculum',
                       'views' => ['courses', 'syllabus', 'assignments', 'timetable'],
                       'write' => ['courses', 'syllabus', 'timetable']],

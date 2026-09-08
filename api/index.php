@@ -622,12 +622,17 @@ const ADMIN_ROLE = 'subadmin';
    ordinary staff/student data an Admin extends while managing people. */
 const SUBADMIN_FORBIDDEN = ['roles', 'auditlog', 'settings'];
 
-/* Reference lists a staff or student manager grows on the fly — designations,
-   departments, specialisations, who a person reports to. They sit in `settings`
-   but are not the system's switches, so an Admin granted Staff or Students may
-   add to them; every other setting stays with the Super Admin. */
-const OPERATIONAL_LIST_SETTINGS = ['designationList', 'departmentList',
-                                   'specialisationList', 'reportingToList'];
+/* The editable reference lists the forms grow on the fly — the "+ Add new…" in
+   a dropdown. They sit in `settings` but are ordinary operational data an Admin
+   extends while doing its job, one list or another on nearly every screen. So an
+   Admin may write these by name; every other setting — the system switches
+   (fees visibility, attendance mode, id length, branch codes) — stays with the
+   Super Admin. This is the whole allowlist; it must match LIST_DEFS in app.js. */
+const OPERATIONAL_LIST_SETTINGS = [
+    'designationList', 'departmentList', 'specialisationList', 'reportingToList',
+    'branchNameList', 'courseList', 'feeTypeList', 'assetCategoryList',
+    'goodsCategoryList', 'bookCategoryList',
+];
 
 /** may an Admin write this settings row? Only the operational lists above. */
 function subadmin_setting_write_ok(string $method, ?string $id): bool
@@ -682,6 +687,30 @@ function is_sub_admin(): bool
 function is_admin_family(): bool
 {
     return in_array(current_role(), ADMIN_FAMILY, true);
+}
+
+/**
+ * An account whose access is decided entirely by its own per-module grant, not
+ * by its role. That is the Admin, and now any account the Super Admin has put on
+ * custom access (access = restricted) — a Faculty, an Accountant, anyone. Such an
+ * account is granted from the whole range of modules and held to exactly what was
+ * ticked: the older per-role rules step aside for it and the module gate decides,
+ * so "give this one person Fees and nothing else" works whatever their role is.
+ * The Super Admin itself is never this — it holds everything unconditionally.
+ */
+function has_custom_access(): bool
+{
+    $u = current_user();
+    if (!$u) {
+        return false;
+    }
+    $role = (string) ($u['role'] ?? '');
+    // the Super Admin holds everything; a student is on the student portal, never
+    // the module grid — neither is a custom-access account
+    if ($role === SUPER_ADMIN_ROLE || $role === 'student') {
+        return false;
+    }
+    return $role === ADMIN_ROLE || (string) ($u['access'] ?? 'full') === 'restricted';
 }
 
 /**
@@ -817,24 +846,23 @@ function effective_perms(): array
         return $perms = [];
     }
     $role = (string) ($u['role'] ?? '');
-    $ceiling = role_ceiling(base_role($role));
-    if ($role === 'admin') {
-        return $perms = $ceiling;              // never narrowed, never lost
+    if ($role === SUPER_ADMIN_ROLE) {
+        return $perms = role_ceiling('admin');   // never narrowed, never lost
     }
+    /* A custom-access account is granted from the whole range of modules — its
+       ceiling is the Super Admin's — and held to exactly what was ticked, with no
+       role template in the way. An account left on its role default keeps that
+       role's ceiling and its template, exactly as before, so nothing changes for
+       anyone the Super Admin has not put on custom access. */
+    $custom = has_custom_access();
+    $ceiling = $custom ? role_ceiling('admin') : role_ceiling(base_role($role));
     $roleRow = role_record($role);
-    /* The Admin narrows per account, never at the role level: its template is
-       deliberately empty, and an empty template read as a restriction would zero
-       every Admin. So the role never narrows here — the per-user grant does. */
-    $fromRole = ($role === ADMIN_ROLE || !$roleRow)
-        ? null
-        : read_perm_set($roleRow['permissions'] ?? null);
-    /* The Admin is always narrowed by its own grant, even if the row somehow
-       says `full`: its ceiling is the Super Admin's, so a missing override must
-       mean "nothing", never "everything". An empty grant intersects to nothing;
-       that is what makes a brand-new Admin start with no access at all. */
-    $own = ((string) ($u['access'] ?? 'full') === 'restricted' || $role === ADMIN_ROLE)
-        ? (read_perm_set($u['permissions'] ?? null) ?? [])
-        : null;
+    $fromRole = ($custom || !$roleRow) ? null : read_perm_set($roleRow['permissions'] ?? null);
+    /* On custom access the grant is the whole story, and a missing grant means
+       "nothing", never "everything" — an empty set intersects to nothing, which
+       is what makes deny-by-default hold and a brand-new custom account start
+       with no access at all. */
+    $own = $custom ? (read_perm_set($u['permissions'] ?? null) ?? []) : null;
     $out = [];
     foreach ($ceiling as $key => $acts) {
         if ($fromRole !== null) {
@@ -900,6 +928,13 @@ function guard_module_write(string $resource, string $method): void
 {
     $perms = restricted_perms();
     if ($perms === null) {
+        return;
+    }
+    /* Settings for the Admin is decided by guard_role_write above, which has the
+       record id and so can pin it to the operational lists; it does not belong
+       to any one module, so the module gate would otherwise refuse a list the
+       Admin is allowed to grow. Having passed that gate, it is already vetted. */
+    if ($resource === 'settings' && has_custom_access()) {
         return;
     }
     $action = METHOD_ACTION[$method] ?? 'edit';
@@ -1080,11 +1115,11 @@ const STAFF_PUBLIC_FIELDS = ['id', 'empId', 'name', 'designation', 'department',
 function guard_role_write(string $resource, string $method, ?string $id): void
 {
     $role = current_role();
-    /* The Admin may reach any collection its granted modules cover — the module
-       gate (guard_module_write) and the escalation shield decide the rest — but
-       never the three tables that decide access itself. The one give: it may add
-       to the operational reference lists that happen to live in `settings`. */
-    if ($role === ADMIN_ROLE) {
+    /* A custom-access account may reach any collection its granted modules cover
+       — the module gate (guard_module_write) and the escalation shield decide the
+       rest — but never the three tables that decide access itself. The one give:
+       it may add to the operational reference lists that live in `settings`. */
+    if (has_custom_access()) {
         if ($resource === 'settings') {
             if (subadmin_setting_write_ok($method, $id)) {
                 return;
@@ -1144,10 +1179,11 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
         send_json(['error' => 'forbidden',
                    'message' => 'Your role cannot read this.'], 403);
     }
-    /* The Admin reads only what its granted modules cover. Everything sensitive
-       it was not given — money, marks, placement, the admission queue, staff
-       files — is refused here, not merely left out of the menu. */
-    if (!$isWrite && is_sub_admin() && isset(COLLECTIONS[$resource])
+    /* A custom-access account reads only what its granted modules cover.
+       Everything sensitive it was not given — money, marks, placement, the
+       admission queue, staff files — is refused here, not merely left out of the
+       menu. This is deny-by-default reaching the read side. */
+    if (!$isWrite && has_custom_access() && isset(COLLECTIONS[$resource])
         && !subadmin_may_read($resource)) {
         send_json(['error' => 'forbidden',
                    'message' => 'Your account has not been granted access to this.'], 403);
@@ -1183,7 +1219,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        students and only students. So the role being assigned is checked against
        the admin family (always refused) and, for the desk, against `student`. */
     if ($isWrite && $resource === 'users' && current_role() !== 'admin') {
-        $subAdmin = is_sub_admin();
+        $subAdmin = has_custom_access();
         // editing or deleting somebody: an administrator's account is off limits
         if ($id !== null) {
             $target = fetch_one('SELECT ' . qi('role') . ' AS role FROM ' . qi('users')
@@ -1243,7 +1279,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
             send_json(['error' => 'forbidden',
                        'message' => 'The curriculum is not part of the accounts office.'], 403);
         }
-        if ($isWrite && !in_array($role, SYLLABUS_WRITE_ROLES, true) && !is_admin_family()) {
+        if ($isWrite && !in_array($role, SYLLABUS_WRITE_ROLES, true) && !has_custom_access()) {
             send_json(['error' => 'forbidden',
                        'message' => 'Only the admin can change the curriculum.'], 403);
         }
@@ -1253,15 +1289,15 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        — Super Admin or a granted Admin — is let past them so the per-account
        permission gate above is what actually decides; for the Admin a module it
        was not granted was already refused there. */
-    if (in_array($resource, FINANCE_COLLECTIONS, true) && !is_admin_family()) {
+    if (in_array($resource, FINANCE_COLLECTIONS, true) && !has_custom_access()) {
         if ($isWrite ? !may_touch_finance() : !may_read_finance()) {
             send_json(['error' => 'forbidden'], 403);
         }
     }
-    if ($isWrite && in_array($resource, FINANCE_WRITE_ONLY, true) && !may_touch_finance() && !is_admin_family()) {
+    if ($isWrite && in_array($resource, FINANCE_WRITE_ONLY, true) && !may_touch_finance() && !has_custom_access()) {
         send_json(['error' => 'forbidden'], 403);
     }
-    if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff() && !is_admin_family()) {
+    if (in_array($resource, STAFF_COLLECTIONS, true) && !may_touch_staff() && !has_custom_access()) {
         send_json(['error' => 'forbidden'], 403);
     }
 
@@ -1285,7 +1321,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
 
     // attendance is registered by the roles allowed to hold a class — and by an
     // Admin granted the Attendance module (the module gate above vetted that)
-    if ($resource === 'attendance' && $isWrite && !may_mark_attendance() && !is_admin_family()) {
+    if ($resource === 'attendance' && $isWrite && !may_mark_attendance() && !has_custom_access()) {
         send_json([
             'error'   => 'forbidden',
             'message' => current_role() === 'faculty'
@@ -1336,14 +1372,14 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     // was a UI convention: the Students page simply hid its buttons, while the
     // API accepted a write from any signed-in role.
     if ($resource === 'students' && $isWrite
-        && !in_array(current_role(), ['admin', 'admission'], true) && !is_admin_family()) {
+        && !in_array(current_role(), ['admin', 'admission'], true) && !has_custom_access()) {
         send_json([
             'error'   => 'forbidden',
             'message' => 'Only the administrator can add, edit or delete a student record.',
         ], 403);
     }
 
-    if (in_array($resource, PLACEMENT_COLLECTIONS, true) && !is_admin_family()) {
+    if (in_array($resource, PLACEMENT_COLLECTIONS, true) && !has_custom_access()) {
         $isStudent = current_role() === 'student';
         $studentMayRead = !$isWrite && $isStudent
             && in_array($resource, array_merge(PLACEMENT_STUDENT_OPEN, PLACEMENT_STUDENT_OWN), true);
@@ -2293,10 +2329,10 @@ function api_bootstrap(): void
    this one. */
 function bootstrap_data(): array
 {
-    /* An Admin is let through the area switches below so a module it *was*
-       granted is not emptied by a rule meant for other roles; the per-account
-       read gate right after decides what it actually receives. */
-    $isSub = is_sub_admin();
+    /* A custom-access account is let through the area switches below so a module
+       it *was* granted is not emptied by a rule meant for other roles; the
+       per-account read gate right after decides what it actually receives. */
+    $isSub = has_custom_access();
     $finance = may_read_finance() || $isSub;
     $staff = may_touch_staff() || $isSub;
     $placement = may_read_placement() || $isSub;

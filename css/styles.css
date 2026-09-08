@@ -366,6 +366,23 @@ tbody tr:hover{background:#fafcff}
 .qa-btn:active{transform:translateY(1px)}
 .qa-ico{font-size:18px;line-height:1}
 
+/* Access Control modal — per-module No/View/Full/Custom */
+.ac-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.ac-src{margin:0 0 12px}
+.ac-tools{display:flex;gap:8px;align-items:center;margin:0 0 10px;flex-wrap:wrap}
+.ac-tools .search-box{flex:1;min-width:150px}
+.ac-list{max-height:52vh;overflow:auto;border:1px solid var(--border);border-radius:10px}
+.ac-mod{padding:10px 12px;border-bottom:1px solid var(--border)}
+.ac-mod:last-child{border-bottom:0}
+.ac-mod-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ac-mod-name{font-weight:600;font-size:13.5px}
+.ac-level{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);
+  font:inherit;font-size:13px;font-weight:500;min-width:130px}
+.ac-actions{display:flex;flex-wrap:wrap;gap:10px 16px;margin:10px 2px 2px;padding-top:10px;
+  border-top:1px dashed var(--border)}
+.ac-act{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer}
+.ac-act input{margin:0}
+
 /* The employee list has ten columns; below a wide desktop it cannot show them
    all without running off the edge. The three that are also on the employee's
    own profile page — Department, Reporting To, Phone — step aside on a laptop,
