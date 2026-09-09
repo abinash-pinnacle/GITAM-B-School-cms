@@ -370,6 +370,25 @@ const Store = {
     }
   },
 
+  /* Renumber every student's id cleanly in one server transaction — no data is
+     deleted, only the roll and its matching login are rewritten. Resolves to
+     { ok, changed, total, mapping:[{id,name,was,roll}] } or { error }. The store
+     is reloaded by the caller afterwards, so the local copy is not patched here. */
+  async renumberStudents() {
+    try {
+      const res = await fetch(`${API}/renumber-students`, {
+        method: 'POST',
+        headers: this._headers(true),
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: (data && data.message) || 'The renumber could not be completed.' };
+      return data;
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
+
   /* Give a student a different id. With no `roll` the server issues the next
      one — for a year that was typed wrong. With a `roll` it uses that one, which
      only the administrator may do. Either way the login moves with the id.

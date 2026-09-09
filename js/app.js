@@ -4348,6 +4348,7 @@
                ? `<button class="btn-sm btn-del" data-reset="${esc(r.yy)}">↺ Start again at 01</button>`
                : `<small style="color:var(--muted)">Delete those ${r.students} first</small>`}</td>
            </tr>`).join('')}</tbody></table></div>`;
+      const studentCount = Store.all('students').length;
       openModal('ID Numbering', `
         <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
           A Student ID is the admission year, the branch code and a running number. The number never
@@ -4355,9 +4356,20 @@
           else.<br>
           After a practice run, delete those students and the year can start again at 01.</p>
         ${body}
+        <div style="margin-top:16px;padding:14px;border:1px solid var(--amber,#e0a800);border-radius:10px;background:#fff9ec">
+          <h4 style="margin:0 0 6px;font-size:14px">🧹 Clean up all Student IDs</h4>
+          <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">
+            Renumber every student (<b>${studentCount}</b>) so each year's numbers run 001, 002, 003…
+            with no gaps — the ID keeps its year and branch. <b>No student is deleted.</b>
+            Each student's login username is the ID, so it changes too — you must give them the new ID.
+            Take a backup first (User Management → Download Backup).</p>
+          <button type="button" class="btn-del" id="renumAll">↻ Renumber all Student IDs</button>
+        </div>
         <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`,
         true);
       $('#cx').onclick = closeModal;
+      const renumBtn = $('#renumAll');
+      if (renumBtn) renumBtn.onclick = () => renumberAllStudents(after);
       document.querySelectorAll('#modalBody [data-reset]').forEach(b => {
         b.onclick = () => {
           const yy = b.dataset.reset;
@@ -4376,6 +4388,43 @@
       });
     };
     Store.studentSeq().then(rows => draw(rows || []));
+  }
+
+  /* Renumber every student cleanly. Deliberately behind a hard confirmation: it
+     rewrites every roll and login username at once. Nothing is deleted; the
+     server does it in one transaction and hands back what changed, which is
+     offered as a CSV so the office has the old→new list to give students. */
+  function renumberAllStudents(after) {
+    const n = Store.all('students').length;
+    confirmDelete('Renumber all Student IDs',
+      `This rewrites the Student ID of all <b>${n}</b> students so each year runs 001, 002, 003…
+       with no gaps. The year and branch stay the same.<br><br>
+       <b>No student is deleted.</b> But each student's <b>login username changes</b> to their new ID —
+       they cannot sign in with the old one until you give them the new number, and anything printed
+       with the old ID (cards, records) becomes out of date.<br><br>
+       Take a backup first if you have not. Continue?`,
+      'Yes, renumber all', async () => {
+        const res = await Store.renumberStudents();
+        if (!res || res.error) { toast((res && res.error) || 'Could not renumber.', 'err'); return; }
+        await Store.load();
+        closeModal();
+        toast(`${res.changed} of ${res.total} Student IDs renumbered.`);
+        if (res.mapping && res.mapping.length) downloadIdMapping(res.mapping);
+        if (after) after(); else render();
+      });
+  }
+  /* The old→new list as a CSV the office can keep — who now has which ID. */
+  function downloadIdMapping(mapping) {
+    const rows = [['Name', 'Old Student ID', 'New Student ID']]
+      .concat(mapping.map(m => [m.name || '', m.was || '', m.roll || '']));
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `student-id-changes-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
   }
 
   /* Setting an id by hand. Read-only everywhere else, because nobody types one

@@ -1740,6 +1740,86 @@ function api_reissue_student_id(): void
     }
 }
 
+/**
+ * Renumber every student's id cleanly, in one transaction.
+ *
+ * Within each admission year the running number is reassigned 1, 2, 3 … in the
+ * students' current-id order, closing the gaps that deletions and hand-typed ids
+ * leave behind, and the id keeps its meaning — year, branch code, number. The
+ * login username is the id, so it moves with it. Nothing is deleted: only the
+ * roll and the matching login are rewritten, and the whole thing commits or
+ * rolls back as one, so a student can never be left half-renumbered. The Super
+ * Admin alone may run it — it rewrites the id and login of every student.
+ */
+function api_renumber_students(): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden',
+                   'message' => 'Only the Super Admin can renumber Student IDs.'], 403);
+    }
+    $yearOf = fn(array $s) => admission_yy((string) ($s['admissionDate'] ?? ($s['academicYear'] ?? '')));
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        lock_collection('students');
+        $students = fetch_all('SELECT * FROM ' . qi('students'));
+        // stable order: admission year, then the current id (numeric), then the row id
+        usort($students, function ($a, $b) use ($yearOf) {
+            $c = strcmp($yearOf($a), $yearOf($b));
+            if ($c !== 0) {
+                return $c;
+            }
+            $c = ((int) ($a['roll'] ?? 0)) <=> ((int) ($b['roll'] ?? 0));
+            if ($c !== 0) {
+                return $c;
+            }
+            return strcmp((string) ($a['id'] ?? ''), (string) ($b['id'] ?? ''));
+        });
+        $seqByYear = [];
+        $mapping = [];
+        foreach ($students as $s) {
+            $yy = $yearOf($s);
+            $seqByYear[$yy] = ($seqByYear[$yy] ?? 0) + 1;
+            $newRoll = format_student_id($yy, (string) ($s['branchName'] ?? ''), $seqByYear[$yy]);
+            $oldRoll = (string) ($s['roll'] ?? '');
+            if ($newRoll === $oldRoll) {
+                continue;                       // already exactly right — leave it
+            }
+            run_sql('UPDATE ' . qi('students') . ' SET ' . qi('roll') . ' = ? WHERE ' . qi('id') . ' = ?',
+                [$newRoll, (string) $s['id']]);
+            /* The login username is the id. Scoped to this one student's own
+               login (by refId) and only if it still carried the old number, so an
+               office that renamed a login by hand is left alone — same rule as a
+               single re-issue. */
+            run_sql('UPDATE ' . qi('users') . ' SET ' . qi('username') . ' = ? WHERE ' . qi('refId')
+                . ' = ? AND ' . qi('role') . " = 'student' AND " . qi('username') . ' = ?',
+                [$newRoll, (string) $s['id'], $oldRoll]);
+            $mapping[] = ['id' => (string) $s['id'], 'name' => (string) ($s['name'] ?? ''),
+                          'was' => $oldRoll, 'roll' => $newRoll];
+        }
+        // each year's counter continues above the highest number just assigned,
+        // so the next admission never collides with a renumbered student
+        foreach ($seqByYear as $yy => $max) {
+            run_sql('DELETE FROM ' . qi('_id_seq') . ' WHERE ' . qi('k') . ' = ?', ['student:' . $yy]);
+            run_sql('INSERT INTO ' . qi('_id_seq') . ' (' . qi('k') . ', ' . qi('n') . ') VALUES (?, ?)',
+                ['student:' . $yy, (int) $max]);
+        }
+        if ($own) {
+            db()->commit();
+        }
+        audit('renumber-students', 'students', '', '',
+              count($mapping) . ' of ' . count($students) . ' Student IDs renumbered');
+        send_json(['ok' => true, 'changed' => count($mapping), 'total' => count($students), 'mapping' => $mapping]);
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+}
+
 /** how many students on the roll hold an id of this scheme for a year */
 function students_in_year(string $yy): int
 {
@@ -3342,6 +3422,9 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'reset-student-seq') {
         api_reset_student_seq();
+    }
+    if ($method === 'POST' && $resource === 'renumber-students') {
+        api_renumber_students();
     }
     /* What the next id would be, without taking it. Signed in only — it says
        how many students the college has admitted this year. */
