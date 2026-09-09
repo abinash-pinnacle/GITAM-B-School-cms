@@ -2432,14 +2432,12 @@
           // the search box, the column row and the panel all have to agree
           if (!passes(s, f) || !passes(s, adv.fields)) return false;
           return ADV_RANGES.every(([k, , level]) => inRange(advValue(s, k, level), adv.ranges[k]));
-        }).sort((a, b) => {
-          // alphabetical by name — first name, then last, then the Student ID
-          const an = String(a.firstName || a.name || '').trim().toLowerCase();
-          const bn = String(b.firstName || b.name || '').trim().toLowerCase();
-          return an.localeCompare(bn)
-            || String(a.lastName || '').toLowerCase().localeCompare(String(b.lastName || '').toLowerCase())
-            || String(a.roll || '').localeCompare(String(b.roll || ''));
-        });
+        }).sort((a, b) =>
+          // in Student ID (roll) order — the natural sequence of a roll, numeric
+          // so 202501009 sorts before 202501010, then name as a tie-break
+          String(a.roll || '').localeCompare(String(b.roll || ''), undefined, { numeric: true })
+          || String(a.firstName || a.name || '').toLowerCase()
+              .localeCompare(String(b.firstName || b.name || '').toLowerCase()));
       };
 
       const paintBar = (total) => {
