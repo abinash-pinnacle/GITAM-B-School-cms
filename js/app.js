@@ -2432,6 +2432,13 @@
           // the search box, the column row and the panel all have to agree
           if (!passes(s, f) || !passes(s, adv.fields)) return false;
           return ADV_RANGES.every(([k, , level]) => inRange(advValue(s, k, level), adv.ranges[k]));
+        }).sort((a, b) => {
+          // alphabetical by name — first name, then last, then the Student ID
+          const an = String(a.firstName || a.name || '').trim().toLowerCase();
+          const bn = String(b.firstName || b.name || '').trim().toLowerCase();
+          return an.localeCompare(bn)
+            || String(a.lastName || '').toLowerCase().localeCompare(String(b.lastName || '').toLowerCase())
+            || String(a.roll || '').localeCompare(String(b.roll || ''));
         });
       };
 

@@ -356,6 +356,11 @@ thead th:first-child{border-radius:8px 0 0 8px} thead th:last-child{border-radiu
 tbody td{padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
 tbody tr:hover{background:#fafcff}
 .row-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+/* In a scrollable table the last (actions) column gets squeezed and its buttons
+   wrap into a tall stack — a 45px row ballooning to 228px, which reads as broken
+   alignment. Keep them on one line inside a table; the table scrolls sideways
+   instead. Mobile card-rows re-enable wrapping just below. */
+.tbl-wrap .row-actions{flex-wrap:nowrap;white-space:nowrap}
 
 /* Admin dashboard quick actions — one button per granted page */
 .quick-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
