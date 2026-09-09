@@ -1757,20 +1757,32 @@
     // ---- whose birthday is coming up ----
     html += birthdayPanel();
 
-    // ---- students overview table ----
-    html += `<div class="panel"><div class="panel-head"><h3>Students Overview</h3></div>
+    // ---- students overview table (a short preview, not the whole roll) ----
+    const overviewRows = students.slice().sort((a, b) =>
+      String(a.roll || '').localeCompare(String(b.roll || ''), undefined, { numeric: true })).slice(0, 8);
+    html += `<div class="panel"><div class="panel-head">
+        <h3>Students Overview</h3>
+        <button class="btn-sm btn-outline" id="dashAllStudents">View all students ${ic('arrow-right')}</button>
+      </div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th><th>Attendance</th><th>GPA</th>
       </tr></thead><tbody>`;
-    students.forEach(s => {
+    overviewRows.forEach(s => {
       const att = studentAttendancePct(s.id);
       const gpa = studentGPA(s.id);
       html += `<tr><td>${esc(s.roll)}</td><td>${esc(s.name)}</td><td>${esc(s.branch)}</td>
         <td>${s.semester}</td><td>${attBar(att)}</td><td>${gpa ?? '—'}</td></tr>`;
     });
-    html += `</tbody></table></div></div>`;
+    html += `</tbody></table></div>
+      ${students.length > overviewRows.length
+        ? `<div class="panel-more">Showing ${overviewRows.length} of ${students.length} students</div>` : ''}
+      </div>`;
 
-    viewDashboard.after = () => { bindIncompleteCard(); };
+    viewDashboard.after = () => {
+      bindIncompleteCard();
+      const all = $('#dashAllStudents');
+      if (all) all.onclick = () => navigate('students');
+    };
     return html;
   }
 
