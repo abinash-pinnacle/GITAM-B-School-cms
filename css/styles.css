@@ -44,6 +44,20 @@ a{color:var(--primary);text-decoration:none}
 .btn-edit:hover{background:#d6e6f7}
 .btn-del{background:#fde8ea;color:var(--red)}
 .btn-del:hover{background:#fbd5d9}
+/* ---- inline SVG line icons (see ic() in app.js) ---- */
+.ic{display:inline-block;flex:none;width:1.05em;height:1.05em;vertical-align:-.14em;
+    fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* a little breathing room when an icon leads button/label text */
+button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,h2 .ic,h3 .ic{margin-right:6px}
+.btn-sm .ic{width:15px;height:15px;margin-right:5px}
+.row-actions .btn-sm .ic{margin-right:0;width:15px;height:15px}
+.nav-item .ico .ic{width:19px;height:19px;margin:0}
+.nav-item.nav-child .ico .ic{width:13px;height:13px;margin:0}
+.stat-card .s-ico .ic{width:20px;height:20px;margin:0}
+.qa-ico .ic{width:18px;height:18px;margin:0}
+.lib-qa-ico .ic{width:18px;height:18px;margin:0;color:#fff;stroke:#fff}
+.nav-ext .ic{width:12px;height:12px;margin:0}
+.btn-primary .ic{margin-right:6px}
 .btn-outline{background:#fff;border:1px solid var(--line);color:var(--ink);padding:9px 16px;border-radius:8px;font-weight:500}
 .btn-outline:hover{border-color:var(--primary);color:var(--primary)}
 /* AFTER the other button classes on purpose. It used to sit above

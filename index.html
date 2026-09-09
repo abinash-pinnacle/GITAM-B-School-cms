@@ -9,10 +9,10 @@
   <!-- installable app (PWA): icons, colours and the manifest an APK builder reads -->
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#123f8c" />
-  <link rel="icon" href="assets/icons/favicon.ico?b=20260909d" sizes="any" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260909d" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260909d" />
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260909d" />
+  <link rel="icon" href="assets/icons/favicon.ico?b=20260909e" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260909e" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260909e" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260909e" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <!-- NOT black-translucent: that draws the page *under* the iPhone status
        bar, so in the installed app the topbar and the ☰ button end up beneath
@@ -25,7 +25,7 @@
        Bump this stamp whenever css/js changes, otherwise a phone that cached
        the old files (iOS Safari caches JS for days when no Cache-Control is
        sent) keeps running yesterday's app against today's API. -->
-  <link rel="stylesheet" href="css/styles.css?b=20260909d" />
+  <link rel="stylesheet" href="css/styles.css?b=20260909e" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
@@ -66,11 +66,11 @@
 
       <form id="loginForm" autocomplete="off">
         <label>Username</label>
-        <div class="in-wrap"><span class="in-ico">&#128100;</span>
+        <div class="in-wrap"><span class="in-ico"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.6 3.6-6.5 8-6.5s8 2.9 8 6.5"/></svg></span>
           <input type="text" id="loginUser" placeholder="Enter username" required /></div>
 
         <label>Password</label>
-        <div class="in-wrap"><span class="in-ico">&#128274;</span>
+        <div class="in-wrap"><span class="in-ico"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
           <input type="password" id="loginPass" placeholder="Enter password" required /></div>
 
         <!-- No role picker: the account behind these credentials decides the
@@ -104,15 +104,15 @@
       <nav id="navMenu" class="nav-menu"></nav>
       <div class="sidebar-footer">
         <div id="sideUser" class="side-user"></div>
-        <button id="pwdBtn" class="btn-ghost btn-block"><span class="lo-ico">🔑</span><span class="lo-txt">Change Password</span></button>
-        <button id="logoutBtn" class="btn-ghost btn-block"><span class="lo-ico">⎋</span><span class="lo-txt">Logout</span></button>
+        <button id="pwdBtn" class="btn-ghost btn-block"><span class="lo-ico"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="14" r="4"/><path d="m11 11 9-9M17 5l3 3M14 8l2 2"/></svg></span><span class="lo-txt">Change Password</span></button>
+        <button id="logoutBtn" class="btn-ghost btn-block"><span class="lo-ico"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><polyline points="18 8 22 12 18 16"/><line x1="22" y1="12" x2="10" y2="12"/></svg></span><span class="lo-txt">Logout</span></button>
       </div>
     </aside>
 
     <!-- Main content -->
     <main class="content">
       <header class="topbar">
-        <button id="menuToggle" class="menu-toggle">☰</button>
+        <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
         <h2 id="pageTitle">Dashboard</h2>
         <div class="topbar-right">
           <span id="topUserName" class="user-chip"></span>
@@ -152,9 +152,9 @@
   <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/xlsx.js?b=20260909d"></script>
-  <script src="js/store.js?b=20260909d"></script>
-  <script src="js/app.js?b=20260909d"></script>
+  <script src="js/xlsx.js?b=20260909e"></script>
+  <script src="js/store.js?b=20260909e"></script>
+  <script src="js/app.js?b=20260909e"></script>
 
   <!-- PWA: register the shell cache and wire the install button.
        Kept inline and defensive so an unsupported browser is a no-op. -->

@@ -10,6 +10,91 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
     { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const money = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+
+  /* ---------- inline SVG icons (professional line set, currentColor) ----------
+     One monochrome 24x24 line glyph per name; ic(name) returns the <svg> markup
+     so it can drop straight into innerHTML wherever a label icon is wanted. */
+  const ICON = {
+    _:        '<circle cx="12" cy="12" r="9"/>',
+    grid:     '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+    chart:    '<line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="9"/><line x1="18" y1="20" x2="18" y2="4"/>',
+    "trending-up":   '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+    "trending-down": '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+    cap:      '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/>',
+    user:     '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.6 3.6-6.5 8-6.5s8 2.9 8 6.5"/>',
+    users:    '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.2 2.9-5.5 6.5-5.5s6.5 2.3 6.5 5.5"/><path d="M16 5.2a3.5 3.5 0 0 1 0 6.6"/><path d="M18 14.4c2.3.6 4 2.3 4 5.6"/>',
+    money:    '<circle cx="12" cy="12" r="9"/><path d="M9 8h6M9 11h6M14 8c0 3-2 4-4.5 4L14 16"/>',
+    "credit-card": '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
+    receipt:  '<path d="M5 3v18l2-1.3L9 21l2-1.3L13 21l2-1.3L17 21l2-1.3V3l-2 1.3L15 3l-2 1.3L11 3 9 4.3 7 3Z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/>',
+    book:     '<path d="M12 6c-2-1.3-5-2-8-2v14c3 0 6 .7 8 2 2-1.3 5-2 8-2V4c-3 0-6 .7-8 2Z"/><line x1="12" y1="6" x2="12" y2="20"/>',
+    books:    '<path d="M4 5h5v15H4Z"/><path d="M9 5h5v15H9Z"/><path d="m14 6 4-1 3 14-4 1Z"/>',
+    file:     '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><polyline points="14 3 14 8 19 8"/>',
+    clipboard:'<rect x="6" y="4" width="12" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="4" rx="1"/>',
+    notes:    '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><polyline points="14 3 14 8 19 8"/><line x1="8" y1="13" x2="14" y2="13"/><line x1="8" y1="16" x2="12" y2="16"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="6"/><line x1="16" y1="3" x2="16" y2="6"/>',
+    clock:    '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/>',
+    pending:  '<path d="M6 3h12M6 21h12"/><path d="M7 3c0 4 3 5 5 7 2-2 5-3 5-7M7 21c0-4 3-5 5-7 2 2 5 3 5 7"/>',
+    alert:    '<path d="M12 3 2 20h20Z"/><line x1="12" y1="9" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12" y2="17.5"/>',
+    ban:      '<circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>',
+    building: '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01"/><path d="M10 21v-4h4v4"/>',
+    bank:     '<line x1="3" y1="21" x2="21" y2="21"/><path d="M4 10h16"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="m12 3 8 5H4Z"/>',
+    school:   '<path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M12 3v3"/>',
+    leaf:     '<path d="M11 20A7 7 0 0 1 18 5c2 0 3 1 3 3a7 7 0 0 1-7 7"/><path d="M4 21c3-6 6-9 11-11"/>',
+    trophy:   '<path d="M8 4h8v5a4 4 0 0 1-8 0Z"/><path d="M8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3"/><line x1="12" y1="13" x2="12" y2="17"/><path d="M9 20h6M10 20l.4-3h3.2l.4 3"/>',
+    target:   '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    package:  '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>',
+    folder:   '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+    "id-card":'<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M4.5 16c0-1.9 1.6-3 3.5-3s3.5 1.1 3.5 3"/><line x1="14" y1="10" x2="19" y2="10"/><line x1="14" y1="14" x2="18" y2="14"/>',
+    briefcase:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/>',
+    scroll:   '<path d="M6 4h11v13a3 3 0 0 1-3 3H6"/><path d="M6 20a3 3 0 0 1-3-3V6a2 2 0 0 1 4 0v2"/><line x1="9" y1="8" x2="14" y2="8"/><line x1="9" y1="12" x2="14" y2="12"/>',
+    bookmark: '<path d="M6 3h12v18l-6-4-6 4Z"/>',
+    refresh:  '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><polyline points="21 3 21 8 16 8"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><polyline points="3 21 3 16 8 16"/>',
+    printer:  '<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><rect x="7" y="14" width="10" height="6"/>',
+    mic:      '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><line x1="12" y1="17" x2="12" y2="21"/>',
+    upload:   '<path d="M12 15V3"/><polyline points="7 8 12 3 17 8"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    download: '<path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    trash:    '<polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+    edit:     '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17Z"/><line x1="14" y1="6" x2="18" y2="10"/>',
+    paperclip:'<path d="M21 10 11.5 19.5a5 5 0 0 1-7-7L14 3a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/>',
+    key:      '<circle cx="8" cy="14" r="4"/><path d="m11 11 9-9M17 5l3 3M14 8l2 2"/>',
+    shield:   '<path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6Z"/>',
+    external: '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/>',
+    lock:     '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    search:   '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.2" y2="16.2"/>',
+    hash:     '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
+    x:        '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
+    check:    '<polyline points="4 12 9.5 17.5 20 6.5"/>',
+    door:     '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><polyline points="18 8 22 12 18 16"/><line x1="22" y1="12" x2="10" y2="12"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    bell:     '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/>',
+    cake:     '<path d="M4 20h16v-6a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3Z"/><path d="M4 16c2 0 2 1.4 4 1.4S12 16 12 16s2 1.4 4 1.4S20 16 20 16"/><line x1="12" y1="4" x2="12" y2="8"/>',
+    star:     '<path d="m12 3 2.6 5.5 6 .8-4.3 4.2 1 6L12 17l-5.3 2.5 1-6L3.4 9.3l6-.8Z"/>',
+    home:     '<path d="M3 11 12 3l9 8"/><path d="M5 10v10h14V10"/><rect x="10" y="14" width="4" height="6"/>',
+    activity: '<path d="M22 12h-4l-3 8-6-16-3 8H2"/>',
+    phone:    '<path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L17 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2Z"/>',
+    link:     '<path d="M10 14a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-6-6l-1.5 1.5"/><path d="M14 10a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 6 6l1.5-1.5"/>',
+    menu:     '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+    smartphone:'<rect x="7" y="3" width="10" height="18" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/>',
+    bot:      '<rect x="4" y="8" width="16" height="12" rx="2"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/><line x1="12" y1="5" x2="12" y2="8"/><circle cx="12" cy="4" r="1"/>',
+    zap:      '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>',
+    pause:    '<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>',
+    plus:     '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    clean:    '<path d="m16 4 4 4-9 9H7v-4Z"/><line x1="5" y1="21" x2="12" y2="21"/>',
+    skip:     '<polygon points="5 5 15 12 5 19"/><line x1="19" y1="5" x2="19" y2="19"/>',
+    type:     '<path d="M4 18 8.5 6 13 18M5.5 14h6"/><path d="M15.5 18v-8h3a2.5 2.5 0 0 1 0 5h-3"/>',
+    mail:     '<rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/>',
+    tools:    '<path d="M14.5 5.5a3.5 3.5 0 0 0 4.5 4.5L21 12l-6 6-2-2"/><path d="m9 9-5 5 2 2 5-5"/>',
+    "chevron-down":'<polyline points="6 9 12 15 18 9"/>',
+    "arrow-right": '<line x1="4" y1="12" x2="20" y2="12"/><polyline points="14 6 20 12 14 18"/>',
+    "arrow-left":  '<line x1="20" y1="12" x2="4" y2="12"/><polyline points="10 6 4 12 10 18"/>',
+    undo:     '<polyline points="9 7 4 12 9 17"/><path d="M4 12h11a5 5 0 0 1 0 10h-1"/>',
+    eye:      '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+    rocket:   '<path d="M5 15c-1 1-2 5-2 5s4-1 5-2M14 4c3 0 6 3 6 6l-7 7-5-5Z"/><circle cx="14.5" cy="9.5" r="1.4"/>',
+  };
+  function ic(name) {
+    var p = ICON[name] || ICON._;
+    return '<svg class="ic ic-' + name + '" viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
+  }
   // small circular table thumbnail — actual photo if set, else the name's first letter
   const avatarHtml = (photo, name) => photo
     ? `<img src="${esc(photo)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block">`
@@ -171,7 +256,7 @@
   const PLACEMENT_MANAGE_ROLES = ['admin', 'placement_officer'];
   function canManagePlacement() {
     if (!user) return false;
-    // custom-access → decided by the placement grant, not the role
+    // custom-access decided by the placement grant, not the role
     if (hasCustomAccess(user)) return WRITE_ACTIONS.some(a => can('placement', a));
     return PLACEMENT_MANAGE_ROLES.includes(user.role);
   }
@@ -536,7 +621,7 @@
   // the mark-attendance page itself, not the portal root — /emp/ only lands on
   // the login index, which is a step further from what staff actually need
   const EMP_ATTENDANCE_URL = 'https://pinnacle.myattendance.co.in/emp/add_attendance';
-  const EMP_ATTENDANCE = [NAV_LINK, '🕐', 'My Attendance', EMP_ATTENDANCE_URL];
+  const EMP_ATTENDANCE = [NAV_LINK, ic('clock'), 'My Attendance', EMP_ATTENDANCE_URL];
   const MENU = {
     /* Grouped strictly by module, one section per module, so a restricted Admin
        granted a single module sees exactly that module's pages under one heading
@@ -545,115 +630,115 @@
        Every row's page must belong (via moduleOfView) to the module its section
        names, or a grant would light the wrong heading. */
     admin: [
-      ['dashboard','📊','Dashboard'],
+      ['dashboard',ic('chart'),'Dashboard'],
       [NAV_SECTION,'','Students'],
-      ['students','🎓','Students'], ['batchsem','🎯','Semester Update'],
-      ['submissions','📝','Admission Forms'],
+      ['students',ic('cap'),'Students'], ['batchsem',ic('target'),'Semester Update'],
+      ['submissions',ic('notes'),'Admission Forms'],
       [NAV_SECTION,'','Faculty & Staff'],
-      ['faculty','🧑‍💼','Employees'], ['accountants','🧑‍💼','Accountants'],
-      ['placementofficers','🧑‍💼','Placement Officers'],
+      ['faculty',ic('user'),'Employees'], ['accountants',ic('user'),'Accountants'],
+      ['placementofficers',ic('user'),'Placement Officers'],
       [NAV_SECTION,'','Courses & Curriculum'],
-      ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
-      ['assignments','🗂️','Assignments'], ['timetable','🗓️','Timetable'],
+      ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['assignments',ic('folder'),'Assignments'], ['timetable',ic('calendar'),'Timetable'],
       [NAV_SECTION,'','Attendance'],
-      ['attendance','✅','Attendance'], ['attrecords','🗂️','Attendance Records'],
+      ['attendance',ic('check'),'Attendance'], ['attrecords',ic('folder'),'Attendance Records'],
       [NAV_SECTION,'','Marks & Results'],
-      ['marks','📝','Marks & Results'],
+      ['marks',ic('notes'),'Marks & Results'],
       [NAV_SECTION,'','Fees & Finance'],
-      ['fees','💳','Fees'], ['finstudents','🎓','Student List'], ['fixedfee','📋','Fixed Fee'],
-      ['semfee','📆','Semester-wise Fee'], ['feecollect','💰','Fee Collection'],
-      ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'],
-      ['finreports','📈','Financial Reports'],
+      ['fees',ic('credit-card'),'Fees'], ['finstudents',ic('cap'),'Student List'], ['fixedfee',ic('clipboard'),'Fixed Fee'],
+      ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
+      ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'],
+      ['finreports',ic('trending-up'),'Financial Reports'],
       [NAV_SECTION,'','Assets'],
-      ['assets','🏢','Asset List'],
+      ['assets',ic('building'),'Asset List'],
       [NAV_SECTION,'','Requisitions'],
-      ['requisitions','📦','Requisitions'],
+      ['requisitions',ic('package'),'Requisitions'],
       [NAV_SECTION,'','Library'],
-      ['library','📖','Library'], ['reports','📊','Library Reports'],
+      ['library',ic('book'),'Library'], ['reports',ic('chart'),'Library Reports'],
       [NAV_SECTION,'','Placement Cell'],
-      ['plstudents','🎓','Placement Students'], ['companies','🏢','Companies'],
-      [NAV_GROUP,'🚀','Placement Drives','drives',DRIVE_TYPES],
-      ['applications','📨','Applications'], ['interviews','🎤','Interviews'],
-      ['placements','🏆','Selections'], ['offers','📜','Offers'],
-      ['plcalendar','📅','Placement Calendar'], ['plreports','📊','Placement Reports'],
+      ['plstudents',ic('cap'),'Placement Students'], ['companies',ic('building'),'Companies'],
+      [NAV_GROUP,ic('rocket'),'Placement Drives','drives',DRIVE_TYPES],
+      ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
+      ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
+      ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Placement Reports'],
       [NAV_SECTION,'','Events & Notices'],
-      ['events','📅','Events'],
+      ['events',ic('calendar'),'Events'],
       [NAV_SECTION,'','System'],
-      ['accounts','🔑','Login Accounts'], ['usersettings','⚙️','User Management'],
-      ['roles','🛡️','Roles & Permissions'], ['adminmgmt','👥','Admin Management'],
+      ['accounts',ic('key'),'Login Accounts'], ['usersettings',ic('settings'),'User Management'],
+      ['roles',ic('shield'),'Roles & Permissions'], ['adminmgmt',ic('users'),'Admin Management'],
       EMP_ATTENDANCE,
     ],
     // manages the placement cell end to end; read-only on the student records it recruits from
     placement_officer: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
-      ['plstudents','🎓','Placement Students'],
-      ['syllabus','🧾','Subjects by Semester'],
-      ['companies','🏢','Companies'],
-      [NAV_GROUP,'🚀','Placement Drives','drives',DRIVE_TYPES],
-      ['applications','📨','Applications'], ['interviews','🎤','Interviews'],
-      ['placements','🏆','Selections'], ['offers','📜','Offers'],
-      ['plcalendar','📅','Placement Calendar'], ['plreports','📊','Reports'],
-      ['events','🔔','Notifications'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
+      ['plstudents',ic('cap'),'Placement Students'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['companies',ic('building'),'Companies'],
+      [NAV_GROUP,ic('rocket'),'Placement Drives','drives',DRIVE_TYPES],
+      ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
+      ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
+      ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Reports'],
+      ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
     center_head: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'], ['faculty','🧑‍💼','Employees'],
-      ['departments','🏛️','Departments'], ['courses','📚','Courses'], ['branches','🌿','Specialisations'],
-      ['syllabus','🧾','Subjects by Semester'],
-      ['attendance','✅','Attendance'], ['timetable','🗓️','Timetable'],
+      ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'], ['faculty',ic('user'),'Employees'],
+      ['departments',ic('bank'),'Departments'], ['courses',ic('books'),'Courses'], ['branches',ic('leaf'),'Specialisations'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['attendance',ic('check'),'Attendance'], ['timetable',ic('calendar'),'Timetable'],
       [NAV_SECTION,'','Fees & Finance'],
-      ['finstudents','🎓','Student List'], ['fixedfee','📋','Fixed Fee'],
-      ['semfee','📆','Semester-wise Fee'], ['payments','🧾','Payment History'],
-      ['pendingfees','⏳','Pending Fees'],
+      ['finstudents',ic('cap'),'Student List'], ['fixedfee',ic('clipboard'),'Fixed Fee'],
+      ['semfee',ic('calendar'),'Semester-wise Fee'], ['payments',ic('receipt'),'Payment History'],
+      ['pendingfees',ic('pending'),'Pending Fees'],
       [NAV_SECTION,'','Monitoring'],
-      ['assets','🏢','Assets'], ['library','📖','Library'], ['chreports','📈','Reports'],
+      ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'], ['chreports',ic('trending-up'),'Reports'],
       // the one thing this role decides rather than just watches
-      ['requisitions','📦','Approvals'],
-      ['events','🔔','Notifications'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+      ['requisitions',ic('package'),'Approvals'],
+      ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     accountant: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
-      ['finstudents','🎓','Student List'], ['assets','🏢','Asset List'],
-      ['fixedfee','📋','Fixed Fee'], ['semfee','📆','Semester-wise Fee'], ['feecollect','💰','Fee Collection'],
-      ['payments','🧾','Payment History'], ['pendingfees','⏳','Pending Fees'], ['requisitions','📦','Requisitions'],
-      ['finreports','📈','Reports'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
+      ['finstudents',ic('cap'),'Student List'], ['assets',ic('building'),'Asset List'],
+      ['fixedfee',ic('clipboard'),'Fixed Fee'], ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
+      ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('package'),'Requisitions'],
+      ['finreports',ic('trending-up'),'Reports'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     faculty: [
-      ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['students','🎓','Students'], ['attendance','✅','Attendance'],
-      ['marks','📝','Marks & Results'], ['timetable','🗓️','Timetable'],
-      ['syllabus','🧾','Subjects by Semester'], ['goodsreq','📦','Goods Requisition'],
-      EMP_ATTENDANCE, ['profile','👤','My Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
+      ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'], ['goodsreq',ic('package'),'Goods Requisition'],
+      EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     student: [
-      ['dashboard','📊','Dashboard'], ['events','📅','Events'], ['myattendance','✅','My Attendance'], ['myresults','📝','My Results'],
-      ['timetable','🗓️','Timetable'], ['syllabus','🧾','Subjects by Semester'],
-      ['mybooks','📖','My Library'], ['myfees','💳','My Fees'],
-      ['myplacement','🏆','My Placement'], ['profile','👤','My Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['myattendance',ic('check'),'My Attendance'], ['myresults',ic('notes'),'My Results'],
+      ['timetable',ic('calendar'),'Timetable'], ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['mybooks',ic('book'),'My Library'], ['myfees',ic('credit-card'),'My Fees'],
+      ['myplacement',ic('trophy'),'My Placement'], ['profile',ic('user'),'My Profile'],
     ],
     /* The admissions desk enrols students and corrects them. Courses and the
        scheme are there because an admission has to be put on one. */
     admission: [
-      ['dashboard','📊','Dashboard'], ['students','🎓','All Students'],
-      ['submissions','📝','Admission Forms'],
-      ['courses','📚','Courses'], ['syllabus','🧾','Subjects by Semester'],
-      ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
+      ['submissions',ic('notes'),'Admission Forms'],
+      ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['events',ic('calendar'),'Events'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     /* The coordinator runs attendance and reads what it is built from. Nothing
        here writes master data — the server refuses it either way. */
     course_coordinator: [
-      ['dashboard','📊','Dashboard'], ['attendance','✅','Attendance'],
-      ['attrecords','🗂️','Attendance Records'],
-      ['students','🎓','Students'], ['submissions','📝','Admission Forms'],
-      ['courses','📚','Courses'],
-      ['syllabus','🧾','Subjects by Semester'], ['timetable','🗓️','Timetable'],
-      ['events','📅','Events'], EMP_ATTENDANCE, ['profile','👤','Profile'],
+      ['dashboard',ic('chart'),'Dashboard'], ['attendance',ic('check'),'Attendance'],
+      ['attrecords',ic('folder'),'Attendance Records'],
+      ['students',ic('cap'),'Students'], ['submissions',ic('notes'),'Admission Forms'],
+      ['courses',ic('books'),'Courses'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'], ['timetable',ic('calendar'),'Timetable'],
+      ['events',ic('calendar'),'Events'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     librarian: [
-      ['dashboard','📊','Dashboard'], ['library','📖','Library'], ['issueBook','⬇️','Issue a Book'],
-      ['returnBook','⬆️','Return a Book'], ['bookreq','📚','Book Requisition'],
-      ['students','🎓','Students'], ['syllabus','🧾','Subjects by Semester'],
-      ['events','📅','Events'], ['reports','📊','Reports'],
+      ['dashboard',ic('chart'),'Dashboard'], ['library',ic('book'),'Library'], ['issueBook',ic('download'),'Issue a Book'],
+      ['returnBook',ic('upload'),'Return a Book'], ['bookreq',ic('books'),'Book Requisition'],
+      ['students',ic('cap'),'Students'], ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['events',ic('calendar'),'Events'], ['reports',ic('chart'),'Reports'],
       EMP_ATTENDANCE,
     ],
   };
@@ -772,7 +857,7 @@
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.title = txt + ' — opens in a new tab';
-        a.innerHTML = `<span class="ico">${ico}</span><span>${txt}</span><span class="nav-ext">↗</span>`;
+        a.innerHTML = `<span class="ico">${ico}</span><span>${txt}</span><span class="nav-ext">${ic('external')}</span>`;
         nav.appendChild(a);
         return;
       }
@@ -1127,12 +1212,12 @@
      not reach. Deliberately says nothing about what is on the other side. */
   function accessDenied() {
     return `<div class="panel" style="text-align:center;padding:46px 22px">
-      <div style="font-size:44px;line-height:1">🔒</div>
+      <div style="font-size:44px;line-height:1">${ic('lock')}</div>
       <h3 style="margin:12px 0 6px;color:var(--primary-dark)">Access Denied</h3>
       <p style="color:var(--muted);margin:0 0 18px">
         You do not have permission to access this module.<br>
         Ask the administrator if you need it.</p>
-      <button class="btn-primary btn-sm" id="adHome">← Back to Dashboard</button></div>`;
+      <button class="btn-primary btn-sm" id="adHome">Back to Dashboard</button></div>`;
   }
 
   /* Which action a toolbar control needs. The two patterns are the codebase's
@@ -1270,9 +1355,9 @@
     const canInstall = typeof window.pwaCanInstall === 'function' && window.pwaCanInstall();
     return `<div class="app-get-bar">
       ${canInstall ? `<button type="button" class="btn-outline btn-sm app-get-btn" id="dashInstallBtn">
-        <span>📲</span><span>Install NMIET B-SCHOOL app</span></button>` : ''}
+        <span>${ic('smartphone')}</span><span>Install NMIET B-SCHOOL app</span></button>` : ''}
       <a class="btn-outline btn-sm app-get-btn" href="apk/NMIET-BSCHOOL-CMS-v1.1.0.apk" download>
-        <span>🤖</span><span>Download Android app (APK)</span></a>
+        <span>${ic('bot')}</span><span>Download Android app (APK)</span></a>
     </div>`;
   }
   function wireAppDownloadBar(scope) {
@@ -1453,7 +1538,7 @@
     const rows = upcomingBirthdays();
     const today = rows.filter(r => r.left === 0).length;
     return `<div class="panel">
-      <div class="panel-head"><h3>🎂 Upcoming Birthdays</h3>
+      <div class="panel-head"><h3>Upcoming Birthdays</h3>
         <span style="font-size:12.5px;color:var(--muted)">${
           today ? plural(today, 'birthday') + ' today' : 'Next ' + BIRTHDAY_WINDOW + ' days'}</span></div>
       ${rows.length ? `<div class="bday-list">${rows.map(r => `
@@ -1466,7 +1551,7 @@
           <div class="bday-when">
             <span class="bday-date">${esc(r.when)}</span>
             ${r.left === 0
-              ? `<span class="pill amber">🎂 Birthday Today</span>`
+              ? `<span class="pill amber">Birthday Today</span>`
               : `<small>${r.left === 1 ? 'Tomorrow' : 'in ' + r.left + ' days'}</small>`}
           </div>
         </div>`).join('')}</div>`
@@ -1484,20 +1569,20 @@
     viewDashboard.after = null;
     const show = (m) => can(m, 'view');
     const cards = [];
-    if (show('students')) cards.push(statCard('🎓', Store.all('students').length, 'Total Students'));
-    if (show('staff')) cards.push(statCard('👨‍🏫', Store.all('faculty').length, 'Faculty Members', 'c2'));
-    if (show('academics')) cards.push(statCard('📚', Store.all('courses').length, 'Courses Offered', 'c3'));
-    if (show('attendance')) cards.push(statCard('🗓️', Store.all('attendance').filter(a => a.date === today()).length, "Today's Classes", 'c3'));
+    if (show('students')) cards.push(statCard(ic('cap'), Store.all('students').length, 'Total Students'));
+    if (show('staff')) cards.push(statCard(ic('user'), Store.all('faculty').length, 'Faculty Members', 'c2'));
+    if (show('academics')) cards.push(statCard(ic('books'), Store.all('courses').length, 'Courses Offered', 'c3'));
+    if (show('attendance')) cards.push(statCard(ic('calendar'), Store.all('attendance').filter(a => a.date === today()).length, "Today's Classes", 'c3'));
     if (show('fees')) {
       const fees = Store.all('fees');
       const tot = fees.reduce((s, f) => s + (f.total || 0), 0);
       const col = fees.reduce((s, f) => s + Math.min(f.total, f.paid || 0), 0);
-      cards.push(statCard('💳', (tot ? Math.round(col / tot * 100) : 0) + '%', 'Fees Collected', 'c3'));
+      cards.push(statCard(ic('credit-card'), (tot ? Math.round(col / tot * 100) : 0) + '%', 'Fees Collected', 'c3'));
     }
-    if (show('library')) cards.push(statCard('📖', Store.all('books').reduce((s, b) => s + (b.total || 0), 0), 'Library Books', 'c2'));
-    if (show('placement')) cards.push(statCard('💼', Store.all('offers').filter(o => ['Accepted', 'Joined'].includes(o.status)).length, 'Placed Students', 'c2'));
-    if (show('requisitions')) cards.push(statCard('📦', Store.all('requisitions').filter(r => (r.status || '') === 'Pending').length, 'Pending Requisitions', 'c4'));
-    if (show('assets')) cards.push(statCard('🏢', Store.all('assets').length, 'Asset Records', 'c3'));
+    if (show('library')) cards.push(statCard(ic('book'), Store.all('books').reduce((s, b) => s + (b.total || 0), 0), 'Library Books', 'c2'));
+    if (show('placement')) cards.push(statCard(ic('briefcase'), Store.all('offers').filter(o => ['Accepted', 'Joined'].includes(o.status)).length, 'Placed Students', 'c2'));
+    if (show('requisitions')) cards.push(statCard(ic('package'), Store.all('requisitions').filter(r => (r.status || '') === 'Pending').length, 'Pending Requisitions', 'c4'));
+    if (show('assets')) cards.push(statCard(ic('building'), Store.all('assets').length, 'Asset Records', 'c3'));
 
     // quick actions: one link per granted page the sidebar shows this account
     const quick = menuFor(user).filter(([k]) =>
@@ -1511,9 +1596,9 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>NMIET B-SCHOOL · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
-        <div class="wb-chips"><span>🔑 ${grantRows.length} module${grantRows.length === 1 ? '' : 's'} granted</span></div>
+        <div class="wb-chips"><span>${grantRows.length} module${grantRows.length === 1 ? '' : 's'} granted</span></div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
     </div>`;
@@ -1528,13 +1613,13 @@
 
     html += `<div class="dash-2col">
       <div class="panel">
-        <div class="panel-head"><h3>⚡ Quick Actions</h3></div>
+        <div class="panel-head"><h3>Quick Actions</h3></div>
         ${quick.length ? `<div class="quick-actions">${quick.map(([k, icon, label]) =>
           `<button class="qa-btn" data-go="${esc(k)}"><span class="qa-ico">${icon || '▸'}</span>${esc(label)}</button>`).join('')}</div>`
           : `<p class="empty">No pages available.</p>`}
       </div>
       <div class="panel">
-        <div class="panel-head"><h3>🔐 Your Access</h3></div>
+        <div class="panel-head"><h3>Your Access</h3></div>
         <div class="tbl-wrap"><table class="pg-table"><thead><tr><th>Module</th><th>You can</th></tr></thead><tbody>
         ${grantRows.map(([label, acts]) => `<tr><td class="pg-mod">${esc(label)}</td>
           <td>${acts.map(a => `<span class="pill">${esc(ACTIONS.find(x => x[0] === a) ? ACTIONS.find(x => x[0] === a)[1] : a)}</span>`).join(' ')}</td></tr>`).join('')}
@@ -1598,11 +1683,11 @@
     // ---- welcome banner ----
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>NMIET B-SCHOOL College Management System · ${prettyDate()}</p>
         <div class="wb-chips">
-          <span>🎓 ${nStu} students</span><span>📚 ${nCou} courses</span>
-          <span>📖 ${onLoan} books on loan</span><span>💳 ${collPct}% fees collected</span>
+          <span>${nStu} students</span><span>${nCou} courses</span>
+          <span>${onLoan} books on loan</span><span>${collPct}% fees collected</span>
         </div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
@@ -1610,11 +1695,11 @@
 
     // ---- stat cards ----
     html += `<div class="stat-grid">
-      ${statCard('🎓', nStu, 'Total Students')}
-      ${statCard('👨‍🏫', nFac, 'Faculty Members', 'c2')}
-      ${statCard('📚', nCou, 'Courses Offered', 'c3')}
-      ${statCard('📖', nBooks, 'Library Books', 'c2')}
-      ${statCard('📋', nIncomplete, 'Incomplete Students', nIncomplete ? 'c4' : 'c3', 'dashIncomplete')}
+      ${statCard(ic('cap'), nStu, 'Total Students')}
+      ${statCard(ic('user'), nFac, 'Faculty Members', 'c2')}
+      ${statCard(ic('books'), nCou, 'Courses Offered', 'c3')}
+      ${statCard(ic('book'), nBooks, 'Library Books', 'c2')}
+      ${statCard(ic('clipboard'), nIncomplete, 'Incomplete Students', nIncomplete ? 'c4' : 'c3', 'dashIncomplete')}
     </div>`;
 
     // ---- charts row: branch distribution + fee donut ----
@@ -1644,7 +1729,7 @@
     // ---- top performers + attendance health ----
     html += `<div class="dash-2col">
       <div class="panel">
-        <div class="panel-head"><h3>🏆 Top Performers</h3></div>
+        <div class="panel-head"><h3>Top Performers</h3></div>
         ${top.length ? top.map((x, i) => `
           <div class="rank-row">
             <span class="rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">${i + 1}</span>
@@ -1653,7 +1738,7 @@
           </div>`).join('') : `<p class="empty">No results yet.</p>`}
       </div>
       <div class="panel">
-        <div class="panel-head"><h3>📅 Upcoming Events</h3>
+        <div class="panel-head"><h3>Upcoming Events</h3>
           <span style="font-size:12.5px;color:var(--muted)">Next ${upcomingEvents.length}</span></div>
         <div class="lib-events-list">${upcomingEvents.length ? upcomingEvents.map(e => {
           const d = new Date(e.date + 'T00:00:00');
@@ -1745,21 +1830,21 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>${esc(f.designation || 'Faculty')} · ${esc(f.department || '')} · ${prettyDate()}</p>
-        <div class="wb-chips"><span>📚 ${classes.length} classes assigned</span><span>🎓 ${studentSet.length} students</span></div>
+        <div class="wb-chips"><span>${classes.length} classes assigned</span><span>${studentSet.length} students</span></div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
     </div>`;
 
     html += `<div class="stat-grid">
-      ${statCard('📚', classes.length, 'Assigned Classes')}
-      ${statCard('🎓', studentSet.length, 'My Students', 'c3')}
-      ${statCard('✅', avgAtt === null ? '—' : avgAtt + '%', 'Avg. Class Attendance', avgAtt !== null && avgAtt < 75 ? 'c4' : 'c2')}
-      ${statCard('🗂️', sessions.length, 'Classes Conducted')}
+      ${statCard(ic('books'), classes.length, 'Assigned Classes')}
+      ${statCard(ic('cap'), studentSet.length, 'My Students', 'c3')}
+      ${statCard(ic('check'), avgAtt === null ? '—' : avgAtt + '%', 'Avg. Class Attendance', avgAtt !== null && avgAtt < 75 ? 'c4' : 'c2')}
+      ${statCard(ic('folder'), sessions.length, 'Classes Conducted')}
     </div>`;
 
-    html += `<div class="panel"><div class="panel-head"><h3>📋 My Assigned Classes</h3>
+    html += `<div class="panel"><div class="panel-head"><h3>My Assigned Classes</h3>
       <span style="font-size:12.5px;color:var(--muted)">Assigned by the System Admin</span></div>`;
     if (!classes.length) {
       html += `<p class="empty">No classes have been assigned to you yet. Please contact the System Admin.</p>`;
@@ -1771,17 +1856,17 @@
         <td><span class="pill blue">Sec ${esc(c.section || 'A')}</span></td>
         <td>${studentsOfCourse(c).length}</td>
         <td><div class="row-actions">
-          <button class="btn-sm btn-edit" data-att="${c.id}">✅ Attendance</button>
-          <button class="btn-sm btn-outline" data-mk="${c.id}">📝 Marks</button></div></td></tr>`).join('')}</tbody></table></div>`;
+          <button class="btn-sm btn-edit" data-att="${c.id}">Attendance</button>
+          <button class="btn-sm btn-outline" data-mk="${c.id}">Marks</button></div></td></tr>`).join('')}</tbody></table></div>`;
     }
     html += `</div>`;
 
     html += `<div class="panel"><div class="panel-head"><h3>Quick Actions</h3></div>
       <div class="lib-qa-grid">
-        <div class="lib-qa-btn" id="qaAtt"><span class="lib-qa-ico" style="background:var(--primary)">✅</span>Take Attendance</div>
-        <div class="lib-qa-btn" id="qaHist"><span class="lib-qa-ico" style="background:var(--blue)">🗂️</span>Attendance History</div>
-        <div class="lib-qa-btn" id="qaRep"><span class="lib-qa-ico" style="background:var(--purple)">📄</span>Generate Attendance Report</div>
-        <div class="lib-qa-btn" id="qaMarks"><span class="lib-qa-ico" style="background:var(--accent)">📝</span>Enter Marks</div>
+        <div class="lib-qa-btn" id="qaAtt"><span class="lib-qa-ico" style="background:var(--primary)">${ic('check')}</span>Take Attendance</div>
+        <div class="lib-qa-btn" id="qaHist"><span class="lib-qa-ico" style="background:var(--blue)">${ic('folder')}</span>Attendance History</div>
+        <div class="lib-qa-btn" id="qaRep"><span class="lib-qa-ico" style="background:var(--purple)">${ic('file')}</span>Generate Attendance Report</div>
+        <div class="lib-qa-btn" id="qaMarks"><span class="lib-qa-ico" style="background:var(--accent)">${ic('notes')}</span>Enter Marks</div>
       </div></div>`;
 
     viewDashboard.after = () => {
@@ -1828,22 +1913,22 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>Admissions · ${prettyDate()}</p>
         <div class="wb-chips">
-          <span>🎓 ${students.length} on the roll</span>
-          <span>🆕 ${admittedThisYear.length} admitted in ${esc(thisYear)}</span>
+          <span>${students.length} on the roll</span>
+          <span>${admittedThisYear.length} admitted in ${esc(thisYear)}</span>
         </div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
     </div>`;
 
     html += `<div class="stat-grid">
-      ${statCard('🎓', students.length, 'Students on the Roll')}
-      ${statCard('🆕', admittedThisYear.length, `Admitted in ${esc(thisYear)}`, 'c3')}
-      ${statCard('✅', active.length, 'Active', 'c3')}
-      ${statCard('⏸️', students.length - active.length, 'Inactive', 'c4')}
-      ${statCard('📋', incompleteStudents().length, 'Incomplete Students',
+      ${statCard(ic('cap'), students.length, 'Students on the Roll')}
+      ${statCard(ic('star'), admittedThisYear.length, `Admitted in ${esc(thisYear)}`, 'c3')}
+      ${statCard(ic('check'), active.length, 'Active', 'c3')}
+      ${statCard(ic('pause'), students.length - active.length, 'Inactive', 'c4')}
+      ${statCard(ic('clipboard'), incompleteStudents().length, 'Incomplete Students',
         incompleteStudents().length ? 'c4' : 'c3', 'dashIncomplete')}
     </div>`;
 
@@ -1873,7 +1958,7 @@
 
     html += `<div class="panel"><div class="panel-head"><h3>Latest Admissions</h3>
         <div class="panel-tools">
-          <button class="btn-outline" id="dashImport">⬆ Bulk Upload</button>
+          <button class="btn-outline" id="dashImport">Bulk Upload</button>
           <button class="btn-primary" id="dashAdd">+ Add Student</button>
         </div></div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -1922,23 +2007,23 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, Librarian 👋</h2>
+        <h2>${greeting()}, Librarian</h2>
         <p>Welcome to Library Management System · ${prettyDate()}</p>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
     </div>`;
 
     html += `<div class="lib-stats-grid">
-      <div class="lib-stat-card"><div class="lib-stat-ico green">📚</div><div>
+      <div class="lib-stat-card"><div class="lib-stat-ico green">${ic('books')}</div><div>
         <div class="lib-stat-lbl">Total Books</div><div class="lib-stat-val">${totalBooks}</div>
         <div class="lib-stat-sub">All books in library</div></div></div>
-      <div class="lib-stat-card"><div class="lib-stat-ico blue">📗</div><div>
+      <div class="lib-stat-card"><div class="lib-stat-ico blue">${ic('book')}</div><div>
         <div class="lib-stat-lbl">Available Books</div><div class="lib-stat-val">${availableBooks}</div>
         <div class="lib-stat-sub">Books available</div></div></div>
-      <div class="lib-stat-card"><div class="lib-stat-ico amber">🔖</div><div>
+      <div class="lib-stat-card"><div class="lib-stat-ico amber">${ic('bookmark')}</div><div>
         <div class="lib-stat-lbl">Issued Books</div><div class="lib-stat-val">${issuedBooks}</div>
         <div class="lib-stat-sub">Currently issued</div></div></div>
-      <div class="lib-stat-card"><div class="lib-stat-ico purple">🎓</div><div>
+      <div class="lib-stat-card"><div class="lib-stat-ico purple">${ic('cap')}</div><div>
         <div class="lib-stat-lbl">Total Students</div><div class="lib-stat-val">${totalStudents}</div>
         <div class="lib-stat-sub">Registered students</div></div></div>
     </div>`;
@@ -1990,10 +2075,10 @@
       </div>
       <div class="panel"><div class="panel-head"><h3>Quick Actions</h3></div>
         <div class="lib-qa-grid">
-          <div class="lib-qa-btn" id="qaAddBook"><span class="lib-qa-ico" style="background:var(--primary)">➕</span>Add Book</div>
-          <div class="lib-qa-btn" id="qaIssueBook"><span class="lib-qa-ico" style="background:var(--blue)">⬇️</span>Issue Book</div>
-          <div class="lib-qa-btn" id="qaReturnBook"><span class="lib-qa-ico" style="background:var(--accent)">⬆️</span>Return Book</div>
-          <div class="lib-qa-btn" id="qaReports"><span class="lib-qa-ico" style="background:var(--purple)">📊</span>View Reports</div>
+          <div class="lib-qa-btn" id="qaAddBook"><span class="lib-qa-ico" style="background:var(--primary)">${ic('plus')}</span>Add Book</div>
+          <div class="lib-qa-btn" id="qaIssueBook"><span class="lib-qa-ico" style="background:var(--blue)">${ic('download')}</span>Issue Book</div>
+          <div class="lib-qa-btn" id="qaReturnBook"><span class="lib-qa-ico" style="background:var(--accent)">${ic('upload')}</span>Return Book</div>
+          <div class="lib-qa-btn" id="qaReports"><span class="lib-qa-ico" style="background:var(--purple)">${ic('chart')}</span>View Reports</div>
         </div>
       </div>
     </div>`;
@@ -2055,17 +2140,17 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(s.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(s.name))}</h2>
         <p>${esc(s.branch)} · Semester ${s.semester} · Section ${esc(s.section)} · Reg No ${esc(s.roll)}</p>
-        <div class="wb-chips"><span>📅 ${prettyDate()}</span></div>
+        <div class="wb-chips"><span>${prettyDate()}</span></div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
     </div>`;
     html += `<div class="stat-grid">
-      ${statCard('✅', (att ?? '—') + '%', 'Attendance', att !== null && att < 75 ? 'c4' : 'c3')}
-      ${statCard('📚', mySubjects.length, 'Subjects This Sem', 'c2')}
-      ${statCard('🗓️', nextClasses.length, 'Upcoming Classes')}
-      ${statCard('📖', myLoans.length, 'Books on Loan', overdueCount ? 'c4' : 'c3')}
+      ${statCard(ic('check'), (att ?? '—') + '%', 'Attendance', att !== null && att < 75 ? 'c4' : 'c3')}
+      ${statCard(ic('books'), mySubjects.length, 'Subjects This Sem', 'c2')}
+      ${statCard(ic('calendar'), nextClasses.length, 'Upcoming Classes')}
+      ${statCard(ic('book'), myLoans.length, 'Books on Loan', overdueCount ? 'c4' : 'c3')}
     </div>`;
     html += `<div class="dash-2col">
       <div class="panel">
@@ -2084,7 +2169,7 @@
         ${nextClasses.length ? nextClasses.map(({ slot, label }) => {
           const c = Store.find('courses', slot.courseId);
           return `<div class="rank-row">
-            <span class="rank">🕒</span>
+            <span class="rank">${ic('clock')}</span>
             <div class="rank-info"><strong>${c ? esc(c.code + ' — ' + c.name) : 'Unknown course'}</strong>
               <small>${esc(label)} · ${slotTimeLabel(slot)}${slot.room ? ' · Room No.' + esc(slot.room) : ''}${c ? ' · ' + esc(facultyName(c.facultyId)) : ''}</small></div>
           </div>`;
@@ -2121,19 +2206,19 @@
           const st = left < 0 ? ['red', `Overdue by ${-left} day(s)`]
                    : left === 0 ? ['amber', 'Due today']
                    : ['green', `Due in ${left} day(s)`];
-          return `<div class="rank-row"><span class="rank">📖</span>
+          return `<div class="rank-row"><span class="rank">${ic('book')}</span>
             <div class="rank-info"><strong>${esc(b.title || 'Unknown book')}</strong>
               <small>Issued ${esc(i.issueDate)} · <span class="pill ${st[0]}">${st[1]}</span></small></div>
           </div>`;
         }).join('') : '<p class="empty">No books currently on loan.</p>'}
-        <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">📚 ${booksAvailable} copies available in the catalogue</div>
+        <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">${booksAvailable} copies available in the catalogue</div>
       </div>
     </div>`;
 
     if (overdueCount)
-      html += `<div class="panel" style="border-left:4px solid var(--red)"><strong style="color:var(--red)">⚠ Overdue Book${overdueCount > 1 ? 's' : ''}.</strong> You have ${overdueCount} book(s) past the due date. Please return them to the library.</div>`;
+      html += `<div class="panel" style="border-left:4px solid var(--red)"><strong style="color:var(--red)">Overdue Book${overdueCount > 1 ? 's' : ''}.</strong> You have ${overdueCount} book(s) past the due date. Please return them to the library.</div>`;
     if (att !== null && att < 75)
-      html += `<div class="panel" style="border-left:4px solid var(--red)"><strong style="color:var(--red)">⚠ Low Attendance.</strong> Your attendance is below 75%. Attend classes regularly to avoid detention.</div>`;
+      html += `<div class="panel" style="border-left:4px solid var(--red)"><strong style="color:var(--red)">Low Attendance.</strong> Your attendance is below 75%. Attend classes regularly to avoid detention.</div>`;
     return html;
   }
 
@@ -2354,12 +2439,12 @@
       <h3>${deptBranch ? deptBranch + ' Department Students' : 'All Students'}</h3>
       <div class="panel-tools">
         <input class="search-box" id="stuSearch" placeholder="Search name / student id..." />
-        <button class="btn-outline btn-sm" id="stuFilter">🔎 Filter</button>
+        <button class="btn-outline btn-sm" id="stuFilter">Filter</button>
         ${baseRoleOf(user.role) === 'admin'
-          ? `<button class="btn-outline btn-sm" id="stuSeq" title="ID numbering">🔢 Numbering</button>` : ''}
-        <button class="btn-outline btn-sm" id="stuPrint">📄 Download PDF</button>
-        <button class="btn-outline btn-sm" id="stuXls">⬇ Download Excel</button>
-        ${canEdit ? `<button class="btn-outline" id="impStu">⬆ Bulk Upload</button>
+          ? `<button class="btn-outline btn-sm" id="stuSeq" title="ID numbering">Numbering</button>` : ''}
+        <button class="btn-outline btn-sm" id="stuPrint">Download PDF</button>
+        <button class="btn-outline btn-sm" id="stuXls">Download Excel</button>
+        ${canEdit ? `<button class="btn-outline" id="impStu">Bulk Upload</button>
         <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
       </div></div>
       <div class="filter-bar hidden" id="stuFilterBar">
@@ -2448,7 +2533,7 @@
         $('#stuFilterNote').textContent = `${n} advanced ${n === 1 ? 'filter' : 'filters'} applied`;
         $('#stuFilter').classList.toggle('btn-primary', !!n);
         $('#stuFilter').classList.toggle('btn-outline', !n);
-        $('#stuFilter').textContent = n ? `🔎 Filter · ${n}` : '🔎 Filter';
+        $('#stuFilter').textContent = n ? `Filter · ${n}` : 'Filter';
       };
       const draw = () => {
         const rows = matching();
@@ -2472,10 +2557,10 @@
           <td><span class="pill ${String(s.status || 'Active') === 'Active' ? 'green' : 'red'}">${
             esc(s.status || 'Active')}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-profile="${s.id}" title="Full student profile">🔍</button>
-            ${canSeeBooks ? `<button class="btn-sm btn-outline" data-books="${s.id}" title="Book issue / return history">📖</button>` : ''}
-            ${canPrintDocs ? `<button class="btn-sm btn-outline" data-id="${s.id}" title="Print ID card">🪪</button>
-            <button class="btn-sm btn-outline" data-sheet="${s.id}" title="Print marksheet">📄</button>` : ''}
+            <button class="btn-sm btn-outline" data-profile="${s.id}" title="Full student profile">${ic('search')}</button>
+            ${canSeeBooks ? `<button class="btn-sm btn-outline" data-books="${s.id}" title="Book issue / return history">${ic('book')}</button>` : ''}
+            ${canPrintDocs ? `<button class="btn-sm btn-outline" data-id="${s.id}" title="Print ID card">${ic('id-card')}</button>
+            <button class="btn-sm btn-outline" data-sheet="${s.id}" title="Print marksheet">${ic('file')}</button>` : ''}
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${s.id}">Edit</button>` : ''}
             ${canDelete ? `<button class="btn-sm btn-del" data-del="${s.id}">Delete</button>` : ''}
           </div></td>
@@ -2626,9 +2711,9 @@
   }
 
   const STU_TABS = [
-    ['personal', '👤 Personal'], ['academic', '🎓 Academic'], ['guardians', '👪 Guardians'],
-    ['address', '🏠 Address'], ['documents', '📄 Documents'], ['fees', '₹ Fees'],
-    ['attendance', '📅 Attendance'], ['health', '🩺 Health'], ['idcard', '🪪 ID Card'],
+    ['personal', 'Personal'], ['academic', 'Academic'], ['guardians', 'Guardians'],
+    ['address', 'Address'], ['documents', 'Documents'], ['fees', '₹ Fees'],
+    ['attendance', 'Attendance'], ['health', 'Health'], ['idcard', 'ID Card'],
   ];
   /* The student sees the same tabs, less the ones that are not theirs to
      read: fees only when the admin has fees switched on for students. */
@@ -2744,10 +2829,10 @@
     </div>`;
 
     const html = `<div class="panel-tools" style="margin-bottom:14px">
-        ${own ? '' : `<button class="btn-outline btn-sm" id="spBack">← All Students</button>`}
-        ${canEdit ? `<button class="btn-primary btn-sm" id="spEdit">✎ Edit Student</button>` : ''}
-        <button class="btn-outline btn-sm" id="spCard">🪪 Print ID Card</button>
-        <button class="btn-outline btn-sm" id="spSheet">📄 Marksheet</button>
+        ${own ? '' : `<button class="btn-outline btn-sm" id="spBack">All Students</button>`}
+        ${canEdit ? `<button class="btn-primary btn-sm" id="spEdit">Edit Student</button>` : ''}
+        <button class="btn-outline btn-sm" id="spCard">Print ID Card</button>
+        <button class="btn-outline btn-sm" id="spSheet">Marksheet</button>
       </div>
       <div class="stu-profile">
         ${side}
@@ -2887,9 +2972,9 @@
         <td style="text-align:right">${money(p.amount)}</td><td>${esc(p.mode || '—')}</td></tr>`).join('')
         : `<tr><td colspan="4" class="empty">No payments recorded.</td></tr>`;
       return `<div class="stat-grid" style="margin-bottom:16px">
-          ${statCard('💰', money(fin.total), 'Total Fee')}
-          ${statCard('✅', money(fin.paid), 'Paid', 'c3')}
-          ${statCard('⏳', money(fin.pending), 'Pending', fin.pending ? 'c4' : 'c3')}
+          ${statCard(ic('money'), money(fin.total), 'Total Fee')}
+          ${statCard(ic('check'), money(fin.paid), 'Paid', 'c3')}
+          ${statCard(ic('pending'), money(fin.pending), 'Pending', fin.pending ? 'c4' : 'c3')}
         </div>
         <h4 class="ro-sub">Semester-wise Fee</h4>
         <div class="tbl-wrap"><table><thead><tr><th>Semester</th><th>Academic Year</th>
@@ -2916,7 +3001,7 @@
             <th>Classes Held</th><th>Attended</th><th>% Attendance</th>
           </tr></thead><tbody>${body}</tbody></table></div>
           <div style="text-align:center;margin-top:16px">
-            <button class="btn-primary btn-sm" id="spAttToggle">↩ Back to Semester-wise</button></div>`;
+            <button class="btn-primary btn-sm" id="spAttToggle">Back to Semester-wise</button></div>`;
       }
       const sems = studentSemesterAttendance(s.id);
       const bySem = new Map(sems.map(r => [r.sem, r]));
@@ -2930,7 +3015,7 @@
           <th>Semester</th><th>Total Classes Held</th><th>Total Classes Attended</th><th>% Attendance</th>
         </tr></thead><tbody>${body}</tbody></table></div>
         <div style="text-align:center;margin-top:16px">
-          <button class="btn-primary btn-sm" id="spAttToggle">📄 View Subject Wise Detail Attendance</button></div>`;
+          <button class="btn-primary btn-sm" id="spAttToggle">View Subject Wise Detail Attendance</button></div>`;
     }
 
     if (tab === 'health') {
@@ -3010,10 +3095,10 @@
         <p style="color:var(--muted);font-size:13px">${esc(s.roll)} · ${esc(s.course || '—')} · ${esc(s.branch || '—')} · Sem ${esc(s.semester || '—')}</p></div>
       </div>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('📈', att === null ? '—' : att + '%', 'Attendance', att !== null && att < 75 ? 'c4' : 'c3')}
-        ${statCard('🎯', gpa ?? '—', 'GPA', 'c2')}
-        ${statCard('💰', money(fin.paid), 'Fees Paid', 'c3')}
-        ${statCard('⏳', money(fin.pending), 'Fees Pending', fin.pending ? 'c4' : 'c3')}
+        ${statCard(ic('trending-up'), att === null ? '—' : att + '%', 'Attendance', att !== null && att < 75 ? 'c4' : 'c3')}
+        ${statCard(ic('target'), gpa ?? '—', 'GPA', 'c2')}
+        ${statCard(ic('money'), money(fin.paid), 'Fees Paid', 'c3')}
+        ${statCard(ic('pending'), money(fin.pending), 'Fees Pending', fin.pending ? 'c4' : 'c3')}
       </div>
       <h4 class="ro-sub">Academic Details</h4>
       <div class="tbl-wrap"><table><tbody>
@@ -3041,8 +3126,8 @@
         <th style="text-align:right">Amount</th><th>Mode</th></tr></thead><tbody>${payRows}</tbody></table></div>
       <div class="form-actions">
         <button class="btn-outline" id="cx">Close</button>
-        <button class="btn-outline" id="pid">🪪 ID Card</button>
-        <button class="btn-primary" id="psheet">📄 Marksheet</button></div>`, true);
+        <button class="btn-outline" id="pid">ID Card</button>
+        <button class="btn-primary" id="psheet">Marksheet</button></div>`, true);
     $('#cx').onclick = closeModal;
     $('#pid').onclick = () => printIdCard(sid);
     $('#psheet').onclick = () => printMarksheet(sid);
@@ -3264,9 +3349,9 @@
       <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
         ${esc(s.roll)} · ${esc(s.branch)} · Sem ${esc(s.semester)} · Sec ${esc(s.section || 'A')}</p>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('📚', history.length, 'Total Issued')}
-        ${statCard('🔖', onLoan.length, 'Currently On Loan', 'c2')}
-        ${statCard('⚠️', overdue.length, 'Overdue', overdue.length ? 'c4' : 'c3')}
+        ${statCard(ic('books'), history.length, 'Total Issued')}
+        ${statCard(ic('bookmark'), onLoan.length, 'Currently On Loan', 'c2')}
+        ${statCard(ic('alert'), overdue.length, 'Overdue', overdue.length ? 'c4' : 'c3')}
       </div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Book</th><th>Issued On</th><th>Due Date</th><th>Returned On</th><th>Status</th>
@@ -3772,7 +3857,7 @@
                    <input name="roll" id="rollInput" value="${esc(s.roll || '')}" readonly>
                    ${baseRoleOf(user.role) === 'admin'
                      ? `<button type="button" class="btn-outline btn-sm" id="rollFix"
-                          style="white-space:nowrap">✎ Correct</button>` : ''}
+                          style="white-space:nowrap">Correct</button>` : ''}
                  </div>
                  <small style="color:var(--muted);font-size:11.5px">Issued when this student was
                    admitted.${baseRoleOf(user.role) === 'admin'
@@ -4347,7 +4432,7 @@
              <td class="mono">${String(r.next).padStart(2, '0')}</td>
              <td>${r.students}</td>
              <td>${r.students === 0
-               ? `<button class="btn-sm btn-del" data-reset="${esc(r.yy)}">↺ Start again at 01</button>`
+               ? `<button class="btn-sm btn-del" data-reset="${esc(r.yy)}">Start again at 01</button>`
                : `<small style="color:var(--muted)">Delete those ${r.students} first</small>`}</td>
            </tr>`).join('')}</tbody></table></div>`;
       const studentCount = Store.all('students').length;
@@ -4359,13 +4444,13 @@
           After a practice run, delete those students and the year can start again at 01.</p>
         ${body}
         <div style="margin-top:16px;padding:14px;border:1px solid var(--amber,#e0a800);border-radius:10px;background:#fff9ec">
-          <h4 style="margin:0 0 6px;font-size:14px">🧹 Clean up all Student IDs</h4>
+          <h4 style="margin:0 0 6px;font-size:14px">Clean up all Student IDs</h4>
           <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">
             Renumber every student (<b>${studentCount}</b>) so each year's numbers run 001, 002, 003…
             with no gaps — the ID keeps its year and branch. <b>No student is deleted.</b>
             Each student's login username is the ID, so it changes too — you must give them the new ID.
-            Take a backup first (User Management → Download Backup).</p>
-          <button type="button" class="btn-del" id="renumAll">↻ Renumber all Student IDs</button>
+            Take a backup first (User Management Download Backup).</p>
+          <button type="button" class="btn-del" id="renumAll">Renumber all Student IDs</button>
         </div>
         <div class="form-actions"><button type="button" class="btn-primary" id="cx">Close</button></div>`,
         true);
@@ -4395,7 +4480,7 @@
   /* Renumber every student cleanly. Deliberately behind a hard confirmation: it
      rewrites every roll and login username at once. Nothing is deleted; the
      server does it in one transaction and hands back what changed, which is
-     offered as a CSV so the office has the old→new list to give students. */
+     offered as a CSV so the office has the oldnew list to give students. */
   function renumberAllStudents(after) {
     const n = Store.all('students').length;
     confirmDelete('Renumber all Student IDs',
@@ -4415,7 +4500,7 @@
         if (after) after(); else render();
       });
   }
-  /* The old→new list as a CSV the office can keep — who now has which ID. */
+  /* The oldnew list as a CSV the office can keep — who now has which ID. */
   function downloadIdMapping(mapping) {
     const rows = [['Name', 'Old Student ID', 'New Student ID']]
       .concat(mapping.map(m => [m.name || '', m.was || '', m.roll || '']));
@@ -5052,8 +5137,8 @@
              ? ' unless a Password column says otherwise' : ''}.</p>
       </div>
       <div class="imp-actions">
-        <button type="button" class="btn-outline" id="impTpl">⬇ Download template</button>
-        <label class="btn-primary imp-pick">📂 Choose file
+        <button type="button" class="btn-outline" id="impTpl"> Download template</button>
+        <label class="btn-primary imp-pick"> Choose file
           <input type="file" id="impFile" accept=".xlsx,.csv,.txt" hidden></label>
         <span id="impName" class="imp-file"></span>
       </div>
@@ -5143,8 +5228,8 @@
             <td>${i + 2}</td>
             <td>${esc(r.raw[idCol.key] || '—')}</td>
             <td>${esc(r.raw[nameCol.key] || '—')}</td>
-            <td>${r.error ? `<span class="imp-bad">✗ ${esc(r.error)}</span>`
-                           : '<span class="imp-ok">✓ Ready</span>'}</td>
+            <td>${r.error ? `<span class="imp-bad">${esc(r.error)}</span>`
+                           : '<span class="imp-ok">Ready</span>'}</td>
           </tr>`).join('')}
         </tbody></table></div>
         ${checked.length > shown.length
@@ -5238,19 +5323,19 @@
           <select id="bsNewYear"><option value="">Leave unchanged</option>${optionsFrom(academicYearList())}</select></div>
         <div class="field full">
           <label class="switch-label"><input type="checkbox" id="bsAutoYear" checked>
-            <span>Update the study Year automatically (Sem 1–2 → Year 1, 3–4 → Year 2, …)</span></label></div>
+            <span>Update the study Year automatically (Sem 1–2  Year 1, 3–4  Year 2, …)</span></label></div>
       </div></div>
 
       <div class="panel"><div class="panel-head"><h3>3 · Review &amp; Apply</h3>
         <div class="panel-tools">
           <button class="btn-outline btn-sm" id="bsAll">Select All</button>
           <button class="btn-outline btn-sm" id="bsNone">Clear Selection</button>
-          <button class="btn-primary" id="bsApply">✔ Apply Update</button>
+          <button class="btn-primary" id="bsApply"> Apply Update</button>
         </div></div>
       <div id="bsStats" class="stat-grid" style="margin-bottom:18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th style="width:34px"></th><th>Reg No</th><th>Name</th><th>Course</th><th>Specialisation</th>
-        <th>Sec</th><th>Academic Year</th><th>Year</th><th>Current Sem</th><th>→</th><th>New Sem</th><th>New Year</th>
+        <th>Sec</th><th>Academic Year</th><th>Year</th><th>Current Sem</th><th></th><th>New Sem</th><th>New Year</th>
       </tr></thead><tbody id="bsBody"></tbody></table></div><div id="bsPager"></div></div>`;
 
     viewBatchSemester.after = () => {
@@ -5296,10 +5381,10 @@
         const blocked = plans.filter(p => p.problem);
         const newYearVal = $('#bsNewYear').value;
 
-        $('#bsStats').innerHTML = `${statCard('🎓', rows.length, 'Students Matched')}
-          ${statCard('✔', willChange.length, 'Will Be Updated', willChange.length ? 'c3' : '')}
-          ${statCard('⏭', plans.length - willChange.length - blocked.length, 'Unticked', 'c2')}
-          ${statCard('⚠️', blocked.length, 'Cannot Change', blocked.length ? 'c4' : 'c3')}`;
+        $('#bsStats').innerHTML = `${statCard(ic('cap'), rows.length, 'Students Matched')}
+          ${statCard(ic('check'), willChange.length, 'Will Be Updated', willChange.length ? 'c3' : '')}
+          ${statCard(ic('skip'), plans.length - willChange.length - blocked.length, 'Unticked', 'c2')}
+          ${statCard(ic('alert'), blocked.length, 'Cannot Change', blocked.length ? 'c4' : 'c3')}`;
 
         $('#bsBody').innerHTML = rows.length ? pageSlice(plans, page).map(p => {
           const s = p.s;
@@ -5311,10 +5396,10 @@
             <td>${esc(s.course || '—')}</td><td>${esc(s.branch || '—')}</td>
             <td>${esc(s.section || '—')}</td>
             <td>${esc(newYearVal && !p.problem
-              ? `${s.academicYear || '—'} → ${newYearVal}`
+              ? `${s.academicYear || '—'} ${newYearVal}`
               : (s.academicYear || '—'))}</td>
             <td>${s.year ?? '—'}</td><td><b>${s.semester ?? '—'}</b></td>
-            <td>${p.problem ? '' : '→'}</td>
+            <td>${p.problem ? '' : ic('arrow-right')}</td>
             <td>${p.problem
               ? `<span class="pill amber">${esc(p.problem)}</span>`
               : `<b style="color:var(--primary-dark)">${p.next}</b>`}</td>
@@ -5349,7 +5434,7 @@
         const autoYear = $('#bsAutoYear').checked;
         const newAcademicYear = $('#bsNewYear').value;
         const modeLabel = { promote: 'promoted', demote: 'moved back', set: 'set' }[$('#bsMode').value];
-        const sample = plans.slice(0, 4).map(p => `${p.s.roll} (Sem ${p.s.semester} → ${p.next})`).join('<br>');
+        const sample = plans.slice(0, 4).map(p => `${p.s.roll} (Sem ${p.s.semester}  ${p.next})`).join('<br>');
         confirmAction('Apply Semester Update',
           `<b>${plans.length}</b> student(s) will be ${modeLabel}:<br><br>${sample}` +
           (plans.length > 4 ? `<br>…and ${plans.length - 4} more` : '') +
@@ -5387,10 +5472,10 @@
           ${employeeValues('department').map(d => `<option>${esc(d)}</option>`).join('')}</select>
         <select class="filter-sel" id="facDesig"><option value="">All Designations</option>
           ${employeeValues('designation').map(d => `<option>${esc(d)}</option>`).join('')}</select>
-        ${canEdit ? `<button class="btn-outline" id="impFac">⬆ Bulk Upload</button>
+        ${canEdit ? `<button class="btn-outline" id="impFac">Bulk Upload</button>
           <button class="btn-primary" id="addFac">+ Add Employee</button>` : `
-          <button class="btn-outline btn-sm" id="facPrint">📄 Download PDF</button>
-          <button class="btn-primary btn-sm" id="facXls">⬇ Download Excel</button>`}
+          <button class="btn-outline btn-sm" id="facPrint">Download PDF</button>
+          <button class="btn-primary btn-sm" id="facXls">Download Excel</button>`}
       </div></div>
       <div class="tbl-wrap"><table class="emp-tbl"><thead><tr>
         <th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Department</th><th>Designation</th><th>Reporting To</th><th>Email</th><th>Phone</th><th>Actions</th>
@@ -5431,11 +5516,11 @@
           <td><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.email||'')}">${esc(f.email || '—')}</div></td>
           <td style="white-space:nowrap">${esc(f.phone || '—')}</td>
           <td><div class="row-actions" style="flex-wrap:nowrap">
-            <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile">👁</button>
-            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">📚</button>` : ''}
-            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">🪪</button>
-            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}" title="Edit">✏️</button>
-            <button class="btn-sm btn-del" data-del="${key}" title="Delete">🗑</button>` : ''}</div></td></tr>`;
+            <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile"></button>
+            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">${ic('books')}</button>` : ''}
+            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card"></button>
+            ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}" title="Edit">${ic('edit')}</button>
+            <button class="btn-sm btn-del" data-del="${key}" title="Delete">${ic('trash')}</button>` : ''}</div></td></tr>`;
         }).join('')
           : `<tr><td colspan="10" class="empty">No employees found.</td></tr>`;
         $('#facBody').querySelectorAll('[data-id]').forEach(b => b.onclick = () => printFacultyIdCard(b.dataset.id));
@@ -5612,8 +5697,8 @@
   }
 
   const FAC_TABS = [
-    ['personal', '👤 Personal'], ['guardians', '👪 Guardians'], ['address', '🏠 Address'],
-    ['other', '⚙️ Other Info'], ['documents', '📄 Documents'], ['health', '🩺 Health'],
+    ['personal', 'Personal'], ['guardians', 'Guardians'], ['address', 'Address'],
+    ['other', 'Other Info'], ['documents', 'Documents'], ['health', 'Health'],
   ];
   let profileFacultyId = null;
   let facTab = 'personal';
@@ -5651,10 +5736,10 @@
     </div>`;
 
     const html = `<div class="panel-tools" style="margin-bottom:14px">
-        <button class="btn-outline btn-sm" id="fpBack">← Employees</button>
-        ${canEdit ? `<button class="btn-primary btn-sm" id="fpEdit">✎ Edit Employee</button>` : ''}
-        <button class="btn-outline btn-sm" id="fpCard">🪪 ID Card</button>
-        <button class="btn-outline btn-sm" id="fpPdf">📄 Generate PDF</button>
+        <button class="btn-outline btn-sm" id="fpBack"> Employees</button>
+        ${canEdit ? `<button class="btn-primary btn-sm" id="fpEdit">Edit Employee</button>` : ''}
+        <button class="btn-outline btn-sm" id="fpCard"> ID Card</button>
+        <button class="btn-outline btn-sm" id="fpPdf"> Generate PDF</button>
       </div>
       <div class="stu-profile">
         ${side}
@@ -5825,10 +5910,10 @@
         <p style="color:var(--muted);font-size:13px">${esc(f.empId || '—')} · ${esc(f.department || '—')} · ${esc(f.designation || '—')}</p></div>
       </div>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('📚', mine.length, 'Classes Assigned')}
-        ${statCard('🎓', load.students, 'Students Taught', 'c2')}
-        ${statCard('🗓️', slots.length, 'Weekly Periods', 'c2')}
-        ${statCard('✅', load.sessions, 'Sessions Recorded', 'c3')}
+        ${statCard(ic('books'), mine.length, 'Classes Assigned')}
+        ${statCard(ic('cap'), load.students, 'Students Taught', 'c2')}
+        ${statCard(ic('calendar'), slots.length, 'Weekly Periods', 'c2')}
+        ${statCard(ic('check'), load.sessions, 'Sessions Recorded', 'c3')}
       </div>
       <h4 class="ro-sub">Profile</h4>
       <div class="tbl-wrap"><table><tbody>
@@ -5856,7 +5941,7 @@
         <b>${load.avgAttendance === null ? '—' : load.avgAttendance + '%'}</b>.
         Last session: <b>${esc(load.lastSession || '—')}</b>.</p>
       <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-        <button class="btn-primary" id="pid">🪪 Print ID Card</button></div>`, true);
+        <button class="btn-primary" id="pid"> Print ID Card</button></div>`, true);
     $('#cx').onclick = closeModal;
     $('#pid').onclick = () => printFacultyIdCard(fid);
   }
@@ -6382,15 +6467,15 @@
     const assignedCount = courses.length - unassigned.length;
 
     let html = `<div class="stat-grid">
-      ${statCard('🗂️', courses.length, 'Total Classes')}
-      ${statCard('✅', assignedCount, 'Assigned', 'c3')}
-      ${statCard('⚠️', unassigned.length, 'Unassigned', unassigned.length ? 'c4' : 'c3')}
-      ${statCard('👨‍🏫', faculty.length, 'Faculty', 'c2')}
+      ${statCard(ic('folder'), courses.length, 'Total Classes')}
+      ${statCard(ic('check'), assignedCount, 'Assigned', 'c3')}
+      ${statCard(ic('alert'), unassigned.length, 'Unassigned', unassigned.length ? 'c4' : 'c3')}
+      ${statCard(ic('user'), faculty.length, 'Faculty', 'c2')}
     </div>`;
 
     // unassigned classes — quick assign
     html += `<div class="panel" ${unassigned.length ? 'style="border-left:4px solid var(--red)"' : ''}>
-      <div class="panel-head"><h3>⚠ Unassigned Classes</h3></div>
+      <div class="panel-head"><h3> Unassigned Classes</h3></div>
       ${unassigned.length ? `<div class="att-list">${unassigned.map(c => `
         <div class="att-row"><div class="who"><strong>${esc(c.code)} — ${esc(c.name)}</strong>
           <small>${esc(c.branch)} · Sem ${c.semester} · Sec ${esc(c.section || 'A')}</small></div>
@@ -6399,7 +6484,7 @@
               <option value="">Assign to...</option>${facultyOptions('')}</select>
             <button class="btn-sm btn-edit qa-btn" data-cid="${c.id}">Assign</button>
           </div></div>`).join('')}</div>`
-        : `<p class="empty" style="padding:14px">✓ All classes are assigned — nothing pending.</p>`}
+        : `<p class="empty" style="padding:14px">All classes are assigned — nothing pending.</p>`}
     </div>`;
 
     // by-faculty breakdown
@@ -6412,7 +6497,7 @@
                                   : `<span style="color:var(--muted);font-size:13px">— none —</span>`;
         return `<tr><td><strong>${esc(f.name)}</strong></td><td>${esc(f.department || '')}</td>
           <td>${chips}</td><td><span class="pill ${mine.length ? 'green' : 'amber'}">${mine.length}</span></td>
-          <td><button class="btn-sm btn-edit" data-manage="${f.id}">📚 Manage</button></td></tr>`;
+          <td><button class="btn-sm btn-edit" data-manage="${f.id}">Manage</button></td></tr>`;
       }).join('')}</tbody></table></div></div>`;
 
     viewAssignments.after = () => {
@@ -6437,8 +6522,8 @@
         ${canEdit ? `<button class="btn-primary" id="addCou">+ Add Course</button>` : `
           <select class="filter-sel" id="couBranch"><option value="">All Courses</option>${branchOptions()}</select>
           <select class="filter-sel" id="couSem"><option value="">All Semesters</option>${semesterOptions()}</select>
-          <button class="btn-outline btn-sm" id="couPrint">📄 Download PDF</button>
-          <button class="btn-primary btn-sm" id="couXls">⬇ Download Excel</button>`}</div></div>
+          <button class="btn-outline btn-sm" id="couPrint">Download PDF</button>
+          <button class="btn-primary btn-sm" id="couXls">Download Excel</button>`}</div></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Code</th><th>Course Name</th><th>Type</th><th>Course</th><th>Sem</th><th>Section</th><th>Credits</th><th>Assigned Faculty</th>
         ${canEdit ? '<th>Actions</th>' : '<th style="text-align:right">Students</th>'}
@@ -6610,9 +6695,9 @@
         const rows = rowsNow();
         const branches = new Set(rows.map(r => r.branch));
         const sems = new Set(rows.map(r => r.semester));
-        $('#sylStats').innerHTML = `${statCard('🌿', branches.size, 'Specialisations')}
-          ${statCard('🎯', sems.size, 'Semesters', 'c2')}
-          ${statCard('📘', rows.length, 'No. of Papers', 'c3')}`;
+        $('#sylStats').innerHTML = `${statCard(ic('leaf'), branches.size, 'Specialisations')}
+          ${statCard(ic('target'), sems.size, 'Semesters', 'c2')}
+          ${statCard(ic('book'), rows.length, 'No. of Papers', 'c3')}`;
 
         // one block per branch, and inside it one table per semester
         const byBranch = new Map();
@@ -6625,7 +6710,7 @@
 
         $('#sylBody').innerHTML = rows.length ? [...byBranch.entries()].map(([br, sm]) => `
           <div class="syl-branch">
-            <h4 class="syl-branch-head">🌿 ${esc(br)}
+            <h4 class="syl-branch-head"> ${esc(br)}
               <small>${plural([...sm.values()].reduce((a, v) => a + v.length, 0), 'subject')} ·
                 ${plural(sm.size, 'semester')}</small></h4>
             ${[...sm.entries()].sort((a, b) => a[0] - b[0]).map(([sem, list]) => {
@@ -6700,7 +6785,7 @@
     openModal((id ? 'Edit' : 'Add') + ' Subject', `<form id="f">
       <div class="form-grid">
         <!-- the shared master-list select: it carries "+ Add New..." and
-             "🗑 Remove...", and the list is saved so every page sees it -->
+             "Remove...", and the list is saved so every page sees it -->
         <div class="field"><label>Specialisation</label>
           <select name="branch" id="sylFormBranch">${branchOptions(branch, true)}</select></div>
         <div class="field"><label>Semester</label>
@@ -7020,7 +7105,7 @@
         const rec = session ? (session.records || {}) : {};
         area.innerHTML = `<div class="att-head-row">
             <strong>${studs.length} student(s)</strong>
-            <button type="button" class="btn-outline btn-sm" id="markAll">✅ Mark All Present</button>
+            <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
             ${session ? `<span class="pill amber">Editing the register saved for this class</span>` : ''}
           </div>
           <div class="tbl-wrap"><table><thead><tr>
@@ -7214,10 +7299,10 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         const present = rows.filter(r => r.status === 'Present').length;
-        $('#arStats').innerHTML = `${statCard('🗂️', rows.length, 'Entries')}
-          ${statCard('✅', present, 'Present', 'c3')}
-          ${statCard('❌', rows.length - present, 'Absent', 'c4')}
-          ${statCard('📈', rows.length ? Math.round(present / rows.length * 100) + '%' : '—', 'Attendance', 'c2')}`;
+        $('#arStats').innerHTML = `${statCard(ic('folder'), rows.length, 'Entries')}
+          ${statCard(ic('check'), present, 'Present', 'c3')}
+          ${statCard(ic('x'), rows.length - present, 'Absent', 'c4')}
+          ${statCard(ic('trending-up'), rows.length ? Math.round(present / rows.length * 100) + '%' : '—', 'Attendance', 'c2')}`;
         $('#arBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td>${esc(r.course)}</td><td>${esc(r.batch)}</td><td>${esc(String(r.semester))}</td>
           <td>${esc(r.department)}</td><td>${esc(r.specialisation)}</td>
@@ -7403,10 +7488,10 @@
     return `<div class="tt-cell${isLab ? ' lab' : ''}">
       <b title="${c ? esc(c.name) : ''}">${c ? esc(c.shortName || shortSubject(c.name)) : '?'}</b>
       <small>${sem} Sem ${esc(t.branch)} · Sec ${esc(t.section || 'ALL')}</small>
-      ${t.branchName ? `<small>🎓 ${esc(t.branchName)}</small>` : ''}
-      <small>👨‍🏫 ${c ? esc(facultyName(c.facultyId)) : '—'}</small>
-      <small>🏫 Room No.${esc(t.room || '—')}</small>
-      ${showDelete ? `<button class="btn-sm btn-del" data-del="${t.id}" style="margin-top:4px">✕</button>` : ''}
+      ${t.branchName ? `<small>${esc(t.branchName)}</small>` : ''}
+      <small> ${c ? esc(facultyName(c.facultyId)) : '—'}</small>
+      <small> Room No.${esc(t.room || '—')}</small>
+      ${showDelete ? `<button class="btn-sm btn-del" data-del="${t.id}" style="margin-top:4px">${ic('x')}</button>` : ''}
     </div>`;
   }
   // lay slots onto the grid: which row each starts at, how many rows it spans
@@ -7457,16 +7542,16 @@
                <option value="room">Room / Section Timetable</option>
                <option value="dept">Department Timetable</option>
              </select>
-             <button class="btn-outline btn-sm" id="ttPrint">🖨 Print</button>
-             <button class="btn-primary btn-sm" id="ttXls">⬇ Excel</button>`}`;
+             <button class="btn-outline btn-sm" id="ttPrint">Print</button>
+             <button class="btn-primary btn-sm" id="ttXls">Excel</button>`}`;
     } else if (isFaculty) {
       // faculty only ever see their own department, subjects and classes
       const f = Store.find('faculty', user.refId) || {};
       const subjects = [...new Set(myCourses.map(c => c.code))];
       const klasses = [...new Set(myCourses.map(c => `${c.branch} S${c.semester}-${c.section || 'A'}`))];
-      html += `${f.department ? `<span class="pill green">🏛 ${esc(f.department)}</span>` : ''}
-        <span class="pill blue">📚 ${subjects.length ? esc(subjects.join(', ')) : 'No subjects'}</span>
-        <span class="pill amber">🎓 ${klasses.length ? esc(klasses.join(' · ')) : 'No classes'}</span>`;
+      html += `${f.department ? `<span class="pill green">${esc(f.department)}</span>` : ''}
+        <span class="pill blue"> ${subjects.length ? esc(subjects.join(', ')) : 'No subjects'}</span>
+        <span class="pill amber"> ${klasses.length ? esc(klasses.join(' · ')) : 'No classes'}</span>`;
     } else {
       html += `<span class="pill blue">${esc(branch)} · Sem ${semester} · Sec ${section}</span>`;
     }
@@ -7693,7 +7778,7 @@
     const pct = studentAttendancePct(sid);
     let html = `<div class="panel"><div class="panel-head"><h3>Overall Attendance</h3></div>
       <p style="font-size:15px">Total: <strong>${attBar(pct)}</strong> across ${sessions.length} sessions.</p>
-      ${pct!==null && pct<75 ? `<p style="color:var(--red);margin-top:8px">⚠ Below 75% — please attend classes regularly.</p>`:''}</div>`;
+      ${pct!==null && pct<75 ? `<p style="color:var(--red);margin-top:8px">Below 75% — please attend classes regularly.</p>`:''}</div>`;
     html += `<div class="panel"><div class="panel-head"><h3>Session History</h3></div><div class="tbl-wrap"><table>
       <thead><tr><th>Date</th><th>Course</th><th>Status</th></tr></thead><tbody>
       ${sessions.length? sessions.map(a => `<tr><td>${esc(a.date)}</td><td>${esc(courseName(a.courseId))}</td>
@@ -7719,7 +7804,7 @@
           <td>${m.internal??'—'}</td><td>${pct === null ? '—' : pct + '%'}</td>
           <td><span class="pill ${g.p?'blue':'red'}">${pct === null ? '—' : g.g}</span></td></tr>`;
       }).join('') : `<tr><td colspan="6" class="empty">No results published yet.</td></tr>`}</tbody></table></div>
-      ${ms.length ? `<div class="form-actions" style="justify-content:flex-start"><button class="btn-primary" id="dlSheet">📄 Download Marksheet (PDF)</button></div>` : ''}</div>`;
+      ${ms.length ? `<div class="form-actions" style="justify-content:flex-start"><button class="btn-primary" id="dlSheet">Download Marksheet (PDF)</button></div>` : ''}</div>`;
     viewMyResults.after = () => { const b = $('#dlSheet'); if (b) b.onclick = () => printMarksheet(sid); };
     return html;
   }
@@ -7739,9 +7824,9 @@
     const nextDue = rows.filter(f => (+f.total || 0) > (+f.paid || 0))
       .map(f => f.dueDate).filter(Boolean).sort()[0] || '—';
     return `<div class="stat-grid">
-      ${statCard('💰', money(total), 'Total Fees')}
-      ${statCard('✅', money(paid), 'Paid', 'c3')}
-      ${statCard('⏳', money(due), 'Balance Due', due>0?'c4':'c3')}
+      ${statCard(ic('money'), money(total), 'Total Fees')}
+      ${statCard(ic('check'), money(paid), 'Paid', 'c3')}
+      ${statCard(ic('pending'), money(due), 'Balance Due', due>0?'c4':'c3')}
     </div>
     <div class="panel"><div class="panel-head"><h3>Fee Details</h3></div>
       <p>Status: <span class="pill ${st[0]}">${st[1]}</span></p>
@@ -7781,8 +7866,8 @@
         ['Designation',f.designation],['Email',f.email],['Phone',f.phone],
         ['Qualification',f.qualification],['Areas of Expertise',f.expertise],['Publications',f.publications],
         ['Courses Teaching', mine.map(c=>c.code).join(', ')||'—']],
-        `<button class="btn-primary" id="printFacId">🪪 Print ID Card</button>
-         <button class="btn-outline" id="editAcademic">✏️ Edit Academic Details</button>`, f.photo);
+        `<button class="btn-primary" id="printFacId"> Print ID Card</button>
+         <button class="btn-outline" id="editAcademic"> Edit Academic Details</button>`, f.photo);
     }
     /* Nobody edits their own staff record from here — an employee id, a
        designation or a department is the admin's to set, the way the centre
@@ -7795,7 +7880,7 @@
       };
       return profileCard([['Employee ID',a.empId],['Name',a.name],['Designation',a.designation],
         ['Email',a.email],['Phone',a.phone],['User ID',user.username]],
-        `<button class="btn-outline" id="changePw">🔒 Change Password</button>
+        `<button class="btn-outline" id="changePw"> Change Password</button>
          <button class="btn-outline" id="profLogout">⎋ Logout</button>`, a.photo);
     }
     if (user.role === 'admission') {
@@ -7808,7 +7893,7 @@
         ['Designation',a.designation||'Admission Officer'],['Email',a.email],['Phone',a.phone],
         ['User ID',user.username],
         ['Access','Add and edit student records · view courses and the scheme']],
-        `<button class="btn-outline" id="changePw">🔒 Change Password</button>
+        `<button class="btn-outline" id="changePw"> Change Password</button>
          <button class="btn-outline" id="profLogout">⎋ Logout</button>`, a.photo);
     }
     if (user.role === 'center_head') {
@@ -7945,20 +8030,20 @@
       const lib = libraryTotals();
       html += readOnlyBanner('The library is run by the librarian. This is a monitoring view.') +
         `<div class="stat-grid">
-          ${statCard('📚', lib.copies, `Total Books (${lib.titles} titles)`)}
-          ${statCard('🔖', lib.issued, 'Issued Books', 'c2')}
-          ${statCard('🔁', lib.returned, 'Returned Books', 'c3')}
-          ${statCard('⚠️', lib.overdue, 'Overdue Books', lib.overdue ? 'c4' : 'c3')}
-          ${statCard('📗', lib.available, 'Available Now', 'c3')}
-          ${statCard('🧾', lib.transactions, 'Library Activity', 'c2')}
+          ${statCard(ic('books'), lib.copies, `Total Books (${lib.titles} titles)`)}
+          ${statCard(ic('bookmark'), lib.issued, 'Issued Books', 'c2')}
+          ${statCard(ic('refresh'), lib.returned, 'Returned Books', 'c3')}
+          ${statCard(ic('alert'), lib.overdue, 'Overdue Books', lib.overdue ? 'c4' : 'c3')}
+          ${statCard(ic('book'), lib.available, 'Available Now', 'c3')}
+          ${statCard(ic('receipt'), lib.transactions, 'Library Activity', 'c2')}
         </div>`;
     }
     html += `<div class="panel"><div class="panel-head"><h3>Books Catalogue</h3>
       <div class="panel-tools">
         <input class="search-box" id="bkSearch" placeholder="Search title / author / category...">
         ${canEdit ? `<button class="btn-primary" id="addBook">+ Add Book</button>` : `
-          <button class="btn-outline btn-sm" id="bkPrint">🖨 Print</button>
-          <button class="btn-primary btn-sm" id="bkXls">⬇ Excel</button>`}</div></div>
+          <button class="btn-outline btn-sm" id="bkPrint">Print</button>
+          <button class="btn-primary btn-sm" id="bkXls">Excel</button>`}</div></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>ISBN</th><th>Title</th><th>Author</th><th>Category</th><th>Total</th><th>Available</th>
         ${canEdit ? '<th>Actions</th>' : '<th style="text-align:right">On Loan</th>'}
@@ -8245,18 +8330,18 @@
     const returnedTotal = all.filter(t => t.returned).length;
 
     let html = `<div class="stat-grid">
-      ${statCard('📚', totalCopies, 'Total Copies')}
-      ${statCard('📗', availableBooks, 'Available Now', 'c3')}
-      ${statCard('🔖', issuedNow, 'Currently Issued', 'c2')}
-      ${statCard('⚠️', overdue.length, 'Overdue', overdue.length ? 'c4' : 'c3')}
-      ${statCard('🔁', returnedTotal, 'Returned (all time)', 'c3')}
-      ${statCard('🧾', all.length, 'Total Transactions', 'c2')}
+      ${statCard(ic('books'), totalCopies, 'Total Copies')}
+      ${statCard(ic('book'), availableBooks, 'Available Now', 'c3')}
+      ${statCard(ic('bookmark'), issuedNow, 'Currently Issued', 'c2')}
+      ${statCard(ic('alert'), overdue.length, 'Overdue', overdue.length ? 'c4' : 'c3')}
+      ${statCard(ic('refresh'), returnedTotal, 'Returned (all time)', 'c3')}
+      ${statCard(ic('receipt'), all.length, 'Total Transactions', 'c2')}
     </div>`;
 
     // ---- filter bar + full transaction ledger ----
     html += `<div class="panel"><div class="panel-head"><h3>Complete Library Records</h3>
       <div class="panel-tools">
-        <button class="btn-primary" id="expExcel">⬇ Download Excel</button>
+        <button class="btn-primary" id="expExcel"> Download Excel</button>
       </div></div>
       <div class="panel-tools">
         <input class="search-box" id="rpSearch" placeholder="Search student / roll / book / ISBN / author...">
@@ -8310,7 +8395,7 @@
         `<tr><td>${esc(t.title)}</td><td>${esc(t.student)}</td><td>${esc(t.roll)}</td><td>${esc(t.phone)}</td>
          <td>${esc(t.issueDate)}</td><td>${esc(t.dueDate)}</td>
          <td style="color:var(--red);font-weight:600">${t.lateDays}</td></tr>`).join('')
-        : `<tr><td colspan="7" class="empty">No overdue books. 🎉</td></tr>`}</tbody></table></div></div>`;
+        : `<tr><td colspan="7" class="empty">No overdue books.</td></tr>`}</tbody></table></div></div>`;
 
     viewLibraryReports.after = () => {
       let page = 1, stuPage = 1, bookPage = 1;
@@ -8676,11 +8761,11 @@
           <option value="librarian">Librarian</option>
           <option value="student">Student</option>
         </select>
-        <button class="btn-outline" id="accPrint">🖨 Print List</button>
+        <button class="btn-outline" id="accPrint"> Print List</button>
       </div></div>
       <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
         Every login in the system — admin, faculty, librarian and student. Passwords are stored
-        hashed and cannot be read back by anyone, including you — use <b>↺ Reset</b> to set a known
+        hashed and cannot be read back by anyone, including you — use <b> Reset</b> to set a known
         one and hand it over.</p>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Role</th><th>Name</th><th>User ID</th><th>Password</th><th>Linked To</th><th>Actions</th>
@@ -8707,7 +8792,7 @@
           <td><small>${esc(accountOwner(u))}</small></td>
           <td><div class="row-actions">
             <button class="btn-sm btn-edit" data-edit-acc="${u.id}">Edit</button>
-            <button class="btn-sm btn-outline" data-reset-acc="${u.id}" title="Set password back to ${DEFAULT_PASSWORD}">↺ Reset</button>
+            <button class="btn-sm btn-outline" data-reset-acc="${u.id}" title="Set password back to ${DEFAULT_PASSWORD}"> Reset</button>
             ${self ? '' : `<button class="btn-sm btn-del" data-del-acc="${u.id}">Delete</button>`}
           </div></td></tr>`;
         }).join('') : `<tr><td colspan="6" class="empty">No accounts found.</td></tr>`;
@@ -8737,7 +8822,7 @@
             .map(p => ({ role: 'placement_officer', refId: p.id, name: p.name, uid: p.empId })),
         ];
         $('#accMissing').innerHTML = !rows.length ? '' :
-          `<div class="panel"><div class="panel-head"><h3>⚠ Without a Login (${rows.length})</h3>
+          `<div class="panel"><div class="panel-head"><h3> Without a Login (${rows.length})</h3>
             <button class="btn-primary" id="accMakeAll">Create All Logins</button></div>
           <div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Name</th><th>Suggested User ID</th><th>Actions</th></tr></thead>
           <tbody>${rows.map((r, i) => `<tr>
@@ -8875,9 +8960,9 @@
       .sort((a,b) => (b.issueDate||'').localeCompare(a.issueDate||''));
     const active = mine.filter(i => !i.returnDate);
     let html = `<div class="stat-grid">
-      ${statCard('📖', active.length, 'Books on Loan')}
-      ${statCard('⏰', active.filter(i=>i.dueDate<today()).length, 'Overdue', 'c4')}
-      ${statCard('📚', mine.length, 'Total Borrowed', 'c3')}
+      ${statCard(ic('book'), active.length, 'Books on Loan')}
+      ${statCard(ic('clock'), active.filter(i=>i.dueDate<today()).length, 'Overdue', 'c4')}
+      ${statCard(ic('books'), mine.length, 'Total Borrowed', 'c3')}
     </div>`;
     html += `<div class="panel"><div class="panel-head"><h3>My Borrowed Books</h3></div>
       <div class="tbl-wrap"><table><thead><tr>
@@ -9000,11 +9085,11 @@
       subLine: s.branch,
       photo: s.photo,
       rows: [
-        ['🎓','Reg No', s.roll],
-        ['🏫','Specialisation', s.branch],
-        ['📘','Year / Sem', `${s.year} / ${s.semester}`],
-        ['🔤','Section', s.section],
-        ['📞','Phone', s.phone || '—'],
+        ['','Reg No', s.roll],
+        ['','Specialisation', s.branch],
+        ['','Year / Sem', `${s.year} / ${s.semester}`],
+        ['','Section', s.section],
+        ['','Phone', s.phone || '—'],
       ],
     });
     printDoc('ID Card - ' + s.roll, inner);
@@ -9019,12 +9104,12 @@
       subLine: f.department,
       photo: f.photo,
       rows: [
-        ['👤','Employee ID', f.empId],
-        ['🧑‍💼','Role', f.roleName],
-        ['🏫','Department', f.department || '—'],
-        ['🎓','Designation', f.designation || '—'],
-        ['✉️','Email', f.email || '—'],
-        ['📞','Phone', f.phone || '—'],
+        ['','Employee ID', f.empId],
+        ['','Role', f.roleName],
+        ['','Department', f.department || '—'],
+        ['','Designation', f.designation || '—'],
+        ['','Email', f.email || '—'],
+        ['','Phone', f.phone || '—'],
       ],
     });
     printDoc('ID Card - ' + f.empId, inner);
@@ -9304,9 +9389,9 @@
       </tbody></table></div>`;
   }
   function exportButtons(p) {
-    return `<button class="btn-outline btn-sm" id="${p}Print">🖨 Print</button>
-      <button class="btn-outline btn-sm" id="${p}Pdf">📄 Download PDF</button>
-      <button class="btn-primary btn-sm" id="${p}Xls">⬇ Download Excel</button>`;
+    return `<button class="btn-outline btn-sm" id="${p}Print"> Print</button>
+      <button class="btn-outline btn-sm" id="${p}Pdf"> Download PDF</button>
+      <button class="btn-primary btn-sm" id="${p}Xls"> Download Excel</button>`;
   }
   // `get()` returns { title, subtitle, columns, rows, totals }
   function bindExports(p, get) {
@@ -9386,7 +9471,7 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name) || 'Accounts')} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name) || 'Accounts')} </h2>
         <p>Accounts &amp; Finance Office · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>Collection ${collPct}%</span>
@@ -9398,12 +9483,12 @@
     </div>`;
 
     html += `<div class="stat-grid">
-      ${statCard('🎓', students.length, 'Total Students')}
-      ${statCard('💰', money(t.collected), 'Total Fee Collection', 'c3')}
-      ${statCard('⏳', money(t.pending), 'Pending Fees', t.pending > 0 ? 'c4' : 'c3')}
-      ${statCard('📋', money(fixedFeeTotal()), 'Total Fixed Fee', 'c2')}
-      ${statCard('🏢', money(assetValueTotal()), `Total Assets (${assets.length} items)`, 'c2')}
-      ${statCard('🧾', money(collectionOn(today())), "Today's Collection", 'c3')}
+      ${statCard(ic('cap'), students.length, 'Total Students')}
+      ${statCard(ic('money'), money(t.collected), 'Total Fee Collection', 'c3')}
+      ${statCard(ic('pending'), money(t.pending), 'Pending Fees', t.pending > 0 ? 'c4' : 'c3')}
+      ${statCard(ic('clipboard'), money(fixedFeeTotal()), 'Total Fixed Fee', 'c2')}
+      ${statCard(ic('building'), money(assetValueTotal()), `Total Assets (${assets.length} items)`, 'c2')}
+      ${statCard(ic('receipt'), money(collectionOn(today())), "Today's Collection", 'c3')}
     </div>`;
 
     html += `<div class="dash-2col">
@@ -9434,7 +9519,7 @@
     html += `<div class="panel"><div class="panel-head"><h3>Recent Fee Payments</h3>
       <div class="panel-tools">
         <input class="search-box" id="dashSearch" placeholder="Search receipt / student...">
-        <button class="btn-primary btn-sm" id="dashCollect">💰 Collect Fee</button>
+        <button class="btn-primary btn-sm" id="dashCollect"> Collect Fee</button>
       </div></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Receipt No</th><th>Student</th><th>Reg No</th><th>Amount</th><th>Mode</th><th>Date</th><th></th>
@@ -9459,7 +9544,7 @@
           return `<tr><td class="mono">${esc(p.receiptNo)}</td><td>${esc(s.name || '—')}</td>
             <td>${esc(s.roll || '—')}</td><td style="text-align:right;font-weight:600">${money(p.amount)}</td>
             <td><span class="pill blue">${esc(p.mode || '—')}</span></td><td>${esc(p.date)}</td>
-            <td><button class="btn-sm btn-outline" data-rcpt="${p.id}">🧾 Receipt</button></td></tr>`;
+            <td><button class="btn-sm btn-outline" data-rcpt="${p.id}"> Receipt</button></td></tr>`;
         }).join('') : `<tr><td colspan="7" class="empty">No fee payments recorded yet.</td></tr>`;
         $('#dashPayBody').querySelectorAll('[data-rcpt]').forEach(b =>
           b.onclick = () => printReceipt(b.dataset.rcpt));
@@ -9526,10 +9611,10 @@
         const sum = rows.reduce((a, r) => ({
           total: a.total + r.total, paid: a.paid + r.paid, pending: a.pending + r.pending,
         }), { total: 0, paid: 0, pending: 0 });
-        $('#fsStats').innerHTML = `${statCard('🎓', rows.length, 'Students Listed')}
-          ${statCard('💰', money(sum.total), 'Total Fee')}
-          ${statCard('✅', money(sum.paid), 'Collected', 'c3')}
-          ${statCard('⏳', money(sum.pending), 'Pending', sum.pending ? 'c4' : 'c3')}`;
+        $('#fsStats').innerHTML = `${statCard(ic('cap'), rows.length, 'Students Listed')}
+          ${statCard(ic('money'), money(sum.total), 'Total Fee')}
+          ${statCard(ic('check'), money(sum.paid), 'Collected', 'c3')}
+          ${statCard(ic('pending'), money(sum.pending), 'Pending', sum.pending ? 'c4' : 'c3')}`;
         $('#fsBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.roll || r.sid)}</td><td>${esc(r.name)}</td><td>${esc(r.course)}</td>
           <td>${esc(r.branch)}</td><td>${esc(r.semester || '—')}</td><td>${esc(r.academicYear)}</td>
@@ -9538,9 +9623,9 @@
           <td style="text-align:right;${r.pending ? 'color:var(--red);font-weight:600' : ''}">${money(r.pending)}</td>
           <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${r.sid}" title="Student details">👁 View</button>
-            <button class="btn-sm btn-edit" data-fee="${r.sid}" title="Fee details">💳 Fees</button>
-            <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Payment history">🧾 History</button>
+            <button class="btn-sm btn-outline" data-view="${r.sid}" title="Student details"> View</button>
+            <button class="btn-sm btn-edit" data-fee="${r.sid}" title="Fee details"> Fees</button>
+            <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Payment history"> History</button>
           </div></td></tr>`).join('')
           : `<tr><td colspan="11" class="empty">No students match these filters.</td></tr>`;
         $('#fsBody').querySelectorAll('[data-view]').forEach(b => b.onclick = () => studentDetailsModal(b.dataset.view));
@@ -9592,9 +9677,9 @@
         <p style="color:var(--muted);font-size:13px">${esc(s.roll)} · ${esc(s.course || '—')} · ${esc(s.branch || '—')}</p></div>
       </div>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('💰', money(r.total), 'Total Fee')}
-        ${statCard('✅', money(r.paid), 'Paid', 'c3')}
-        ${statCard('⏳', money(r.pending), 'Pending', r.pending ? 'c4' : 'c3')}
+        ${statCard(ic('money'), money(r.total), 'Total Fee')}
+        ${statCard(ic('check'), money(r.paid), 'Paid', 'c3')}
+        ${statCard(ic('pending'), money(r.pending), 'Pending', r.pending ? 'c4' : 'c3')}
       </div>
       <div class="tbl-wrap"><table><tbody>
         <tr><td style="font-weight:600;width:170px">Student ID</td><td>${esc(s.roll)}</td></tr>
@@ -9607,7 +9692,7 @@
         <tr><td style="font-weight:600">Phone</td><td>${esc(s.phone || '—')}</td></tr>
       </tbody></table></div>
       <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-        <button class="btn-primary" id="goFees">💳 Fee Details</button></div>`, true);
+        <button class="btn-primary" id="goFees"> Fee Details</button></div>`, true);
     $('#cx').onclick = closeModal;
     $('#goFees').onclick = () => studentFeeModal(sid);
   }
@@ -9622,9 +9707,9 @@
       <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
         ${esc(s.roll)} · ${esc(s.course || '—')} · ${esc(s.branch || '—')} · ${esc(s.academicYear || '—')}</p>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('💰', money(total), 'Total Fee')}
-        ${statCard('✅', money(paid), 'Paid', 'c3')}
-        ${statCard('⏳', money(Math.max(0, total - paid)), 'Pending', total - paid > 0 ? 'c4' : 'c3')}
+        ${statCard(ic('money'), money(total), 'Total Fee')}
+        ${statCard(ic('check'), money(paid), 'Paid', 'c3')}
+        ${statCard(ic('pending'), money(Math.max(0, total - paid)), 'Pending', total - paid > 0 ? 'c4' : 'c3')}
       </div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Semester</th><th>Academic Year</th><th style="text-align:right">Total</th>
@@ -9640,8 +9725,8 @@
       }).join('') : `<tr><td colspan="7" class="empty">No fee record for this student yet.</td></tr>`}
       </tbody></table></div>
       <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-        ${readOnly() ? `<button class="btn-primary" id="goHistory">🧾 Payment History</button>`
-          : `<button class="btn-primary" id="goCollect">💰 Collect Fee</button>`}</div>`, true);
+        ${readOnly() ? `<button class="btn-primary" id="goHistory">Payment History</button>`
+          : `<button class="btn-primary" id="goCollect">Collect Fee</button>`}</div>`, true);
     $('#cx').onclick = closeModal;
     if (readOnly()) $('#goHistory').onclick = () => studentHistoryModal(sid);
     else $('#goCollect').onclick = () => collectFeeForm(sid);
@@ -9663,7 +9748,7 @@
         <td style="text-align:right;font-weight:600">${money(p.amount)}</td>
         <td>${esc(p.mode || '—')}</td><td class="mono">${esc(p.txnId || '—')}</td>
         <td><span class="pill green">${esc(p.status || 'Success')}</span></td>
-        <td><button class="btn-sm btn-outline" data-rc="${p.id}">🧾 Receipt</button></td></tr>`).join('')
+        <td><button class="btn-sm btn-outline" data-rc="${p.id}">Receipt</button></td></tr>`).join('')
         : `<tr><td colspan="7" class="empty">No payments recorded for this student.</td></tr>`}
       </tbody></table></div>
       <div class="form-actions"><button class="btn-primary" id="cx">Close</button></div>`, true);
@@ -9708,10 +9793,10 @@
         const qty = rows.reduce((a, x) => a + (+x.quantity || 0), 0);
         const cost = rows.reduce((a, x) => a + (+x.purchaseCost || 0), 0);
         const value = rows.reduce((a, x) => a + (+x.currentValue || 0), 0);
-        $('#asStats').innerHTML = `${statCard('🏢', rows.length, 'Asset Entries')}
-          ${statCard('🔢', qty, 'Total Units', 'c2')}
-          ${statCard('💵', money(cost), 'Purchase Cost')}
-          ${statCard('📉', money(value), 'Current Value', 'c3')}`;
+        $('#asStats').innerHTML = `${statCard(ic('building'), rows.length, 'Asset Entries')}
+          ${statCard(ic('hash'), qty, 'Total Units', 'c2')}
+          ${statCard(ic('money'), money(cost), 'Purchase Cost')}
+          ${statCard(ic('trending-down'), money(value), 'Current Value', 'c3')}`;
         $('#asBody').innerHTML = rows.length ? pageSlice(rows, page).map(a => {
           const pill = { 'In Use': 'green', 'In Store': 'blue', 'Under Maintenance': 'amber',
                          Damaged: 'red', Disposed: 'red' }[a.status] || 'blue';
@@ -9722,7 +9807,7 @@
             <td>${esc(a.vendor || '—')}</td><td>${esc(a.location || '—')}</td>
             <td><span class="pill ${pill}">${esc(a.status || '—')}</span></td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-outline" data-view="${a.id}">👁 View</button>
+              <button class="btn-sm btn-outline" data-view="${a.id}"> View</button>
               ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${a.id}">Edit</button>
               <button class="btn-sm btn-del" data-del="${a.id}">Delete</button>` : ''}
             </div></td></tr>`;
@@ -9883,9 +9968,9 @@
         const rows = filtered();
         page = Math.min(page, pageCount(rows.length));
         const active = rows.filter(r => (r.status || 'Active') === 'Active');
-        $('#ffStats').innerHTML = `${statCard('📋', rows.length, 'Fee Heads Listed')}
-          ${statCard('✅', active.length, 'Active', 'c3')}
-          ${statCard('💰', money(active.reduce((a, r) => a + (+r.amount || 0), 0)), 'Total Fixed Fee', 'c2')}`;
+        $('#ffStats').innerHTML = `${statCard(ic('clipboard'), rows.length, 'Fee Heads Listed')}
+          ${statCard(ic('check'), active.length, 'Active', 'c3')}
+          ${statCard(ic('money'), money(active.reduce((a, r) => a + (+r.amount || 0), 0)), 'Total Fixed Fee', 'c2')}`;
         $('#ffBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.id)}</td><td>${esc(r.course || '—')}</td><td>${esc(r.branch || '—')}</td>
           <td>${esc(r.academicYear || '—')}</td><td>${esc(r.feeType || '—')}</td>
@@ -9893,7 +9978,7 @@
           <td>${esc(r.effectiveFrom || '—')}</td>
           <td><span class="pill ${(r.status || 'Active') === 'Active' ? 'green' : 'red'}">${esc(r.status || 'Active')}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${r.id}"> View</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${r.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${r.id}">Delete</button>` : ''}
           </div></td></tr>`).join('')
@@ -10054,10 +10139,10 @@
         const sum = rows.reduce((a, r) => ({
           total: a.total + r.total, paid: a.paid + r.paid, pending: a.pending + r.pending,
         }), { total: 0, paid: 0, pending: 0 });
-        $('#sfStats').innerHTML = `${statCard('📆', rows.length, 'Fee Records')}
-          ${statCard('💰', money(sum.total), 'Total Fee')}
-          ${statCard('✅', money(sum.paid), 'Collected', 'c3')}
-          ${statCard('⏳', money(sum.pending), 'Pending', sum.pending ? 'c4' : 'c3')}`;
+        $('#sfStats').innerHTML = `${statCard(ic('calendar'), rows.length, 'Fee Records')}
+          ${statCard(ic('money'), money(sum.total), 'Total Fee')}
+          ${statCard(ic('check'), money(sum.paid), 'Collected', 'c3')}
+          ${statCard(ic('pending'), money(sum.pending), 'Pending', sum.pending ? 'c4' : 'c3')}`;
         $('#sfBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td>${esc(r.name)}</td><td class="mono">${esc(r.roll)}</td><td>${esc(r.course)}</td>
           <td>${esc(r.branch)}</td><td>${esc(r.semester || '—')}</td><td>${esc(r.academicYear)}</td>
@@ -10066,7 +10151,7 @@
           <td style="text-align:right;${r.pending ? 'color:var(--red);font-weight:600' : ''}">${money(r.pending)}</td>
           <td>${esc(r.dueDate)}</td><td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${r.id}"> View</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${r.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${r.id}">Delete</button>` : ''}
           </div></td></tr>`).join('')
@@ -10222,8 +10307,8 @@
     const html = `<div class="stat-grid" id="fcStats"></div>
       <div class="panel"><div class="panel-head"><h3>Collect Fee</h3>
         <div class="panel-tools">
-          <button class="btn-outline btn-sm" id="fcGoHistory">🧾 Payment History</button>
-          <button class="btn-outline btn-sm" id="fcGoPending">⏳ Pending Fees</button>
+          <button class="btn-outline btn-sm" id="fcGoHistory"> Payment History</button>
+          <button class="btn-outline btn-sm" id="fcGoPending"> Pending Fees</button>
         </div></div>
       ${finFilterBar('fc', { extra: `<label class="switch-label">
         <input type="checkbox" id="fcOnlyDue" checked><span>Only students with dues</span></label>` })}
@@ -10247,10 +10332,10 @@
         const rows = filtered();
         page = Math.min(page, pageCount(rows.length));
         const t = collectionTotals();
-        $('#fcStats').innerHTML = `${statCard('🧾', money(collectionOn(today())), "Today's Collection", 'c3')}
-          ${statCard('📄', Store.all('payments').filter(p => p.date === today()).length, "Today's Receipts", 'c2')}
-          ${statCard('💰', money(t.collected), 'Collected (all time)')}
-          ${statCard('⏳', money(t.pending), 'Outstanding', t.pending ? 'c4' : 'c3')}`;
+        $('#fcStats').innerHTML = `${statCard('', money(collectionOn(today())), "Today's Collection", 'c3')}
+          ${statCard('', Store.all('payments').filter(p => p.date === today()).length, "Today's Receipts", 'c2')}
+          ${statCard('', money(t.collected), 'Collected (all time)')}
+          ${statCard('', money(t.pending), 'Outstanding', t.pending ? 'c4' : 'c3')}`;
         $('#fcBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.course)}</td>
           <td>${esc(r.branch)}</td><td>${esc(r.semester || '—')}</td>
@@ -10259,7 +10344,7 @@
           <td style="text-align:right;${r.pending ? 'color:var(--red);font-weight:600' : ''}">${money(r.pending)}</td>
           <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><button class="btn-sm ${r.pending ? 'btn-edit' : 'btn-outline'}" data-collect="${r.sid}"
-            ${r.pending ? '' : 'disabled title="Nothing pending"'}>💰 Collect</button></td></tr>`).join('')
+            ${r.pending ? '' : 'disabled title="Nothing pending"'}>Collect</button></td></tr>`).join('')
           : `<tr><td colspan="10" class="empty">No students match these filters.</td></tr>`;
         $('#fcBody').querySelectorAll('[data-collect]').forEach(b =>
           b.onclick = () => collectFeeForm(b.dataset.collect, draw));
@@ -10274,7 +10359,7 @@
             return `<tr><td class="mono">${esc(p.receiptNo)}</td><td>${esc(s.name || '—')} (${esc(s.roll || '—')})</td>
               <td style="text-align:right;font-weight:600">${money(p.amount)}</td>
               <td><span class="pill blue">${esc(p.mode)}</span></td><td class="mono">${esc(p.txnId || '—')}</td>
-              <td><button class="btn-sm btn-outline" data-rc="${p.id}">🧾 Receipt</button></td></tr>`;
+              <td><button class="btn-sm btn-outline" data-rc="${p.id}">Receipt</button></td></tr>`;
           }).join('')}</tbody></table></div>`
           : `<p class="empty">No fee collected today yet.</p>`;
         $('#fcToday').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => printReceipt(b.dataset.rc));
@@ -10454,17 +10539,17 @@
         const rows = filtered();
         page = Math.min(page, pageCount(rows.length));
         const sum = rows.reduce((a, r) => a + r.amount, 0);
-        $('#phStats').innerHTML = `${statCard('🧾', rows.length, 'Receipts Listed')}
-          ${statCard('💰', money(sum), 'Amount in View', 'c3')}
-          ${statCard('👥', new Set(rows.map(r => r.sid)).size, 'Distinct Students', 'c2')}`;
+        $('#phStats').innerHTML = `${statCard('', rows.length, 'Receipts Listed')}
+          ${statCard('', money(sum), 'Amount in View', 'c3')}
+          ${statCard('', new Set(rows.map(r => r.sid)).size, 'Distinct Students', 'c2')}`;
         $('#phBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.receiptNo)}</td><td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td>
           <td style="text-align:right;font-weight:600">${money(r.amount)}</td>
           <td><span class="pill blue">${esc(r.mode)}</span></td><td class="mono">${esc(r.txnId)}</td>
           <td>${esc(r.date)}</td><td><span class="pill green">${esc(r.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
-            <button class="btn-sm btn-edit" data-print="${r.id}">🖨 Receipt</button>
+            <button class="btn-sm btn-outline" data-view="${r.id}">View</button>
+            <button class="btn-sm btn-edit" data-print="${r.id}">Receipt</button>
           </div></td></tr>`).join('')
           : `<tr><td colspan="9" class="empty">No transactions match these filters.</td></tr>`;
         $('#phBody').querySelectorAll('[data-view]').forEach(b => b.onclick = () => receiptModal(b.dataset.view));
@@ -10527,8 +10612,8 @@
       ${row('Collected By', p.collectedBy)}
     </tbody></table></div>
     <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-      <button class="btn-outline" id="dl">⬇ Download</button>
-      <button class="btn-primary" id="pr">🖨 Print Receipt</button></div>`, true);
+      <button class="btn-outline" id="dl">Download</button>
+      <button class="btn-primary" id="pr">Print Receipt</button></div>`, true);
     $('#cx').onclick = closeModal;
     $('#pr').onclick = () => printReceipt(paymentId);
     $('#dl').onclick = () => { printReceipt(paymentId); toast('Choose "Save as PDF" in the print dialog.'); };
@@ -10577,10 +10662,10 @@
         page = Math.min(page, pageCount(rows.length));
         const sum = rows.reduce((a, r) => a + r.pending, 0);
         const overdue = rows.filter(r => r.dueDate !== '—' && r.dueDate < today());
-        $('#pfStats').innerHTML = `${statCard('👥', rows.length, 'Students with Dues', 'c4')}
-          ${statCard('⏳', money(sum), 'Total Pending', 'c4')}
-          ${statCard('⚠️', overdue.length, 'Past Due Date', overdue.length ? 'c4' : 'c3')}
-          ${statCard('📉', money(rows.length ? Math.round(sum / rows.length) : 0), 'Average Pending', 'c2')}`;
+        $('#pfStats').innerHTML = `${statCard('', rows.length, 'Students with Dues', 'c4')}
+          ${statCard('', money(sum), 'Total Pending', 'c4')}
+          ${statCard('', overdue.length, 'Past Due Date', overdue.length ? 'c4' : 'c3')}
+          ${statCard('', money(rows.length ? Math.round(sum / rows.length) : 0), 'Average Pending', 'c2')}`;
         $('#pfBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => {
           const late = r.dueDate !== '—' && r.dueDate < today();
           return `<tr><td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.course)}</td>
@@ -10588,12 +10673,12 @@
             <td style="text-align:right">${money(r.total)}</td>
             <td style="text-align:right;color:var(--green)">${money(r.paid)}</td>
             <td style="text-align:right;color:var(--red);font-weight:600">${money(r.pending)}</td>
-            <td${late ? ' style="color:var(--red);font-weight:600"' : ''}>${esc(r.dueDate)}${late ? ' ⚠' : ''}</td>
+            <td${late ? ' style="color:var(--red);font-weight:600"' : ''}>${esc(r.dueDate)}${late ? ' ' : ''}</td>
             <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
             <td>${canCollect
-              ? `<button class="btn-sm btn-edit" data-collect="${r.sid}">💰 Collect</button>`
-              : `<button class="btn-sm btn-outline" data-detail="${r.sid}">👁 View</button>`}</td></tr>`;
-        }).join('') : `<tr><td colspan="11" class="empty">No pending fees for these filters. 🎉</td></tr>`;
+              ? `<button class="btn-sm btn-edit" data-collect="${r.sid}">Collect</button>`
+              : `<button class="btn-sm btn-outline" data-detail="${r.sid}">View</button>`}</td></tr>`;
+        }).join('') : `<tr><td colspan="11" class="empty">No pending fees for these filters.</td></tr>`;
         if (canCollect) {
           $('#pfBody').querySelectorAll('[data-collect]').forEach(b =>
             b.onclick = () => collectFeeForm(b.dataset.collect, draw));
@@ -10638,12 +10723,12 @@
 
   /* =========================== REPORTS =========================== */
   const FIN_REPORTS = [
-    ['studentFee', '🎓 Student Fee Report'],
-    ['collection', '💰 Fee Collection Report'],
-    ['pending', '⏳ Pending Fee Report'],
-    ['fixed', '📋 Fixed Fee Report'],
-    ['semester', '📆 Semester-wise Fee Report'],
-    ['asset', '🏢 Asset Report'],
+    ['studentFee', ' Student Fee Report'],
+    ['collection', ' Fee Collection Report'],
+    ['pending', ' Pending Fee Report'],
+    ['fixed', ' Fixed Fee Report'],
+    ['semester', ' Semester-wise Fee Report'],
+    ['asset', ' Asset Report'],
   ];
   let finReport = 'studentFee';
 
@@ -10710,10 +10795,10 @@
           pending: rows.reduce((a, r) => a + r.pending, 0),
         },
         stats: [
-          statCard('🎓', rows.length, 'Students'),
-          statCard('💰', money(rows.reduce((a, r) => a + r.total, 0)), 'Total Fee'),
-          statCard('✅', money(rows.reduce((a, r) => a + r.paid, 0)), 'Collected', 'c3'),
-          statCard('⏳', money(rows.reduce((a, r) => a + r.pending, 0)), 'Pending', 'c4'),
+          statCard('', rows.length, 'Students'),
+          statCard('', money(rows.reduce((a, r) => a + r.total, 0)), 'Total Fee'),
+          statCard('', money(rows.reduce((a, r) => a + r.paid, 0)), 'Collected', 'c3'),
+          statCard('', money(rows.reduce((a, r) => a + r.pending, 0)), 'Pending', 'c4'),
         ],
       };
     }
@@ -10752,10 +10837,10 @@
         ],
         rows: buckets,
         stats: [
-          statCard('🧾', pays.length, 'Receipts'),
-          statCard('💰', money(total), 'Collected', 'c3'),
-          statCard('📅', money(collectionOn(today())), "Today's Collection", 'c2'),
-          statCard('👥', new Set(pays.map(p => p.sid)).size, 'Students Paid'),
+          statCard('', pays.length, 'Receipts'),
+          statCard('', money(total), 'Collected', 'c3'),
+          statCard('', money(collectionOn(today())), "Today's Collection", 'c2'),
+          statCard('', new Set(pays.map(p => p.sid)).size, 'Students Paid'),
         ],
       };
     }
@@ -10793,10 +10878,10 @@
         ],
         rows,
         stats: [
-          statCard('👥', base.length, 'Students with Dues', 'c4'),
-          statCard('⏳', money(pending), 'Total Pending', 'c4'),
-          statCard('💰', money(base.reduce((a, r) => a + r.total, 0)), 'Fee Charged'),
-          statCard('✅', money(base.reduce((a, r) => a + r.paid, 0)), 'Already Paid', 'c3'),
+          statCard('', base.length, 'Students with Dues', 'c4'),
+          statCard('', money(pending), 'Total Pending', 'c4'),
+          statCard('', money(base.reduce((a, r) => a + r.total, 0)), 'Fee Charged'),
+          statCard('', money(base.reduce((a, r) => a + r.paid, 0)), 'Already Paid', 'c3'),
         ],
       };
     }
@@ -10821,9 +10906,9 @@
         rows,
         totals: { id: 'TOTAL', course: rows.length + ' heads', amount: rows.reduce((a, r) => a + (+r.amount || 0), 0) },
         stats: [
-          statCard('📋', rows.length, 'Fee Heads'),
-          statCard('✅', active.length, 'Active', 'c3'),
-          statCard('💰', money(active.reduce((a, r) => a + (+r.amount || 0), 0)), 'Total Fixed Fee', 'c2'),
+          statCard('', rows.length, 'Fee Heads'),
+          statCard('', active.length, 'Active', 'c3'),
+          statCard('', money(active.reduce((a, r) => a + (+r.amount || 0), 0)), 'Total Fixed Fee', 'c2'),
         ],
       };
     }
@@ -10861,10 +10946,10 @@
           pending: rows.reduce((a, r) => a + r.pending, 0),
         },
         stats: [
-          statCard('📆', rows.length, 'Fee Records'),
-          statCard('💰', money(rows.reduce((a, r) => a + r.total, 0)), 'Total Fee'),
-          statCard('✅', money(rows.reduce((a, r) => a + r.paid, 0)), 'Collected', 'c3'),
-          statCard('⏳', money(rows.reduce((a, r) => a + r.pending, 0)), 'Pending', 'c4'),
+          statCard('', rows.length, 'Fee Records'),
+          statCard('', money(rows.reduce((a, r) => a + r.total, 0)), 'Total Fee'),
+          statCard('', money(rows.reduce((a, r) => a + r.paid, 0)), 'Collected', 'c3'),
+          statCard('', money(rows.reduce((a, r) => a + r.pending, 0)), 'Pending', 'c4'),
         ],
       };
     }
@@ -10898,10 +10983,10 @@
         depreciation: rows.reduce((a, r) => a + r.depreciation, 0),
       },
       stats: [
-        statCard('🏢', rows.length, 'Asset Entries'),
-        statCard('🔢', rows.reduce((a, r) => a + (+r.quantity || 0), 0), 'Total Units', 'c2'),
-        statCard('💵', money(rows.reduce((a, r) => a + (+r.purchaseCost || 0), 0)), 'Purchase Cost'),
-        statCard('📉', money(rows.reduce((a, r) => a + (+r.currentValue || 0), 0)), 'Current Value', 'c3'),
+        statCard('', rows.length, 'Asset Entries'),
+        statCard('', rows.reduce((a, r) => a + (+r.quantity || 0), 0), 'Total Units', 'c2'),
+        statCard('', money(rows.reduce((a, r) => a + (+r.purchaseCost || 0), 0)), 'Purchase Cost'),
+        statCard('', money(rows.reduce((a, r) => a + (+r.currentValue || 0), 0)), 'Current Value', 'c3'),
       ],
     };
   }
@@ -11065,10 +11150,10 @@
           (!st || (r.status || 'Pending') === st));
         page = Math.min(page, pageCount(rows.length));
         const count = (s) => all.filter(r => (r.status || 'Pending') === s).length;
-        $('#rqStats').innerHTML = `${statCard('📦', all.length, 'My Requests')}
-          ${statCard('⏳', count('Pending'), 'Pending', count('Pending') ? 'c2' : 'c3')}
-          ${statCard('✅', count('Approved') + count('Ordered') + count('Received'), 'Approved', 'c3')}
-          ${statCard('❌', count('Rejected'), 'Rejected', count('Rejected') ? 'c4' : 'c3')}`;
+        $('#rqStats').innerHTML = `${statCard('', all.length, 'My Requests')}
+          ${statCard('', count('Pending'), 'Pending', count('Pending') ? 'c2' : 'c3')}
+          ${statCard('', count('Approved') + count('Ordered') + count('Received'), 'Approved', 'c3')}
+          ${statCard('', count('Rejected'), 'Rejected', count('Rejected') ? 'c4' : 'c3')}`;
         $('#rqBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => {
           const status = r.status || 'Pending';
           const editable = status === 'Pending';
@@ -11082,7 +11167,7 @@
             <td>${esc(r.neededBy || '—')}</td>
             <td><span class="pill ${REQ_PILL[status]}">${esc(status)}</span></td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
+              <button class="btn-sm btn-outline" data-view="${r.id}">View</button>
               ${editable ? `<button class="btn-sm btn-edit" data-edit="${r.id}">Edit</button>
                 <button class="btn-sm btn-del" data-del="${r.id}">Withdraw</button>` : ''}
             </div></td></tr>`;
@@ -11257,14 +11342,14 @@
         const all = rowsOf();
         const count = (s) => all.filter(r => r.status === s).length;
         const pendingValue = all.filter(r => r.status === 'Pending').reduce((a, r) => a + r.totalEstimate, 0);
-        $('#rvStats').innerHTML = `${statCard('📦', all.length, isAcct ? 'Cleared for Accounts' : 'Total Requests')}
+        $('#rvStats').innerHTML = `${statCard('', all.length, isAcct ? 'Cleared for Accounts' : 'Total Requests')}
           ${isAcct
-            ? statCard('✅', count('Approved'), 'Ready to Order', count('Approved') ? 'c2' : 'c3')
-            : statCard('⏳', count('Pending'), 'Awaiting Center Head', count('Pending') ? 'c2' : 'c3')}
-          ${statCard('💰', money(isAcct
+            ? statCard('', count('Approved'), 'Ready to Order', count('Approved') ? 'c2' : 'c3')
+            : statCard('', count('Pending'), 'Awaiting Center Head', count('Pending') ? 'c2' : 'c3')}
+          ${statCard('', money(isAcct
               ? all.filter(r => r.status === 'Approved').reduce((a, r) => a + r.totalEstimate, 0)
               : pendingValue), isAcct ? 'Value to Order' : 'Pending Value', pendingValue ? 'c4' : 'c3')}
-          ${statCard('📥', count('Ordered') + count('Received'), 'Ordered / Received', 'c3')}`;
+          ${statCard('', count('Ordered') + count('Received'), 'Ordered / Received', 'c3')}`;
         $('#rvBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => `<tr>
           <td class="mono">${esc(r.id)}</td>
           <td><span class="pill ${r.type === 'Book' ? 'blue' : 'amber'}">${esc(r.type)}</span></td>
@@ -11277,8 +11362,8 @@
           <td>${esc(r.neededBy || '—')}</td>
           <td><span class="pill ${REQ_PILL[r.status]}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
-            <button class="btn-sm btn-edit" data-review="${r.id}">${isCH ? '✅ Approve' : '📝 Review'}</button>
+            <button class="btn-sm btn-outline" data-view="${r.id}">View</button>
+            <button class="btn-sm btn-edit" data-review="${r.id}">${isCH ? 'Approve' : 'Review'}</button>
             ${isCH ? '' : `<button class="btn-sm btn-del" data-del="${r.id}">Delete</button>`}
           </div></td></tr>`).join('')
           : `<tr><td colspan="11" class="empty">${isAcct
@@ -11372,7 +11457,7 @@
           <textarea name="reviewRemarks" rows="3" placeholder="Reason for the decision, budget note, PO number…">${esc(r.reviewRemarks || '')}</textarea></div>
       </div>
       ${r.linkedId
-        ? `<p style="font-size:12.5px;color:var(--green);margin-top:10px">✔ Already added to
+        ? `<p style="font-size:12.5px;color:var(--green);margin-top:10px">Already added to
              ${isBook ? 'the library catalogue' : 'the asset register'} as <b>${esc(r.linkedId)}</b>.</p>`
         : canConvert
           ? `<label class="switch-label" style="margin-top:12px">
@@ -11548,7 +11633,7 @@
 
   /* ---------- other editable master lists ----------
      Same deal as the branch list: the dropdown carries "+ Add New..." and
-     "🗑 Remove...", the list is remembered in `settings` so everyone sees it,
+     "Remove...", the list is remembered in `settings` so everyone sees it,
      and any value already present in the data is always included so an
      existing record can never end up with an option that isn't listed. */
   const LIST_DEFS = {
@@ -11749,7 +11834,7 @@
   const ADD_NEW = '__addnew__';
   const REMOVE_OPT = '__removeopt__';
   function addNewOpt(label) { return `<option value="${ADD_NEW}">+ ${label || 'Add New...'}</option>`; }
-  function removeOpt() { return `<option value="${REMOVE_OPT}">🗑 Remove...</option>`; }
+  function removeOpt() { return `<option value="${REMOVE_OPT}">Remove...</option>`; }
   function listExtraOpts(label) { return addNewOpt(label) + removeOpt(); }
 
   // for selects backed by a plain string list (Branch, Day, Period): typing a
@@ -12089,7 +12174,7 @@
   /* ---------- the read-only banner every center-head page carries ---------- */
   function readOnlyBanner(text) {
     return `<div class="ro-banner">
-      <span class="ro-badge">👁 READ ONLY</span>
+      <span class="ro-badge">READ ONLY</span>
       <span>${esc(text || 'You can view, search, filter, print and export. No data on this page can be changed.')}</span>
     </div>`;
   }
@@ -12119,12 +12204,12 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>Center Head · College-wide monitoring · ${prettyDate()}</p>
         <div class="wb-chips">
-          <span>🎓 ${students.length} students</span><span>👨‍🏫 ${faculty.length} faculty</span>
-          <span>📈 ${att.pct === null ? '—' : att.pct + '%'} attendance</span>
-          <span>💳 ${collPct}% fees collected</span>
+          <span>${students.length} students</span><span>${faculty.length} faculty</span>
+          <span>${att.pct === null ? '—' : att.pct + '%'} attendance</span>
+          <span>${collPct}% fees collected</span>
         </div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
@@ -12139,7 +12224,7 @@
         String(a.requestDate || '').localeCompare(String(b.requestDate || '')));
     if (pendingReqs.length) {
       html += `<div class="panel" style="border-left:4px solid var(--amber)">
-        <div class="panel-head"><h3>📦 Waiting for Your Approval (${pendingReqs.length})</h3>
+        <div class="panel-head"><h3>Waiting for Your Approval (${pendingReqs.length})</h3>
           <button class="btn-primary btn-sm" id="chGoReqs">Open Approvals</button></div>
         <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px">
           Requests raised by faculty and the library. The accounts office cannot order any of
@@ -12160,13 +12245,13 @@
     /* ---- OVERVIEW ---- */
     html += `<h3 class="ro-section">Overview</h3>
       <div class="stat-grid">
-        ${statCard('🎓', students.length, 'Total Students')}
-        ${statCard('👨‍🏫', faculty.length, 'Total Faculty', 'c2')}
-        ${statCard('🧑‍💼', staff, 'Total Staff', 'c2')}
-        ${statCard('📚', courses.length, 'Total Courses', 'c3')}
-        ${statCard('🏛️', depts.length, 'Total Departments', 'c3')}
-        ${statCard('🌿', branches.length, 'Total Branches', 'c2')}
-        ${statCard('🏢', ast.units, `Total Assets (${ast.entries} entries)`, 'c2')}
+        ${statCard(ic('cap'), students.length, 'Total Students')}
+        ${statCard(ic('user'), faculty.length, 'Total Faculty', 'c2')}
+        ${statCard(ic('user'), staff, 'Total Staff', 'c2')}
+        ${statCard(ic('books'), courses.length, 'Total Courses', 'c3')}
+        ${statCard(ic('bank'), depts.length, 'Total Departments', 'c3')}
+        ${statCard(ic('leaf'), branches.length, 'Total Branches', 'c2')}
+        ${statCard(ic('building'), ast.units, `Total Assets (${ast.entries} entries)`, 'c2')}
       </div>`;
 
     /* ---- ACADEMIC ---- */
@@ -12178,10 +12263,10 @@
 
     html += `<h3 class="ro-section">Academic Overview</h3>
       <div class="stat-grid">
-        ${statCard('📝', students.length, 'Enrolled This Session')}
-        ${statCard('🗓️', slots.length, 'Timetable Periods', 'c2')}
-        ${statCard('✅', Store.all('attendance').length, 'Sessions Recorded', 'c3')}
-        ${statCard('🎯', Store.all('marks').length, 'Result Entries', 'c2')}
+        ${statCard(ic('notes'), students.length, 'Enrolled This Session')}
+        ${statCard(ic('calendar'), slots.length, 'Timetable Periods', 'c2')}
+        ${statCard(ic('check'), Store.all('attendance').length, 'Sessions Recorded', 'c3')}
+        ${statCard(ic('target'), Store.all('marks').length, 'Result Entries', 'c2')}
       </div>
       <div class="dash-2col">
         <div class="panel"><div class="panel-head"><h3>Specialisation-wise Student Count</h3></div>
@@ -12250,7 +12335,7 @@
             : '<p class="empty">No attendance recorded.</p>'}
         </div>
       </div>
-      <div class="panel"><div class="panel-head"><h3>⚠ Students Below 75% Attendance</h3>
+      <div class="panel"><div class="panel-head"><h3>Students Below 75% Attendance</h3>
         <span style="font-size:12px;color:var(--muted)">${lowAttendance.length ? 'Lowest ' + lowAttendance.length : 'None'}</span></div>
         <div class="tbl-wrap"><table><thead><tr><th>Reg No</th><th>Name</th><th>Specialisation</th><th>Sem</th>
           <th style="text-align:right">Held</th><th style="text-align:right">Present</th><th>Attendance</th>
@@ -12258,7 +12343,7 @@
           <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${esc(r.branch)}</td>
           <td>${esc(String(r.semester))}</td><td style="text-align:right">${r.held}</td>
           <td style="text-align:right">${r.present}</td><td>${attBar(r.attendance)}</td></tr>`).join('')
-          : `<tr><td colspan="7" class="empty">Every student is at or above 75%. 🎉</td></tr>`}
+          : `<tr><td colspan="7" class="empty">Every student is at or above 75%.</td></tr>`}
         </tbody></table></div></div>`;
 
     /* ---- FINANCIAL ---- */
@@ -12269,10 +12354,10 @@
 
     html += `<h3 class="ro-section">Financial Overview</h3>
       <div class="stat-grid">
-        ${statCard('💰', money(fin.collected), 'Total Fee Collection', 'c3')}
-        ${statCard('⏳', money(fin.pending), 'Total Pending Fees', fin.pending ? 'c4' : 'c3')}
-        ${statCard('📋', money(fixedFeeTotal()), 'Fixed Fee Structure', 'c2')}
-        ${statCard('🧾', money(collectionOn(today())), "Today's Collection", 'c3')}
+        ${statCard(ic('money'), money(fin.collected), 'Total Fee Collection', 'c3')}
+        ${statCard(ic('pending'), money(fin.pending), 'Total Pending Fees', fin.pending ? 'c4' : 'c3')}
+        ${statCard(ic('clipboard'), money(fixedFeeTotal()), 'Fixed Fee Structure', 'c2')}
+        ${statCard(ic('receipt'), money(collectionOn(today())), "Today's Collection", 'c3')}
       </div>
       <div class="dash-2col">
         <div class="panel"><div class="panel-head"><h3>Semester-wise Fee Collection</h3></div>
@@ -12320,12 +12405,12 @@
 
     html += `<h3 class="ro-section">Asset Overview</h3>
       <div class="stat-grid">
-        ${statCard('🏢', ast.units, 'Total Asset Units')}
-        ${statCard('🗂️', ast.categories, 'Asset Categories', 'c2')}
-        ${statCard('💵', money(ast.value), 'Current Asset Value', 'c3')}
-        ${statCard('📦', ast.available, 'Available (In Store)', 'c2')}
-        ${statCard('✅', ast.assigned, 'Assigned (In Use)', 'c3')}
-        ${statCard('🛠️', ast.damaged, 'Damaged / Maintenance', ast.damaged ? 'c4' : 'c3')}
+        ${statCard(ic('building'), ast.units, 'Total Asset Units')}
+        ${statCard(ic('folder'), ast.categories, 'Asset Categories', 'c2')}
+        ${statCard(ic('money'), money(ast.value), 'Current Asset Value', 'c3')}
+        ${statCard(ic('package'), ast.available, 'Available (In Store)', 'c2')}
+        ${statCard(ic('check'), ast.assigned, 'Assigned (In Use)', 'c3')}
+        ${statCard(ic('tools'), ast.damaged, 'Damaged / Maintenance', ast.damaged ? 'c4' : 'c3')}
       </div>
       <div class="panel"><div class="panel-head"><h3>Assets by Category</h3></div>
         <div class="tbl-wrap"><table><thead><tr><th>Category</th>
@@ -12340,12 +12425,12 @@
     const recentLib = lib.txns.slice(0, 8);
     html += `<h3 class="ro-section">Library Overview</h3>
       <div class="stat-grid">
-        ${statCard('📚', lib.copies, `Total Books (${lib.titles} titles)`)}
-        ${statCard('🔖', lib.issued, 'Currently Issued', 'c2')}
-        ${statCard('🔁', lib.returned, 'Returned (all time)', 'c3')}
-        ${statCard('⚠️', lib.overdue, 'Overdue', lib.overdue ? 'c4' : 'c3')}
-        ${statCard('📗', lib.available, 'Available Now', 'c3')}
-        ${statCard('🧾', lib.transactions, 'Total Transactions', 'c2')}
+        ${statCard(ic('books'), lib.copies, `Total Books (${lib.titles} titles)`)}
+        ${statCard(ic('bookmark'), lib.issued, 'Currently Issued', 'c2')}
+        ${statCard(ic('refresh'), lib.returned, 'Returned (all time)', 'c3')}
+        ${statCard(ic('alert'), lib.overdue, 'Overdue', lib.overdue ? 'c4' : 'c3')}
+        ${statCard(ic('book'), lib.available, 'Available Now', 'c3')}
+        ${statCard(ic('receipt'), lib.transactions, 'Total Transactions', 'c2')}
       </div>
       <div class="panel"><div class="panel-head"><h3>Library Activity Summary</h3>
         <span style="font-size:12px;color:var(--muted)">Latest ${recentLib.length} transactions</span></div>
@@ -12360,7 +12445,7 @@
         </tbody></table></div></div>`;
 
     html += `<div class="panel"><div class="panel-head"><h3>Reports</h3>
-      <button class="btn-primary btn-sm" id="chGoReports">📈 Open Reports</button></div>
+      <button class="btn-primary btn-sm" id="chGoReports">Open Reports</button></div>
       <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0">
         Student, faculty, attendance, fee collection, pending fee, semester-wise fee, asset,
         library, department, course and overall college reports — each with search, filters,
@@ -12390,12 +12475,12 @@
 
   /* =========================== ATTENDANCE OVERVIEW =========================== */
   const CH_ATT_TABS = [
-    ['sessions', '🗓 Attendance History'],
-    ['students', '🎓 Student Attendance'],
-    ['faculty', '👨‍🏫 Faculty Attendance'],
-    ['courses', '📚 Course-wise'],
-    ['departments', '🏛 Department-wise'],
-    ['semesters', '📆 Semester-wise'],
+    ['sessions', 'Attendance History'],
+    ['students', 'Student Attendance'],
+    ['faculty', 'Faculty Attendance'],
+    ['courses', 'Course-wise'],
+    ['departments', 'Department-wise'],
+    ['semesters', 'Semester-wise'],
   ];
   let chAttTab = 'sessions';
 
@@ -12407,11 +12492,11 @@
     const html = readOnlyBanner('Attendance is recorded by the faculty. This page reports it — '
       + 'there is no editing option here.') +
       `<div class="stat-grid">
-        ${statCard('📈', att.pct === null ? '—' : att.pct + '%', 'Overall Attendance', att.pct !== null && att.pct < 75 ? 'c4' : 'c3')}
-        ${statCard('✅', sessions.length, 'Sessions Recorded', 'c2')}
-        ${statCard('👥', att.present, 'Present Marks', 'c3')}
-        ${statCard('🚫', att.marks - att.present, 'Absent Marks', 'c4')}
-        ${statCard('⚠️', low, 'Students Below 75%', low ? 'c4' : 'c3')}
+        ${statCard(ic('trending-up'), att.pct === null ? '—' : att.pct + '%', 'Overall Attendance', att.pct !== null && att.pct < 75 ? 'c4' : 'c3')}
+        ${statCard(ic('check'), sessions.length, 'Sessions Recorded', 'c2')}
+        ${statCard(ic('users'), att.present, 'Present Marks', 'c3')}
+        ${statCard(ic('ban'), att.marks - att.present, 'Absent Marks', 'c4')}
+        ${statCard(ic('alert'), low, 'Students Below 75%', low ? 'c4' : 'c3')}
       </div>
       <div class="panel"><div class="panel-head"><h3>Attendance Reports</h3>
         <div class="panel-tools">${exportButtons('ca')}</div></div>
@@ -12653,10 +12738,10 @@
         const r = report();
         const rows = r.rows;
         page = Math.min(page, pageCount(rows.length));
-        $('#dpStats').innerHTML = `${statCard('🏛️', rows.length, 'Departments')}
-          ${statCard('👨‍🏫', rows.reduce((a, x) => a + x.faculty, 0), 'Faculty', 'c2')}
-          ${statCard('📚', rows.reduce((a, x) => a + x.courses, 0), 'Courses', 'c3')}
-          ${statCard('🎓', rows.reduce((a, x) => a + x.students, 0), 'Students', 'c2')}`;
+        $('#dpStats').innerHTML = `${statCard(ic('bank'), rows.length, 'Departments')}
+          ${statCard(ic('user'), rows.reduce((a, x) => a + x.faculty, 0), 'Faculty', 'c2')}
+          ${statCard(ic('books'), rows.reduce((a, x) => a + x.courses, 0), 'Courses', 'c3')}
+          ${statCard(ic('cap'), rows.reduce((a, x) => a + x.students, 0), 'Students', 'c2')}`;
         $('#dpTable').innerHTML = reportTableHtml(r.columns, pageSlice(rows, page), 'No departments found.');
         $('#dpPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#dpPager'), rows.length, page, (p) => page = p, draw);
@@ -12723,9 +12808,9 @@
       };
       const draw = () => {
         const r = report();
-        $('#brStats').innerHTML = `${statCard('🌿', r.rows.length, 'Specialisations')}
-          ${statCard('🎓', r.totals.students, 'Students', 'c2')}
-          ${statCard('💰', money(r.totals.feePaid), 'Fees Collected', 'c3')}`;
+        $('#brStats').innerHTML = `${statCard(ic('leaf'), r.rows.length, 'Specialisations')}
+          ${statCard(ic('cap'), r.totals.students, 'Students', 'c2')}
+          ${statCard(ic('money'), money(r.totals.feePaid), 'Fees Collected', 'c3')}`;
         $('#brTable').innerHTML = reportTableHtml(r.columns, r.rows, 'No specialisations in use yet.');
 
         // branch × semester headcount grid
@@ -12750,17 +12835,17 @@
 
   /* =========================== REPORTS HUB =========================== */
   const CH_REPORTS = [
-    ['student', '🎓 Student Report'],
-    ['faculty', '👨‍🏫 Faculty Report'],
-    ['attendance', '✅ Attendance Report'],
-    ['collection', '💰 Fee Collection Report'],
-    ['pending', '⏳ Pending Fee Report'],
-    ['semester', '📆 Semester-wise Fee Report'],
-    ['asset', '🏢 Asset Report'],
-    ['library', '📖 Library Report'],
-    ['department', '🏛 Department Report'],
-    ['course', '📚 Course Report'],
-    ['overall', '🏫 Overall College Report'],
+    ['student', 'Student Report'],
+    ['faculty', 'Faculty Report'],
+    ['attendance', 'Attendance Report'],
+    ['collection', 'Fee Collection Report'],
+    ['pending', 'Pending Fee Report'],
+    ['semester', 'Semester-wise Fee Report'],
+    ['asset', 'Asset Report'],
+    ['library', 'Library Report'],
+    ['department', 'Department Report'],
+    ['course', 'Course Report'],
+    ['overall', 'Overall College Report'],
   ];
   let chReport = 'student';
 
@@ -12817,9 +12902,9 @@
       const r = studentReport(rows);
       r.note = 'Every student on record with their attendance and result standing.';
       r.stats = [
-        statCard('🎓', rows.length, 'Students Listed'),
-        statCard('🌿', new Set(rows.map(s => s.branch)).size, 'Specialisations', 'c2'),
-        statCard('📆', new Set(rows.map(s => s.semester)).size, 'Semesters', 'c3'),
+        statCard(ic('cap'), rows.length, 'Students Listed'),
+        statCard(ic('leaf'), new Set(rows.map(s => s.branch)).size, 'Specialisations', 'c2'),
+        statCard(ic('calendar'), new Set(rows.map(s => s.semester)).size, 'Semesters', 'c3'),
       ];
       return r;
     }
@@ -12832,9 +12917,9 @@
       const r = facultyReport(rows);
       r.note = 'Faculty roster with department, qualification and teaching load.';
       r.stats = [
-        statCard('👨‍🏫', rows.length, 'Faculty Listed'),
-        statCard('🏛️', new Set(rows.map(x => x.department)).size, 'Departments', 'c2'),
-        statCard('📚', rows.reduce((a, x) => a + facultyTeachingLoad(x.id).classes, 0), 'Classes Assigned', 'c3'),
+        statCard(ic('user'), rows.length, 'Faculty Listed'),
+        statCard(ic('bank'), new Set(rows.map(x => x.department)).size, 'Departments', 'c2'),
+        statCard(ic('books'), rows.reduce((a, x) => a + facultyTeachingLoad(x.id).classes, 0), 'Classes Assigned', 'c3'),
       ];
       return r;
     }
@@ -12847,9 +12932,9 @@
       const avg = withPct.length
         ? Math.round(withPct.reduce((a, x) => a + x.attendance, 0) / withPct.length) : null;
       r.stats = [
-        statCard('🎓', r.rows.length, 'Students Listed'),
-        statCard('📈', avg === null ? '—' : avg + '%', 'Average Attendance', avg !== null && avg < 75 ? 'c4' : 'c3'),
-        statCard('⚠️', withPct.filter(x => x.attendance < 75).length, 'Below 75%', 'c4'),
+        statCard(ic('cap'), r.rows.length, 'Students Listed'),
+        statCard(ic('trending-up'), avg === null ? '—' : avg + '%', 'Average Attendance', avg !== null && avg < 75 ? 'c4' : 'c3'),
+        statCard(ic('alert'), withPct.filter(x => x.attendance < 75).length, 'Below 75%', 'c4'),
       ];
       return r;
     }
@@ -12867,10 +12952,10 @@
         title: 'Library Report', sheetName: 'Library', subtitle: stamp,
         note: 'Every issue and return on record, with the derived loan status.',
         stats: [
-          statCard('📚', lib.copies, 'Total Copies'),
-          statCard('🔖', lib.issued, 'Currently Issued', 'c2'),
-          statCard('⚠️', lib.overdue, 'Overdue', lib.overdue ? 'c4' : 'c3'),
-          statCard('🧾', rows.length, 'Transactions Listed', 'c2'),
+          statCard(ic('books'), lib.copies, 'Total Copies'),
+          statCard(ic('bookmark'), lib.issued, 'Currently Issued', 'c2'),
+          statCard(ic('alert'), lib.overdue, 'Overdue', lib.overdue ? 'c4' : 'c3'),
+          statCard(ic('receipt'), rows.length, 'Transactions Listed', 'c2'),
         ],
         columns: [
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'student', width: 24 },
@@ -12898,9 +12983,9 @@
         title: 'Department Report', sheetName: 'Departments', subtitle: stamp,
         note: 'Staff, subjects, students, attendance and fees per department.',
         stats: [
-          statCard('🏛️', rows.length, 'Departments'),
-          statCard('👨‍🏫', rows.reduce((a, r) => a + r.faculty, 0), 'Faculty', 'c2'),
-          statCard('🎓', rows.reduce((a, r) => a + r.students, 0), 'Students', 'c3'),
+          statCard(ic('bank'), rows.length, 'Departments'),
+          statCard(ic('user'), rows.reduce((a, r) => a + r.faculty, 0), 'Faculty', 'c2'),
+          statCard(ic('cap'), rows.reduce((a, r) => a + r.students, 0), 'Students', 'c3'),
         ],
         columns: [
           { header: 'Department', key: 'department', width: 26 },
@@ -12936,9 +13021,9 @@
       const r = courseReport(rows);
       r.note = 'Every course with its class, faculty, headcount and attendance.';
       r.stats = [
-        statCard('📚', rows.length, 'Courses Listed'),
-        statCard('🎓', rows.reduce((a, c) => a + studentsOfCourse(c).length, 0), 'Seats Filled', 'c2'),
-        statCard('✅', rows.reduce((a, c) => a + courseAttendance(c.id).sessions, 0), 'Sessions Held', 'c3'),
+        statCard(ic('books'), rows.length, 'Courses Listed'),
+        statCard(ic('cap'), rows.reduce((a, c) => a + studentsOfCourse(c).length, 0), 'Seats Filled', 'c2'),
+        statCard(ic('check'), rows.reduce((a, c) => a + courseAttendance(c.id).sessions, 0), 'Sessions Held', 'c3'),
       ];
       return r;
     }
@@ -12971,10 +13056,10 @@
         title: 'Overall College Report', sheetName: 'Overall', subtitle: stamp,
         note: 'One-page snapshot of the whole institution, as of this moment.',
         stats: [
-          statCard('🎓', students.length, 'Students'),
-          statCard('👨‍🏫', Store.all('faculty').length, 'Faculty', 'c2'),
-          statCard('📈', att.pct === null ? '—' : att.pct + '%', 'Attendance', 'c3'),
-          statCard('💰', money(fin.collected), 'Fees Collected', 'c3'),
+          statCard(ic('cap'), students.length, 'Students'),
+          statCard(ic('user'), Store.all('faculty').length, 'Faculty', 'c2'),
+          statCard(ic('trending-up'), att.pct === null ? '—' : att.pct + '%', 'Attendance', 'c3'),
+          statCard(ic('money'), money(fin.collected), 'Fees Collected', 'c3'),
         ],
         columns: [
           { header: 'Metric', key: 'metric', width: 30 },
@@ -13207,10 +13292,10 @@
         <span class="pill ${st.pill}">${esc(st.label)}</span></div>
       <p class="pl-detail">${esc(st.detail)}</p>
       <div class="stat-grid" style="margin-top:14px">
-        ${statCard('📨', apps.length, 'Applications')}
-        ${statCard('🎤', ivs.length, 'Interviews', 'c2')}
-        ${statCard('📜', offers.length, 'Offers', 'c3')}
-        ${statCard('🚀', openDrives().length, 'Open Drives', 'c2')}
+        ${statCard(ic('mail'), apps.length, 'Applications')}
+        ${statCard(ic('mic'), ivs.length, 'Interviews', 'c2')}
+        ${statCard(ic('scroll'), offers.length, 'Offers', 'c3')}
+        ${statCard(ic('rocket'), openDrives().length, 'Open Drives', 'c2')}
       </div></div>
 
     <div class="panel"><div class="panel-head"><h3>Your Figures</h3></div>
@@ -13333,7 +13418,7 @@
       <input type="hidden" name="offerLetter" id="olValueInput" value="${esc(current || '')}">
       <input type="hidden" name="offerLetterName" id="olNameInput" value="${esc(currentName || '')}">
       <div id="olPreview" style="margin-top:8px;font-size:12.5px;color:var(--muted)">
-        ${current ? `📎 ${esc(currentName || 'offer-letter')}` : 'No file attached.'}</div>
+        ${current ? `${esc(currentName || 'offer-letter')}` : 'No file attached.'}</div>
     </div>`;
   }
   function bindOfferLetterField() {
@@ -13350,7 +13435,7 @@
       reader.onload = () => {
         $('#olValueInput').value = reader.result;
         $('#olNameInput').value = file.name;
-        $('#olPreview').innerHTML = `📎 ${esc(file.name)}`;
+        $('#olPreview').innerHTML = `${esc(file.name)}`;
       };
       reader.onerror = () => toast('Could not read that file.', 'err');
       reader.readAsDataURL(file);
@@ -13410,11 +13495,11 @@
 
     let html = `<div class="welcome-banner">
       <div class="wb-text">
-        <h2>${greeting()}, ${esc(firstName(user.name))} 👋</h2>
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
         <p>Training &amp; Placement Cell · ${prettyDate()}</p>
         <div class="wb-chips">
-          <span>🏢 ${st.companies} companies</span><span>🚀 ${st.activeDrives} active drives</span>
-          <span>🏆 ${st.placed} placed</span><span>📈 ${st.pct}% placement</span>
+          <span>${st.companies} companies</span><span>${st.activeDrives} active drives</span>
+          <span>${st.placed} placed</span><span>${st.pct}% placement</span>
         </div>
       </div>
       <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
@@ -13437,18 +13522,18 @@
 
     html += `<h3 class="ro-section">Overview</h3>
       <div class="stat-grid">
-        ${statCard('🎓', st.students, 'Total Students')}
-        ${statCard('✅', st.eligible, 'Eligible Students', 'c3')}
-        ${statCard('🏢', st.companies, 'Companies', 'c2')}
-        ${statCard('🚀', st.activeDrives, `Active Drives (of ${st.drives})`, 'c2')}
-        ${statCard('📨', st.applications, 'Applications')}
-        ${statCard('🏆', st.placed, 'Placed Students', 'c3')}
-        ${statCard('🔍', st.unplaced, 'Unplaced Students', 'c4')}
-        ${statCard('🚫', st.notJoined, 'Not Joined', 'c4')}
-        ${statCard('🚪', st.left, 'Left After Joining', 'c4')}
-        ${statCard('📈', st.pct + '%', `Placement (of ${st.denom} students)`, st.pct >= 50 ? 'c3' : 'c4')}
-        ${statCard('💰', money(st.highest), 'Highest Package', 'c3')}
-        ${statCard('📊', money(st.average), 'Average Package', 'c2')}
+        ${statCard(ic('cap'), st.students, 'Total Students')}
+        ${statCard(ic('check'), st.eligible, 'Eligible Students', 'c3')}
+        ${statCard(ic('building'), st.companies, 'Companies', 'c2')}
+        ${statCard(ic('rocket'), st.activeDrives, `Active Drives (of ${st.drives})`, 'c2')}
+        ${statCard(ic('mail'), st.applications, 'Applications')}
+        ${statCard(ic('trophy'), st.placed, 'Placed Students', 'c3')}
+        ${statCard(ic('search'), st.unplaced, 'Unplaced Students', 'c4')}
+        ${statCard(ic('ban'), st.notJoined, 'Not Joined', 'c4')}
+        ${statCard(ic('door'), st.left, 'Left After Joining', 'c4')}
+        ${statCard(ic('trending-up'), st.pct + '%', `Placement (of ${st.denom} students)`, st.pct >= 50 ? 'c3' : 'c4')}
+        ${statCard(ic('money'), money(st.highest), 'Highest Package', 'c3')}
+        ${statCard(ic('chart'), money(st.average), 'Average Package', 'c2')}
       </div>`;
 
     html += `<div class="dash-2col">
@@ -13485,7 +13570,7 @@
           : `<tr><td colspan="4" class="empty">No students on record.</td></tr>`}
         </tbody></table></div>
       </div>
-      <div class="panel"><div class="panel-head"><h3>📅 Upcoming Placement Events</h3>
+      <div class="panel"><div class="panel-head"><h3>Upcoming Placement Events</h3>
         <span style="font-size:12.5px;color:var(--muted)">Next ${upcoming.length}</span></div>
         <div class="lib-events-list">${upcoming.length ? upcoming.map(e => {
           const d = new Date(e.date + 'T00:00:00');
@@ -13502,7 +13587,7 @@
     </div>`;
 
     html += `<div class="panel"><div class="panel-head"><h3>Active Drives</h3>
-      <button class="btn-primary btn-sm" id="pdGoDrives">🚀 Manage Drives</button></div>
+      <button class="btn-primary btn-sm" id="pdGoDrives">Manage Drives</button></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Company</th><th>Role</th><th style="text-align:right">Package</th><th>Drive Date</th>
         <th style="text-align:right">Eligible</th><th style="text-align:right">Applied</th><th>Status</th>
@@ -13578,7 +13663,7 @@
           <td><span class="pill ${r.eligibleDrives ? 'green' : 'amber'}">${r.eligibleDrives} drive(s)</span></td>
           <td><span class="pill ${r.pill}">${esc(r.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Placement history">👁 History</button>
+            <button class="btn-sm btn-outline" data-hist="${r.sid}" title="Placement history">History</button>
           </div></td>
           <td style="text-align:right${r.backlogs ? ';color:var(--red);font-weight:600' : ''}">${r.backlogs}</td>
         </tr>`).join('')
@@ -13664,10 +13749,10 @@
           Sem ${esc(String(s.semester || '—'))} · Batch ${esc(s.batch || '—')}</p></div>
       </div>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('🎯', studentCgpa(s) ?? '—', 'CGPA')}
-        ${statCard('⚠️', +s.backlogs || 0, 'Backlogs', (+s.backlogs || 0) ? 'c4' : 'c3')}
-        ${statCard('📨', apps.length, 'Applications', 'c2')}
-        ${statCard('🏆', status.label, 'Status', status.pill === 'green' ? 'c3' : status.pill === 'red' ? 'c4' : 'c2')}
+        ${statCard(ic('target'), studentCgpa(s) ?? '—', 'CGPA')}
+        ${statCard(ic('alert'), +s.backlogs || 0, 'Backlogs', (+s.backlogs || 0) ? 'c4' : 'c3')}
+        ${statCard(ic('mail'), apps.length, 'Applications', 'c2')}
+        ${statCard(ic('trophy'), status.label, 'Status', status.pill === 'green' ? 'c3' : status.pill === 'red' ? 'c4' : 'c2')}
       </div>
       <h4 class="ro-sub">Open Drives</h4>
       <div class="tbl-wrap"><table><thead><tr><th>Company</th><th>Role</th>
@@ -14076,8 +14161,8 @@
           <option value="Approved">Approved</option>
           <option value="Rejected">Rejected</option>
         </select>
-        <button class="btn-outline btn-sm" id="sbXls">⬇ Excel</button>
-        <button class="btn-outline btn-sm" id="sbLink">🔗 Form Link</button>
+        <button class="btn-outline btn-sm" id="sbXls">Excel</button>
+        <button class="btn-outline btn-sm" id="sbLink">Form Link</button>
       </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
         Students fill the public form themselves; nothing here touches the roll until you approve it.
@@ -14121,11 +14206,11 @@
       };
       const draw = () => {
         const all = Store.all('submissions');
-        $('#sbStats').innerHTML = `${statCard('📝', all.filter(r => (r.status || 'Pending') === 'Pending').length,
+        $('#sbStats').innerHTML = `${statCard(ic('notes'), all.filter(r => (r.status || 'Pending') === 'Pending').length,
             'Waiting for review', all.some(r => (r.status || 'Pending') === 'Pending') ? 'c4' : 'c3')}
-          ${statCard('✅', all.filter(r => r.status === 'Approved').length, 'Approved', 'c2')}
-          ${statCard('🚫', all.filter(r => r.status === 'Rejected').length, 'Rejected', 'c3')}
-          ${statCard('🔗', all.length, 'Received in total')}`;
+          ${statCard(ic('check'), all.filter(r => r.status === 'Approved').length, 'Approved', 'c2')}
+          ${statCard(ic('ban'), all.filter(r => r.status === 'Rejected').length, 'Rejected', 'c3')}
+          ${statCard(ic('link'), all.length, 'Received in total')}`;
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         $('#sbBody').innerHTML = rows.length ? pageSlice(rows, page).map(r => {
@@ -14146,11 +14231,11 @@
             <td style="white-space:nowrap;font-size:12.5px">${when(r.submittedAt)}</td>
             <td><span class="pill ${SUB_STATUS_PILL[st] || 'amber'}">${esc(st)}</span></td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-outline" data-view="${r.id}">👁 View</button>
-              ${canEdit && st !== 'Approved' ? `<button class="btn-sm btn-outline" data-ed="${r.id}" title="Correct the form">✏️ Edit</button>` : ''}
-              ${canEdit && st === 'Pending' ? `<button class="btn-sm btn-edit" data-ok="${r.id}">✓ Approve</button>
+              <button class="btn-sm btn-outline" data-view="${r.id}">View</button>
+              ${canEdit && st !== 'Approved' ? `<button class="btn-sm btn-outline" data-ed="${r.id}" title="Correct the form">Edit</button>` : ''}
+              ${canEdit && st === 'Pending' ? `<button class="btn-sm btn-edit" data-ok="${r.id}">Approve</button>
               <button class="btn-sm btn-del" data-no="${r.id}">Reject</button>` : ''}
-              ${canEdit && st === 'Rejected' ? `<button class="btn-sm btn-edit" data-back="${r.id}">↩ Recover</button>` : ''}
+              ${canEdit && st === 'Rejected' ? `<button class="btn-sm btn-edit" data-back="${r.id}">Recover</button>` : ''}
             </div></td></tr>`;
         }).join('') : `<tr><td colspan="8" class="empty">No forms ${
           $('#sbStatus').value === 'Pending' ? 'waiting for review' : 'found'}.</td></tr>`;
@@ -14347,10 +14432,10 @@
         ['Regular Medication', d.medication], ['Notes', d.healthNotes]])}
       ${block('Emergency Contact', [['Name', d.emergencyName], ['Mobile', d.emergencyPhone]])}
       <div class="form-actions">
-        ${st !== 'Approved' && !readOnly() ? `<button type="button" class="btn-outline" id="smEdit">✏️ Edit</button>` : ''}
+        ${st !== 'Approved' && !readOnly() ? `<button type="button" class="btn-outline" id="smEdit">Edit</button>` : ''}
         ${st === 'Pending' && !readOnly() ? `<button type="button" class="btn-del" id="smNo">Reject</button>
-        <button type="button" class="btn-primary" id="smOk">✓ Approve</button>` : ''}
-        ${st === 'Rejected' && !readOnly() ? `<button type="button" class="btn-primary" id="smBack">↩ Recover</button>` : ''}
+        <button type="button" class="btn-primary" id="smOk">Approve</button>` : ''}
+        ${st === 'Rejected' && !readOnly() ? `<button type="button" class="btn-primary" id="smBack">Recover</button>` : ''}
         <button type="button" class="btn-outline" id="cx">Close</button>
       </div>`, true);
     $('#cx').onclick = closeModal;
@@ -14626,10 +14711,10 @@
             ${allRoleKeys().map(r => `<option value="${esc(r)}">${esc(roleLabel(r))}</option>`).join('')}</select>
           <select class="filter-sel" id="usStatus"><option value="">Any Status</option>
             <option value="Active">Active</option><option value="Inactive">Inactive</option></select>
-          <button class="btn-outline btn-sm" id="usRoles">🛡 Roles</button>
-          <button class="btn-outline btn-sm" id="usAudit">🕘 Audit Log</button>
-          <button class="btn-outline btn-sm" id="usTrash">🗑 Trash</button>
-          <button class="btn-outline btn-sm" id="usBackup">⬇ Download Backup</button>
+          <button class="btn-outline btn-sm" id="usRoles">Roles</button>
+          <button class="btn-outline btn-sm" id="usAudit">Audit Log</button>
+          <button class="btn-outline btn-sm" id="usTrash">Trash</button>
+          <button class="btn-outline btn-sm" id="usBackup">Download Backup</button>
           <button class="btn-primary" id="usAdd">+ Create User</button>
         </div></div>
       <p style="font-size:13px;color:var(--muted);margin:-6px 0 14px">
@@ -14656,11 +14741,11 @@
       const draw = () => {
         const rows = rowsFor();
         const all = Store.all('users');
-        $('#usStats').innerHTML = `${statCard('👥', all.length, 'Logins')}
-          ${statCard('✅', all.filter(userActive).length, 'Active', 'c2')}
-          ${statCard('🚫', all.filter(u => !userActive(u)).length, 'Deactivated',
+        $('#usStats').innerHTML = `${statCard(ic('users'), all.length, 'Logins')}
+          ${statCard(ic('check'), all.filter(userActive).length, 'Active', 'c2')}
+          ${statCard(ic('ban'), all.filter(u => !userActive(u)).length, 'Deactivated',
             all.some(u => !userActive(u)) ? 'c4' : 'c3')}
-          ${statCard('🛡', allRoleKeys().length, 'Roles', 'c3')}`;
+          ${statCard(ic('shield'), allRoleKeys().length, 'Roles', 'c3')}`;
         page = Math.min(page, pageCount(rows.length));
         $('#usBody').innerHTML = rows.length ? pageSlice(rows, page).map(u => {
           const own = userPerms(u);
@@ -14682,11 +14767,11 @@
               isAdmin ? 'Everything — the administrator is never narrowed'
                       : esc(permSummary(own || rolePerms(u.role), ceiling))}</td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-outline" data-view="${u.id}">👁 Access</button>
+              <button class="btn-sm btn-outline" data-view="${u.id}">Access</button>
               ${noAccessCtl ? '' : `<button class="btn-sm btn-edit" data-perm="${u.id}">Access Control</button>`}
               <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
               ${u.id === user.id ? '' : `<button class="btn-sm btn-outline" data-toggle="${u.id}">${
-                active ? '🚫 Deactivate' : '✅ Activate'}</button>
+                active ? 'Deactivate' : 'Activate'}</button>
               <button class="btn-sm btn-del" data-del="${u.id}">Delete</button>`}
             </div></td></tr>`;
         }).join('') : `<tr><td colspan="7" class="empty">No login accounts found.</td></tr>`;
@@ -14784,7 +14869,7 @@
         This is the account you are signed in with, so its role and status are locked — nobody can
         lock themselves out or hand themselves a bigger role from here.</p>` : ''}
       <div class="form-actions">
-        ${uid ? `<button type="button" class="btn-outline" id="uxReset">↺ Reset Password</button>` : ''}
+        ${uid ? `<button type="button" class="btn-outline" id="uxReset">Reset Password</button>` : ''}
         <button type="button" class="btn-outline" id="cx">Cancel</button>
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
     $('#cx').onclick = closeModal;
@@ -14909,7 +14994,7 @@
       </tr></thead><tbody>${rows.map(([k, label]) => `<tr>
         <td class="pg-mod">${esc(label)}</td>
         ${ACTIONS.map(([a]) => `<td>${perms[k].includes(a)
-          ? '<span style="color:var(--green);font-weight:700">✓</span>'
+          ? '<span style="color:var(--green);font-weight:700"></span>'
           : '<span style="color:var(--border)">·</span>'}</td>`).join('')}
       </tr>`).join('')}</tbody></table></div>`
         : `<p class="empty" style="padding:18px 2px">No modules — this account opens the dashboard
@@ -15199,9 +15284,9 @@
       const draw = () => {
         const rows = rowsFor();
         const admins = Store.all('users').filter(u => u.role === SUBADMIN_ROLE);
-        $('#amStats').innerHTML = `${statCard('👥', admins.length, 'Admins')}
-          ${statCard('✅', admins.filter(userActive).length, 'Active', 'c2')}
-          ${statCard('🚫', admins.filter(u => !userActive(u)).length, 'Deactivated',
+        $('#amStats').innerHTML = `${statCard(ic('users'), admins.length, 'Admins')}
+          ${statCard(ic('check'), admins.filter(userActive).length, 'Active', 'c2')}
+          ${statCard(ic('ban'), admins.filter(u => !userActive(u)).length, 'Deactivated',
             admins.some(u => !userActive(u)) ? 'c4' : 'c3')}`;
         $('#amBody').innerHTML = rows.length ? rows.map(u => {
           const perms = effectivePerms(u);
@@ -15215,11 +15300,11 @@
               : '<small style="color:var(--muted)">none yet</small>'}</td>
             <td style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${esc(when(adminLastLogin(u.id)))}</td>
             <td><div class="row-actions">
-              <button class="btn-sm btn-edit" data-perm="${u.id}">🔐 Permissions</button>
+              <button class="btn-sm btn-edit" data-perm="${u.id}">Permissions</button>
               <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
-              <button class="btn-sm btn-outline" data-reset="${u.id}">↺ Password</button>
-              <button class="btn-sm btn-outline" data-log="${u.id}">🕘 Activity</button>
-              <button class="btn-sm btn-outline" data-toggle="${u.id}">${active ? '🚫 Deactivate' : '✅ Activate'}</button>
+              <button class="btn-sm btn-outline" data-reset="${u.id}">Password</button>
+              <button class="btn-sm btn-outline" data-log="${u.id}">Activity</button>
+              <button class="btn-sm btn-outline" data-toggle="${u.id}">${active ? 'Deactivate' : 'Activate'}</button>
               <button class="btn-sm btn-del" data-del="${u.id}">Delete</button>
             </div></td></tr>`;
         }).join('') : `<tr><td colspan="6" class="empty">No Admin accounts yet. Create one to grant scoped access.</td></tr>`;
@@ -15404,7 +15489,7 @@
       : [];
     if (!fields.length) return esc(r.summary || '—');
     return fields.map(([k, v]) => `<div><b>${esc(k)}</b> `
-      + `<span style="color:var(--muted)">${esc(v.from === '' ? '—' : v.from)}</span> → `
+      + `<span style="color:var(--muted)">${esc(v.from === '' ? '—' : v.from)}</span> `
       + `<span style="color:var(--ink)">${esc(v.to === '' ? '—' : v.to)}</span></div>`).join('');
   }
 
@@ -15433,7 +15518,7 @@
         <td>${esc(r.deletedBy || '—')}</td>
         <td style="white-space:nowrap">${esc(when(r.deletedAt))}</td>
         <td style="white-space:nowrap;text-align:right">
-          <button class="btn-outline btn-sm" data-restore="${esc(r.id)}">↺ Restore</button>
+          <button class="btn-outline btn-sm" data-restore="${esc(r.id)}">Restore</button>
           <button class="btn-del btn-sm" data-purge="${esc(r.id)}">Delete forever</button>
         </td></tr>`).join('')}</tbody></table></div>`
         : ''}
@@ -15497,9 +15582,9 @@
       const draw = () => {
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
-        $('#coStats').innerHTML = `${statCard('🏢', rows.length, 'Companies')}
-          ${statCard('🚀', rows.reduce((a, c) => a + c.driveCount, 0), 'Drives Conducted', 'c2')}
-          ${statCard('🏆', rows.reduce((a, c) => a + c.placed, 0), 'Students Placed', 'c3')}`;
+        $('#coStats').innerHTML = `${statCard(ic('building'), rows.length, 'Companies')}
+          ${statCard(ic('rocket'), rows.reduce((a, c) => a + c.driveCount, 0), 'Drives Conducted', 'c2')}
+          ${statCard(ic('trophy'), rows.reduce((a, c) => a + c.placed, 0), 'Students Placed', 'c3')}`;
         $('#coBody').innerHTML = rows.length ? pageSlice(rows, page).map(c => `<tr>
           <td class="mono">${esc(c.id)}</td>
           <td><strong>${esc(c.name)}</strong>${c.website ? `<br><small style="color:var(--muted)">${esc(c.website)}</small>` : ''}</td>
@@ -15510,7 +15595,7 @@
           <td style="text-align:right">${c.driveCount}</td>
           <td style="text-align:right">${c.placed}</td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${c.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${c.id}">View</button>
             <button class="btn-sm btn-edit" data-edit="${c.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${c.id}">Delete</button>
           </div></td></tr>`).join('')
@@ -15618,10 +15703,10 @@
     const row = (k, v) => `<tr><td style="font-weight:600;width:170px">${esc(k)}</td><td>${esc(v || '—')}</td></tr>`;
     openModal('Company — ' + c.name, `
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('🚀', drives.length, 'Drives')}
-        ${statCard('📜', offers.length, 'Offers Issued', 'c2')}
-        ${statCard('🏆', placed.length, 'Students Placed', 'c3')}
-        ${statCard('💰', money(placed.length ? Math.round(placed.reduce((a, o) => a + (+o.package || 0), 0) / placed.length) : 0), 'Average Package', 'c2')}
+        ${statCard(ic('rocket'), drives.length, 'Drives')}
+        ${statCard(ic('scroll'), offers.length, 'Offers Issued', 'c2')}
+        ${statCard(ic('trophy'), placed.length, 'Students Placed', 'c3')}
+        ${statCard(ic('money'), money(placed.length ? Math.round(placed.reduce((a, o) => a + (+o.package || 0), 0) / placed.length) : 0), 'Average Package', 'c2')}
       </div>
       <h4 class="ro-sub">Company Details</h4>
       <div class="tbl-wrap"><table><tbody>
@@ -15699,10 +15784,10 @@
       const draw = () => {
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
-        $('#drStats').innerHTML = `${statCard('🚀', rows.length, 'Drives Listed')}
-          ${statCard('✅', rows.filter(d => OPEN_DRIVE_STATUS.includes(d.status || 'Draft')).length, 'Active', 'c3')}
-          ${statCard('📨', rows.reduce((a, d) => a + d.applied, 0), 'Applications', 'c2')}
-          ${statCard('🎯', rows.reduce((a, d) => a + d.selected, 0), 'Selections', 'c3')}`;
+        $('#drStats').innerHTML = `${statCard(ic('rocket'), rows.length, 'Drives Listed')}
+          ${statCard(ic('check'), rows.filter(d => OPEN_DRIVE_STATUS.includes(d.status || 'Draft')).length, 'Active', 'c3')}
+          ${statCard(ic('mail'), rows.reduce((a, d) => a + d.applied, 0), 'Applications', 'c2')}
+          ${statCard(ic('target'), rows.reduce((a, d) => a + d.selected, 0), 'Selections', 'c3')}`;
         $('#drBody').innerHTML = rows.length ? pageSlice(rows, page).map(d => `<tr>
           <td class="mono">${esc(d.id)}</td><td>${esc(d.company)}</td>
           <td><strong>${esc(d.jobRole || '—')}</strong>${d.location ? `<br><small style="color:var(--muted)">${esc(d.location)}</small>` : ''}</td>
@@ -15714,7 +15799,7 @@
           <td style="text-align:right">${d.applied}</td>
           <td><span class="pill ${DRIVE_PILL[d.status] || 'blue'}">${esc(d.status || 'Draft')}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${d.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${d.id}">View</button>
             <button class="btn-sm btn-edit" data-edit="${d.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${d.id}">Delete</button>
           </div></td></tr>`).join('')
@@ -15856,10 +15941,10 @@
         ${esc(companyName(d.companyId))} · ${esc(d.location || '—')} ·
         <span class="pill ${DRIVE_PILL[d.status] || 'blue'}">${esc(d.status || 'Draft')}</span></p>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('💰', money(d.package), 'Package')}
-        ${statCard('✅', eligible.length, 'Eligible Students', 'c3')}
-        ${statCard('📨', apps.length, 'Applications', 'c2')}
-        ${statCard('🎯', apps.filter(a => a.status === 'Selected').length, 'Selected', 'c3')}
+        ${statCard(ic('money'), money(d.package), 'Package')}
+        ${statCard(ic('check'), eligible.length, 'Eligible Students', 'c3')}
+        ${statCard(ic('mail'), apps.length, 'Applications', 'c2')}
+        ${statCard(ic('target'), apps.filter(a => a.status === 'Selected').length, 'Selected', 'c3')}
       </div>
       <h4 class="ro-sub">Drive Details</h4>
       <div class="tbl-wrap"><table><tbody>
@@ -15888,7 +15973,7 @@
         : `<tr><td colspan="5" class="empty">Every eligible student has applied.</td></tr>`}
       </tbody></table></div>
       <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-        <button class="btn-primary" id="goApps">📨 Manage Applications</button></div>`, true);
+        <button class="btn-primary" id="goApps">Manage Applications</button></div>`, true);
     $('#cx').onclick = closeModal;
     $('#goApps').onclick = () => { closeModal(); appDriveFilter = id; navigate('applications'); };
   }
@@ -15938,10 +16023,10 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         const c = (s) => rows.filter(r => (r.status || 'Applied') === s).length;
-        $('#apStats').innerHTML = `${statCard('📨', rows.length, 'Applications')}
-          ${statCard('⭐', c('Shortlisted'), 'Shortlisted', 'c2')}
-          ${statCard('🎯', c('Selected'), 'Selected', 'c3')}
-          ${statCard('❌', c('Rejected'), 'Rejected', c('Rejected') ? 'c4' : 'c3')}`;
+        $('#apStats').innerHTML = `${statCard(ic('mail'), rows.length, 'Applications')}
+          ${statCard(ic('star'), c('Shortlisted'), 'Shortlisted', 'c2')}
+          ${statCard(ic('target'), c('Selected'), 'Selected', 'c3')}
+          ${statCard(ic('x'), c('Rejected'), 'Rejected', c('Rejected') ? 'c4' : 'c3')}`;
         $('#apBody').innerHTML = rows.length ? pageSlice(rows, page).map(a => `<tr>
           <td class="mono">${esc(a.id)}</td><td>${esc(a.name)}</td><td class="mono">${esc(a.roll)}</td>
           <td>${esc(a.branch)}</td>
@@ -15951,7 +16036,7 @@
           <td><div class="row-actions">
             <button class="btn-sm btn-edit" data-status="${a.id}">Status</button>
             ${a.status === 'Selected' && !Store.all('offers').some(o => o.studentId === a.studentId && o.driveId === a.driveId)
-              ? `<button class="btn-sm btn-primary" data-offer="${a.id}" title="Create the offer">📜 Offer</button>` : ''}
+              ? `<button class="btn-sm btn-primary" data-offer="${a.id}" title="Create the offer">Offer</button>` : ''}
             <button class="btn-sm btn-outline" data-edit="${a.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${a.id}">Delete</button>
           </div></td></tr>`).join('')
@@ -16039,7 +16124,7 @@
       const opts = all.filter(s => !taken.includes(s.id)).map(s => {
         const el = d ? driveEligibility(s, d) : { ok: true };
         return `<option value="${s.id}" ${s.id === a.studentId ? 'selected' : ''}>
-          ${esc(s.roll)} — ${esc(s.name)}${el.ok ? '' : '  ⚠ not eligible'}</option>`;
+          ${esc(s.roll)} — ${esc(s.name)}${el.ok ? '' : '  not eligible'}</option>`;
       }).join('');
       $('#apfStudent').innerHTML = opts || `<option value="">No student left to add</option>`;
       const note = () => {
@@ -16047,8 +16132,8 @@
         if (!s || !d) { $('#apfNote').textContent = ''; return; }
         const el = driveEligibility(s, d);
         $('#apfNote').textContent = el.ok
-          ? '✓ Meets the eligibility criteria.'
-          : '⚠ Does not meet: ' + el.reasons.join(', ');
+          ? 'Meets the eligibility criteria.'
+          : 'Does not meet: ' + el.reasons.join(', ');
         $('#apfNote').style.color = el.ok ? 'var(--green)' : 'var(--red)';
       };
       $('#apfStudent').onchange = note;
@@ -16146,10 +16231,10 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         const c = (s) => rows.filter(r => (r.status || 'Scheduled') === s).length;
-        $('#ivStats').innerHTML = `${statCard('🎤', rows.length, 'Interviews')}
-          ${statCard('📅', c('Scheduled'), 'Scheduled', 'c2')}
-          ${statCard('✅', c('Completed'), 'Completed', 'c3')}
-          ${statCard('🚫', c('Cancelled') + c('No Show'), 'Cancelled / No Show', 'c4')}`;
+        $('#ivStats').innerHTML = `${statCard(ic('mic'), rows.length, 'Interviews')}
+          ${statCard(ic('calendar'), c('Scheduled'), 'Scheduled', 'c2')}
+          ${statCard(ic('check'), c('Completed'), 'Completed', 'c3')}
+          ${statCard(ic('ban'), c('Cancelled') + c('No Show'), 'Cancelled / No Show', 'c4')}`;
         $('#ivBody').innerHTML = rows.length ? pageSlice(rows, page).map(i => `<tr>
           <td class="mono">${esc(i.id)}</td>
           <td>${esc(i.name)}<br><small style="color:var(--muted)">${esc(i.roll)}</small></td>
@@ -16284,10 +16369,10 @@
         page = Math.min(page, pageCount(rows.length));
         const placed = rows.filter(o => PLACED_OFFER_STATUS.includes(o.status));
         const pkgs = placed.map(o => +o.package || 0).filter(n => n > 0);
-        $('#plStats').innerHTML = `${statCard('🎯', rows.length, 'Selections Listed')}
-          ${statCard('🏆', placed.length, 'Placed', 'c3')}
-          ${statCard('💰', money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest Package', 'c3')}
-          ${statCard('📊', money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average Package', 'c2')}`;
+        $('#plStats').innerHTML = `${statCard(ic('target'), rows.length, 'Selections Listed')}
+          ${statCard(ic('trophy'), placed.length, 'Placed', 'c3')}
+          ${statCard(ic('money'), money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest Package', 'c3')}
+          ${statCard(ic('chart'), money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average Package', 'c2')}`;
         $('#plBody').innerHTML = rows.length ? pageSlice(rows, page).map(o => `<tr>
           <td class="mono">${esc(o.roll)}</td><td>${esc(o.name)}</td><td>${esc(o.branch)}</td>
           <td>${esc(o.company)}</td><td>${esc(o.jobRole || '—')}</td>
@@ -16295,7 +16380,7 @@
           <td>${esc(o.joiningDate || '—')}</td>
           <td><span class="pill ${OFFER_PILL[o.status] || 'blue'}">${esc(o.status || 'Offered')}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${o.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${o.id}">View</button>
             <button class="btn-sm btn-edit" data-edit="${o.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${o.id}">Delete</button>
           </div></td></tr>`).join('')
@@ -16407,10 +16492,10 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         const c = (s) => rows.filter(r => r.status === s).length;
-        $('#ofStats').innerHTML = `${statCard('📜', rows.length, 'Offers')}
-          ${statCard('⏳', c('Offered'), 'Awaiting Response', 'c2')}
-          ${statCard('✅', c('Accepted') + c('Joined'), 'Accepted / Joined', 'c3')}
-          ${statCard('📎', rows.filter(r => r.offerLetter).length, 'Letters Attached', 'c2')}`;
+        $('#ofStats').innerHTML = `${statCard(ic('scroll'), rows.length, 'Offers')}
+          ${statCard(ic('pending'), c('Offered'), 'Awaiting Response', 'c2')}
+          ${statCard(ic('check'), c('Accepted') + c('Joined'), 'Accepted / Joined', 'c3')}
+          ${statCard(ic('paperclip'), rows.filter(r => r.offerLetter).length, 'Letters Attached', 'c2')}`;
         $('#ofBody').innerHTML = rows.length ? pageSlice(rows, page).map(o => `<tr>
           <td class="mono">${esc(o.id)}</td>
           <td>${esc(o.name)}<br><small style="color:var(--muted)">${esc(o.roll)} · ${esc(o.branch)}</small></td>
@@ -16418,11 +16503,11 @@
           <td style="text-align:right;font-weight:600">${money(o.package)}</td>
           <td>${esc(o.offerDate || '—')}</td><td>${esc(o.joiningDate || '—')}</td>
           <td>${o.offerLetter
-            ? `<button class="btn-sm btn-outline" data-letter="${o.id}">📎 Open</button>`
+            ? `<button class="btn-sm btn-outline" data-letter="${o.id}">Open</button>`
             : '<small style="color:var(--muted)">—</small>'}</td>
           <td><span class="pill ${OFFER_PILL[o.status] || 'blue'}">${esc(o.status)}</span></td>
           <td><div class="row-actions">
-            <button class="btn-sm btn-outline" data-view="${o.id}">👁 View</button>
+            <button class="btn-sm btn-outline" data-view="${o.id}">View</button>
             <button class="btn-sm btn-edit" data-edit="${o.id}">Edit</button>
             <button class="btn-sm btn-del" data-del="${o.id}">Delete</button>
           </div></td></tr>`).join('')
@@ -16559,9 +16644,9 @@
           <span class="pill ${OFFER_PILL[o.status] || 'blue'}">${esc(o.status || 'Offered')}</span></p></div>
       </div>
       <div class="stat-grid" style="margin-bottom:18px">
-        ${statCard('🏢', companyName(o.companyId), 'Company')}
-        ${statCard('💰', money(o.package), 'Package', 'c3')}
-        ${statCard('📅', o.joiningDate || '—', 'Joining Date', 'c2')}
+        ${statCard(ic('building'), companyName(o.companyId), 'Company')}
+        ${statCard(ic('money'), money(o.package), 'Package', 'c3')}
+        ${statCard(ic('calendar'), o.joiningDate || '—', 'Joining Date', 'c2')}
       </div>
       <h4 class="ro-sub">Offer Details</h4>
       <div class="tbl-wrap"><table><tbody>
@@ -16575,7 +16660,7 @@
         ${row('Remarks', o.remarks)}
       </tbody></table></div>
       <div class="form-actions"><button class="btn-outline" id="cx">Close</button>
-        ${o.offerLetter ? `<button class="btn-primary" id="ol">📎 View Offer Letter</button>` : ''}</div>`, true);
+        ${o.offerLetter ? `<button class="btn-primary" id="ol">View Offer Letter</button>` : ''}</div>`, true);
     $('#cx').onclick = closeModal;
     if (o.offerLetter) $('#ol').onclick = () => openOfferLetter(id);
   }
@@ -16639,10 +16724,10 @@
         const rows = rowsFor();
         page = Math.min(page, pageCount(rows.length));
         const td = today();
-        $('#pcStats').innerHTML = `${statCard('📅', rows.length, 'Dates Listed')}
-          ${statCard('🚀', rows.filter(r => r.type === 'Drive').length, 'Drives', 'c3')}
-          ${statCard('🎤', rows.filter(r => r.type === 'Interview').length, 'Interviews', 'c2')}
-          ${statCard('⏰', rows.filter(r => r.date >= td).length, 'Still Upcoming', 'c2')}`;
+        $('#pcStats').innerHTML = `${statCard(ic('calendar'), rows.length, 'Dates Listed')}
+          ${statCard(ic('rocket'), rows.filter(r => r.type === 'Drive').length, 'Drives', 'c3')}
+          ${statCard(ic('mic'), rows.filter(r => r.type === 'Interview').length, 'Interviews', 'c2')}
+          ${statCard(ic('clock'), rows.filter(r => r.date >= td).length, 'Still Upcoming', 'c2')}`;
 
         // a compact month-grouped timeline above the table
         const groups = {};
@@ -16751,14 +16836,14 @@
     return `NMIET B-SCHOOL · Training & Placement Cell · Generated on ${new Date().toLocaleString('en-IN')}`;
   }
   const PL_REPORTS = [
-    ['placement', '🏆 Placement Report'],
-    ['company', '🏢 Company-wise Report'],
-    ['branch', '🌿 Specialisation-wise Report'],
-    ['package', '💰 Package Report'],
-    ['drive', '🚀 Drive Report'],
-    ['application', '📨 Application Report'],
-    ['unplaced', '⏳ Unplaced Students'],
-    ['left', '🚪 Not Joined / Left'],
+    ['placement', 'Placement Report'],
+    ['company', 'Company-wise Report'],
+    ['branch', 'Specialisation-wise Report'],
+    ['package', 'Package Report'],
+    ['drive', 'Drive Report'],
+    ['application', 'Application Report'],
+    ['unplaced', 'Unplaced Students'],
+    ['left', 'Not Joined / Left'],
   ];
   let plReport = 'placement';
 
@@ -16833,10 +16918,10 @@
         title: 'Placement Report', sheetName: 'Placements', subtitle: stamp,
         note: 'Every offer on record, with the student, company, package and joining date.',
         stats: [
-          statCard('📜', rows.length, 'Offers Listed'),
-          statCard('🏆', placed.length, 'Placed', 'c3'),
-          statCard('💰', money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest', 'c3'),
-          statCard('📊', money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average', 'c2'),
+          statCard(ic('scroll'), rows.length, 'Offers Listed'),
+          statCard(ic('trophy'), placed.length, 'Placed', 'c3'),
+          statCard(ic('money'), money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest', 'c3'),
+          statCard(ic('chart'), money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average', 'c2'),
         ],
         columns: placementColumns(), rows,
         totals: { roll: 'TOTAL', name: rows.length + ' offers',
@@ -16876,9 +16961,9 @@
         title: 'Company-wise Placement Report', sheetName: 'By Company', subtitle: stamp,
         note: 'Recruitment activity and outcome for every company on record.',
         stats: [
-          statCard('🏢', rows.length, 'Companies'),
-          statCard('🚀', rows.reduce((a, g) => a + g.drives, 0), 'Drives', 'c2'),
-          statCard('🏆', rows.reduce((a, g) => a + g.placed, 0), 'Placed', 'c3'),
+          statCard(ic('building'), rows.length, 'Companies'),
+          statCard(ic('rocket'), rows.reduce((a, g) => a + g.drives, 0), 'Drives', 'c2'),
+          statCard(ic('trophy'), rows.reduce((a, g) => a + g.placed, 0), 'Placed', 'c3'),
         ],
         columns: [
           { header: 'Company', key: 'company', width: 26 }, { header: 'Industry', key: 'industry', width: 20 },
@@ -16925,9 +17010,9 @@
         title: 'Specialisation-wise Placement Report', sheetName: 'By Branch', subtitle: stamp,
         note: 'Headcount, eligibility and placement outcome for each specialisation.',
         stats: [
-          statCard('🌿', rows.length, 'Specialisations'),
-          statCard('🎓', rows.reduce((a, g) => a + g.students, 0), 'Students', 'c2'),
-          statCard('🏆', rows.reduce((a, g) => a + g.placed, 0), 'Placed', 'c3'),
+          statCard(ic('leaf'), rows.length, 'Specialisations'),
+          statCard(ic('cap'), rows.reduce((a, g) => a + g.students, 0), 'Students', 'c2'),
+          statCard(ic('trophy'), rows.reduce((a, g) => a + g.placed, 0), 'Placed', 'c3'),
         ],
         columns: [
           { header: 'Specialisation', key: 'branch', width: 12 },
@@ -16964,11 +17049,11 @@
         title: 'Package Report', sheetName: 'Packages', subtitle: stamp,
         note: 'Accepted and joined offers ranked by package — the basis for the highest, average and median figures.',
         stats: [
-          statCard('🏆', rows.length, 'Placed Students'),
-          statCard('💰', money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest', 'c3'),
-          statCard('📊', money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average', 'c2'),
-          statCard('📉', money(median), 'Median', 'c2'),
-          statCard('🔻', money(pkgs.length ? Math.min(...pkgs) : 0), 'Lowest', 'c2'),
+          statCard(ic('trophy'), rows.length, 'Placed Students'),
+          statCard(ic('money'), money(pkgs.length ? Math.max(...pkgs) : 0), 'Highest', 'c3'),
+          statCard(ic('chart'), money(pkgs.length ? Math.round(pkgs.reduce((a, b) => a + b, 0) / pkgs.length) : 0), 'Average', 'c2'),
+          statCard(ic('trending-down'), money(median), 'Median', 'c2'),
+          statCard(ic('chevron-down'), money(pkgs.length ? Math.min(...pkgs) : 0), 'Lowest', 'c2'),
         ],
         columns: [
           { header: 'Rank', key: 'rank', width: 8, type: 'number' },
@@ -17006,11 +17091,11 @@
         .sort((a, b) => String(b.driveDate).localeCompare(String(a.driveDate)));
       return {
         title: 'Drive Report', sheetName: 'Drives', subtitle: stamp,
-        note: 'The funnel for every drive: eligible → applied → shortlisted → selected → placed.',
+        note: 'The funnel for every drive: eligible applied shortlisted selected placed.',
         stats: [
-          statCard('🚀', rows.length, 'Drives'),
-          statCard('📨', rows.reduce((a, d) => a + d.applied, 0), 'Applications', 'c2'),
-          statCard('🏆', rows.reduce((a, d) => a + d.placed, 0), 'Placed', 'c3'),
+          statCard(ic('rocket'), rows.length, 'Drives'),
+          statCard(ic('mail'), rows.reduce((a, d) => a + d.applied, 0), 'Applications', 'c2'),
+          statCard(ic('trophy'), rows.reduce((a, d) => a + d.placed, 0), 'Placed', 'c3'),
         ],
         columns: [
           { header: 'Drive ID', key: 'id', width: 10 }, { header: 'Company', key: 'company', width: 24 },
@@ -17054,9 +17139,9 @@
         title: 'Application Report', sheetName: 'Applications', subtitle: stamp,
         note: 'Every application with the student it belongs to and where it reached.',
         stats: [
-          statCard('📨', rows.length, 'Applications'),
-          statCard('⭐', rows.filter(a => a.status === 'Shortlisted').length, 'Shortlisted', 'c2'),
-          statCard('🎯', rows.filter(a => a.status === 'Selected').length, 'Selected', 'c3'),
+          statCard(ic('mail'), rows.length, 'Applications'),
+          statCard(ic('star'), rows.filter(a => a.status === 'Shortlisted').length, 'Shortlisted', 'c2'),
+          statCard(ic('target'), rows.filter(a => a.status === 'Selected').length, 'Selected', 'c3'),
         ],
         columns: [
           { header: 'Application ID', key: 'id', width: 14 },
@@ -17103,9 +17188,9 @@
         title: 'Not Joined / Left Report', sheetName: 'Not Joined or Left', subtitle: stamp,
         note: `Students who accepted an offer and did not join, or joined and left. A stay of ${SHORT_STAY_DAYS} days or less counts as short.`,
         stats: [
-          statCard('🚪', rows.length, 'Offers Ended', 'c4'),
-          statCard('🚫', rows.filter(r => r.status === 'Not Joined').length, 'Never Joined', 'c4'),
-          statCard('⏱️', rows.filter(r => r.status === 'Left').length, 'Left After Joining', 'c4'),
+          statCard(ic('door'), rows.length, 'Offers Ended', 'c4'),
+          statCard(ic('ban'), rows.filter(r => r.status === 'Not Joined').length, 'Never Joined', 'c4'),
+          statCard(ic('clock'), rows.filter(r => r.status === 'Left').length, 'Left After Joining', 'c4'),
         ],
         columns: [
           { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
@@ -17142,9 +17227,9 @@
       title: 'Unplaced Students Report', sheetName: 'Unplaced', subtitle: stamp,
       note: 'Students without an accepted or joined offer, ranked by how many open drives they still qualify for.',
       stats: [
-        statCard('⏳', rows.length, 'Unplaced'),
-        statCard('✅', rows.filter(r => r.eligibleDrives > 0).length, 'Still Eligible', 'c2'),
-        statCard('🚫', rows.filter(r => r.eligibleDrives === 0).length, 'No Open Drive', 'c4'),
+        statCard(ic('pending'), rows.length, 'Unplaced'),
+        statCard(ic('check'), rows.filter(r => r.eligibleDrives > 0).length, 'Still Eligible', 'c2'),
+        statCard(ic('ban'), rows.filter(r => r.eligibleDrives === 0).length, 'No Open Drive', 'c4'),
       ],
       columns: [
         { header: 'Reg No', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 26 },
