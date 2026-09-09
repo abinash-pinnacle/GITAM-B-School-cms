@@ -5347,7 +5347,7 @@
       <div id="bsStats" class="stat-grid" style="margin-bottom:18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th style="width:34px"></th><th>Reg No</th><th>Name</th><th>Course</th><th>Specialisation</th>
-        <th>Sec</th><th>Academic Year</th><th>Year</th><th>Current Sem</th><th></th><th>New Sem</th><th>New Year</th>
+        <th>Sec</th><th>Academic Year</th><th>Year</th><th>Current Sem</th><th>${ic('arrow-right')}</th><th>New Sem</th><th>New Year</th>
       </tr></thead><tbody id="bsBody"></tbody></table></div><div id="bsPager"></div></div>`;
 
     viewBatchSemester.after = () => {
@@ -5528,9 +5528,9 @@
           <td><div style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.email||'')}">${esc(f.email || '—')}</div></td>
           <td style="white-space:nowrap">${esc(f.phone || '—')}</td>
           <td><div class="row-actions" style="flex-wrap:nowrap">
-            <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile"></button>
+            <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile">${ic('eye')}</button>
             ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">${ic('books')}</button>` : ''}
-            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card"></button>
+            <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">${ic('id-card')}</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}" title="Edit">${ic('edit')}</button>
             <button class="btn-sm btn-del" data-del="${key}" title="Delete">${ic('trash')}</button>` : ''}</div></td></tr>`;
         }).join('')
@@ -15006,7 +15006,7 @@
       </tr></thead><tbody>${rows.map(([k, label]) => `<tr>
         <td class="pg-mod">${esc(label)}</td>
         ${ACTIONS.map(([a]) => `<td>${perms[k].includes(a)
-          ? '<span style="color:var(--green);font-weight:700"></span>'
+          ? '<span style="color:var(--green);font-weight:700">' + ic('check') + '</span>'
           : '<span style="color:var(--border)">·</span>'}</td>`).join('')}
       </tr>`).join('')}</tbody></table></div>`
         : `<p class="empty" style="padding:18px 2px">No modules — this account opens the dashboard
