@@ -2370,7 +2370,7 @@
       <div class="tbl-wrap tbl-sticky"><table class="tbl-filter"><thead>
         <tr>
           <th>#</th><th>Student ID</th><th>First Name</th><th>Middle Name</th><th>Last Name</th>
-          <th>Department</th><th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
+          <th>Department</th><th>Branch</th><th>Specialisation</th><th>Section</th><th>Batch</th><th>Course</th>
           <th>Phone No.</th><th>Status</th><th></th>
         </tr>
         <tr class="filter-row">
@@ -2380,6 +2380,7 @@
           <td><input data-f="middleName"></td>
           <td><input data-f="lastName"></td>
           <td><select data-f="branch">${colFilterOptions(all, 'branch', '')}</select></td>
+          <td><select data-f="branchName">${colFilterOptions(all, 'branchName', '')}</select></td>
           <td><select data-f="specialisation">${colFilterOptions(all, 'specialisation', '')}</select></td>
           <td><select data-f="section">${colFilterOptions(all, 'section', '')}</select></td>
           <td><select data-f="batch">${colFilterOptions(all, 'batch', '')}</select></td>
@@ -2462,6 +2463,7 @@
           <td>${esc(s.middleName || '')}</td>
           <td>${esc(s.lastName || '')}</td>
           <td>${esc(s.branch || '')}</td>
+          <td>${esc(s.branchName || '—')}</td>
           <td>${esc(s.specialisation || '—')}</td>
           <td>${esc(s.section || '')}</td>
           <td>${esc(s.batch || '—')}</td>
