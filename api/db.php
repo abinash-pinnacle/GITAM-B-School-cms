@@ -262,6 +262,7 @@ function init_db(): void
     seed_admin_role();
     seed_placement_roles();
     seed_academic_head_role();
+    undo_placement_roles_full();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -456,6 +457,39 @@ function seed_academic_head_role(): void
     ]);
 }
 
+/**
+ * Undo of a short-lived backfill (2026-09-16, reverted the same evening) that
+ * wrote a "full access to every module" template onto the three placement
+ * access roles. It had already run on any database that served a request in
+ * between, so reverting the code alone leaves those rows granted. This puts
+ * them back to NULL — deny-by-default, exactly as seed_placement_roles() first
+ * created them — but only where the template is byte-for-byte the one that
+ * backfill wrote, so a role the Super Admin has since shaped is left alone.
+ * Idempotent: once reset, nothing matches and it does nothing.
+ */
+function undo_placement_roles_full(): void
+{
+    $all = ['view', 'add', 'edit', 'delete', 'import', 'export', 'print', 'approve', 'manage', 'reports'];
+    $full = [];
+    foreach (['students', 'staff', 'academics', 'attendance', 'marks', 'fees', 'assets',
+              'requisitions', 'library', 'placement', 'events', 'reports'] as $m) {
+        $full[$m] = $all;
+    }
+    foreach (['dean_placement', 'plmt_officer', 'plmt_coordinator'] as $key) {
+        $row = fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('permissions') . ' AS p FROM ' . qi('roles')
+            . ' WHERE ' . qi('key') . ' = ?', [$key]);
+        if (!$row) {
+            continue;
+        }
+        $cur = json_decode((string) ($row['p'] ?? ''), true);
+        if ($cur !== $full) {
+            continue;                       // not the backfill's template — leave it
+        }
+        run_sql('UPDATE ' . qi('roles') . ' SET ' . qi('permissions') . ' = NULL WHERE ' . qi('id') . ' = ?',
+            [(string) $row['id']]);
+    }
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -464,7 +498,7 @@ function seed_academic_head_role(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-16-academic-head-role';
+const DB_MIGRATION_REV = '2026-09-16-placement-roles-revert';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
