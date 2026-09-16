@@ -261,6 +261,7 @@ function init_db(): void
        release gains it on the next deploy. */
     seed_admin_role();
     seed_placement_roles();
+    seed_academic_head_role();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -413,6 +414,48 @@ function seed_placement_roles(): void
     }
 }
 
+/**
+ * The Academics Head ACCESS role — a new academic-operations role under the
+ * existing Center Head. Like the placement access roles it is built on the Super
+ * Admin's ceiling (base = admin) so any module may be assigned to it, but unlike
+ * them it ships with a sensible academic starter template rather than empty:
+ * full control of Courses & Curriculum, Marks & Results and Attendance, and
+ * view of Students, Faculty and Events. The template is capped by the ceiling
+ * (effective = ceiling ∩ template) and the Super Admin can widen or narrow it,
+ * module by module, in Roles > Academics Head. Idempotent: seeded only when
+ * absent, so an edited template is never wiped.
+ *
+ * It does NOT touch Super Admin or Center Head, and holds no roles/settings/
+ * audit access (the escalation shield in index.php already forbids that for any
+ * non-Super-Admin), so an Academics Head can never change its own role or reach
+ * global settings.
+ */
+function seed_academic_head_role(): void
+{
+    if (fetch_one('SELECT 1 AS x FROM ' . qi('roles') . ' WHERE ' . qi('key') . " = 'academic_head'")) {
+        return;
+    }
+    $all = ['view', 'add', 'edit', 'delete', 'import', 'export', 'print', 'approve', 'manage', 'reports'];
+    upsert('roles', [
+        'id'          => next_id('roles'),
+        'key'         => 'academic_head',
+        'label'       => 'Academics Head',
+        'base'        => 'admin',
+        'builtin'     => '1',
+        'status'      => 'Active',
+        'description' => 'Head of academics, under the Center Head. Manages curriculum, '
+                       . 'attendance and results; views students and faculty.',
+        'permissions' => [
+            'academics'  => $all,          // courses, subjects, timetable, curriculum
+            'marks'      => $all,          // internal/semester marks & results
+            'attendance' => $all,          // attendance and its records
+            'students'   => ['view'],      // student academic details, read
+            'staff'      => ['view'],      // faculty list & workload, read
+            'events'     => ['view'],      // notices / notifications
+        ],
+    ]);
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -421,7 +464,7 @@ function seed_placement_roles(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-08-placement-roles';
+const DB_MIGRATION_REV = '2026-09-16-academic-head-role';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

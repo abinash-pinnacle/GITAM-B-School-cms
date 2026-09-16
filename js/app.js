@@ -1565,6 +1565,99 @@
      nothing it cannot reach is counted, linked or shown here — the same rule the
      server enforces, drawn on the page. An Admin with no modules yet sees a
      plain "waiting for access" note rather than an empty grid. */
+  /* The Academics Head's own dashboard: academic tiles and panels, each still
+     gated by the role's grant, so a module the Super Admin has not given stays
+     off the board. Built from the same cards/panels the admin dashboard uses. */
+  function academicHeadDashboard() {
+    viewDashboard.after = null;
+    const seeStu = can('students', 'view'), seeFac = can('staff', 'view');
+    const seeAcad = can('academics', 'view'), seeAtt = can('attendance', 'view');
+    const seeMarks = can('marks', 'view');
+    const students = Store.all('students');
+    const faculty = Store.all('faculty');
+    const courses = Store.all('courses');
+    const subjects = Store.all('syllabus');
+    const depts = departmentList();
+
+    // current semester = the one most students are sitting in
+    const semCount = {};
+    students.forEach(s => { const k = s.semester; if (k !== null && k !== undefined && k !== '') semCount[k] = (semCount[k] || 0) + 1; });
+    const curSem = Object.keys(semCount).sort((a, b) => semCount[b] - semCount[a])[0];
+
+    // attendance overview across students that have any attendance recorded
+    let attSum = 0, attN = 0;
+    students.forEach(s => { const p = studentAttendancePct(s.id); if (p !== null && p !== undefined) { attSum += p; attN++; } });
+    const attAvg = attN ? Math.round(attSum / attN) : null;
+
+    // performance + how many students still have no result on record
+    let gpaSum = 0, gpaN = 0, pendingMarks = 0;
+    students.forEach(s => { const g = studentGPA(s.id); if (g !== null && g !== undefined) { gpaSum += g; gpaN++; } else pendingMarks++; });
+    const avgGpa = gpaN ? (gpaSum / gpaN).toFixed(2) : '—';
+
+    const cards = [];
+    if (seeStu) cards.push(statCard(ic('cap'), students.length, 'Total Students'));
+    if (seeFac) cards.push(statCard(ic('user'), faculty.length, 'Total Faculty', 'c2'));
+    if (seeAcad) cards.push(statCard(ic('books'), courses.length, 'Total Courses', 'c3'));
+    if (seeFac) cards.push(statCard(ic('bank'), depts.length, 'Departments', 'c2'));
+    if (seeAcad) cards.push(statCard(ic('notes'), subjects.length, 'Total Subjects', 'c3'));
+    cards.push(statCard(ic('calendar'), curSem ? ('Sem ' + curSem) : '—', 'Current Semester', 'c2'));
+    if (seeAtt) cards.push(statCard(ic('check'), attAvg === null ? '—' : attAvg + '%', 'Attendance Overview', 'c3'));
+    if (seeMarks) cards.push(statCard(ic('trophy'), avgGpa, 'Academic Performance', 'c2'));
+    if (seeMarks) cards.push(statCard(ic('notes'), pendingMarks, 'Pending Marks', 'c4'));
+
+    let html = `<div class="welcome-banner">
+      <div class="wb-text">
+        <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
+        <p>NMIET B-SCHOOL · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
+        <div class="wb-chips"><span>Academic operations</span>${
+          seeStu ? `<span>${students.length} students</span>` : ''}${
+          seeAcad ? `<span>${subjects.length} subjects</span>` : ''}</div>
+      </div>
+      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+    </div>`;
+
+    if (cards.length) html += `<div class="stat-grid">${cards.join('')}</div>`;
+
+    if (seeStu) {
+      const byBranch = {};
+      students.forEach(s => { const k = specOf(s) || 'Not set'; byBranch[k] = (byBranch[k] || 0) + 1; });
+      const rows = Object.entries(byBranch).sort((a, b) => b[1] - a[1]);
+      const maxN = Math.max(1, ...rows.map(r => r[1]));
+      const top = students.map(s => ({ s, gpa: studentGPA(s.id) })).filter(x => x.gpa !== null)
+        .sort((a, b) => b.gpa - a.gpa).slice(0, 5);
+      html += `<div class="dash-2col">
+        <div class="panel"><div class="panel-head"><h3>Students by Specialisation</h3></div>
+          ${rows.length ? rows.map(([b, n]) => `
+            <div class="dist-row"><span class="dist-label">${esc(b)}</span>
+              <span class="dist-bar"><i style="width:${Math.round(n / maxN * 100)}%"></i></span>
+              <span class="dist-val">${n}</span></div>`).join('') : `<p class="empty">No data.</p>`}
+        </div>
+        <div class="panel"><div class="panel-head"><h3>Top Performers</h3></div>
+          ${top.length ? top.map((x, i) => `
+            <div class="rank-row">
+              <span class="rank ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''}">${i + 1}</span>
+              <div class="rank-info"><strong>${esc(x.s.name)}</strong><small>${esc(x.s.roll)} · ${esc(x.s.branch)}</small></div>
+              <span class="pill green">GPA ${x.gpa}</span></div>`).join('') : `<p class="empty">No results recorded yet.</p>`}
+        </div>
+      </div>`;
+    }
+
+    // quick links to every academic page the grant actually opens
+    const quick = menuFor(user).filter(([k]) =>
+      k !== NAV_SECTION && k !== NAV_LINK && k !== NAV_GROUP
+      && k !== 'dashboard' && !ALWAYS_ALLOWED.includes(k));
+    if (quick.length) {
+      html += `<div class="panel"><div class="panel-head"><h3>Quick Actions</h3></div>
+        <div class="quick-actions">${quick.map(([k, icon, label]) =>
+          `<button class="qa-btn" data-go="${esc(k)}"><span class="qa-ico">${icon || ''}</span>${esc(label)}</button>`).join('')}</div></div>`;
+    }
+
+    viewDashboard.after = () => {
+      document.querySelectorAll('.qa-btn[data-go]').forEach(b => { b.onclick = () => navigate(b.dataset.go); });
+    };
+    return html;
+  }
+
   function subAdminDashboard() {
     viewDashboard.after = null;
     const show = (m) => can(m, 'view');
@@ -1640,6 +1733,9 @@
     // a custom-access account — the Admin or anyone the Super Admin put on custom
     // access — gets the permission-built dashboard: only the cards, actions and
     // access summary for the modules it was actually granted
+    // the Academics Head gets a purpose-built academic dashboard, still gated by
+    // its grant; every other custom-access account gets the generic one
+    if (user && user.role === 'academic_head') return academicHeadDashboard();
     if (hasCustomAccess(user)) return subAdminDashboard();
     if (user.role === 'student') return studentDashboard();
     if (user.role === 'faculty') return facultyDashboard();
