@@ -262,7 +262,6 @@ function init_db(): void
     seed_admin_role();
     seed_placement_roles();
     seed_academic_head_role();
-    backfill_placement_roles_full();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -416,38 +415,6 @@ function seed_placement_roles(): void
 }
 
 /**
- * The three placement access roles were seeded deny-by-default and left for the
- * Super Admin to fill in; the decision since (2026-09-16) is that they start
- * with FULL access to every grantable module. This backfill writes that full
- * template onto each of them — but only where the template is still empty, so
- * a role the Super Admin has already shaped keeps its shape. The admin ceiling
- * still caps the result (effective = ceiling ∩ template), so `system` and
- * anything else not grantable stays out of reach regardless of what is listed.
- */
-function backfill_placement_roles_full(): void
-{
-    $all = ['view', 'add', 'edit', 'delete', 'import', 'export', 'print', 'approve', 'manage', 'reports'];
-    $full = [];
-    foreach (['students', 'staff', 'academics', 'attendance', 'marks', 'fees', 'assets',
-              'requisitions', 'library', 'placement', 'events', 'reports'] as $m) {
-        $full[$m] = $all;
-    }
-    foreach (['dean_placement', 'plmt_officer', 'plmt_coordinator'] as $key) {
-        $row = fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('permissions') . ' AS p FROM ' . qi('roles')
-            . ' WHERE ' . qi('key') . ' = ?', [$key]);
-        if (!$row) {
-            continue;
-        }
-        $cur = json_decode((string) ($row['p'] ?? ''), true);
-        if (is_array($cur) && count($cur) > 0) {
-            continue;                       // already shaped by the Super Admin — leave it
-        }
-        run_sql('UPDATE ' . qi('roles') . ' SET ' . qi('permissions') . ' = ? WHERE ' . qi('id') . ' = ?',
-            [json_encode($full), (string) $row['id']]);
-    }
-}
-
-/**
  * The Academics Head ACCESS role — a new academic-operations role under the
  * existing Center Head. Like the placement access roles it is built on the Super
  * Admin's ceiling (base = admin) so any module may be assigned to it, but unlike
@@ -497,7 +464,7 @@ function seed_academic_head_role(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-16-placement-roles-full';
+const DB_MIGRATION_REV = '2026-09-16-academic-head-role';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
