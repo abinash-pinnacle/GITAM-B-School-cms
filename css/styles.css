@@ -75,22 +75,28 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 /* dvh after vh: on iOS 100vh is the viewport *without* the address bar, so a
    full-height box is always taller than what you can see. dvh is the real
    height; the vh line stays as the fallback for older browsers. */
-/* A calm, professional entry: a deep brand gradient with two static depth
-   glows and a faint dot-grid so the ground reads as a designed surface, not a
-   flat block. Nothing loops or drifts. */
+/* A professional entry: a deep brand gradient whose two aurora glows drift
+   slowly and softly (no spinning, no specks), over a static dot-grid so the
+   ground reads as a designed surface. Motion is gentle and long-cycle. */
 .login-wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:20px;overflow:hidden;
+  padding:20px;overflow:hidden;position:relative;
   background:
-    radial-gradient(circle at 1px 1px,rgba(255,255,255,.055) 1px,transparent 1.6px) 0 0/26px 26px,
-    radial-gradient(60vmax 60vmax at 12% 8%,rgba(55,208,127,.20),transparent 55%),
-    radial-gradient(58vmax 58vmax at 90% 92%,rgba(47,109,240,.22),transparent 55%),
-    linear-gradient(135deg,#0b2c56 0%,var(--primary-dark) 38%,var(--primary) 64%,#11623a 100%)}
+    radial-gradient(50vmax 50vmax at 16% 14%,rgba(55,208,127,.28),transparent 60%),
+    radial-gradient(52vmax 52vmax at 86% 88%,rgba(47,109,240,.30),transparent 60%),
+    linear-gradient(135deg,#0b2c56 0%,var(--primary-dark) 40%,var(--primary) 66%,#11623a 100%);
+  background-size:190% 190%,190% 190%,220% 220%;
+  animation:auroraShift 26s ease-in-out infinite}
+/* the dot-grid stays perfectly still while the colour drifts behind it */
+.login-wrap::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.05) 1px,transparent 1.6px) 0 0/26px 26px}
 .login-footer{position:relative;z-index:1}
 /* a static gradient hairline frames the card — no spin */
 .login-frame{position:relative;border-radius:20px;padding:1.5px;z-index:1;
   background:linear-gradient(135deg,rgba(55,208,127,.9),rgba(47,109,240,.9) 55%,rgba(18,63,140,.9))}
+/* the glow behind the card breathes, softly */
 .login-frame::after{content:"";position:absolute;inset:-10px;border-radius:28px;z-index:-1;
-  background:linear-gradient(135deg,rgba(55,208,127,.5),rgba(47,109,240,.5));filter:blur(30px);opacity:.4}
+  background:linear-gradient(135deg,rgba(55,208,127,.55),rgba(47,109,240,.55));filter:blur(30px);
+  opacity:.4;animation:glowBreathe 7s ease-in-out infinite}
 .login-split{position:relative;z-index:1;display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden}
 .login-hero{position:relative;flex:1;min-width:0;display:flex}
 .login-hero-img{width:100%;height:100%;object-fit:cover;display:block}
@@ -116,8 +122,12 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 .in-wrap:focus-within .in-ico{opacity:1;transform:translateY(-50%) scale(1.12)}
 #loginForm input,#loginForm select{width:100%;padding:14px 15px 14px 44px;font-size:15px;border:1px solid var(--line);border-radius:10px;background:#fbfcfe}
 #loginForm input:focus,#loginForm select:focus{outline:none;border-color:var(--primary);background:#fff}
-#loginForm .btn-primary{margin-top:28px;padding:14px;font-size:16px;
+#loginForm .btn-primary{margin-top:28px;padding:14px;font-size:16px;position:relative;overflow:hidden;
   background:linear-gradient(120deg,var(--primary),#1f9c57)}
+/* a light sweep crosses the button on hover — a small, premium touch */
+#loginForm .btn-primary::after{content:"";position:absolute;top:0;left:-70%;width:55%;height:100%;
+  transform:skewX(-18deg);background:linear-gradient(120deg,transparent,rgba(255,255,255,.35),transparent);pointer-events:none}
+#loginForm .btn-primary:hover::after{animation:btnShine .8s ease}
 .login-error{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;text-align:center}
 .login-hint{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .login-hint strong{color:var(--ink)}
@@ -135,6 +145,12 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 @keyframes floatLogo{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes footerIn{from{opacity:0}to{opacity:.8}}
 @keyframes btnShine{from{left:-70%}to{left:130%}}
+/* slow, soft aurora drift behind the sign-in card; long cycle, gentle shift */
+@keyframes auroraShift{
+  0%{background-position:0% 0%,100% 100%,0% 50%}
+  50%{background-position:26% 34%,74% 66%,100% 50%}
+  100%{background-position:0% 0%,100% 100%,0% 50%}}
+@keyframes glowBreathe{0%,100%{opacity:.32}50%{opacity:.55}}
 
 /* the whole card glides up on arrival; the campus photo slowly drifts behind it */
 .login-frame{animation:cardIn .8s cubic-bezier(.22,.68,.24,1) both}
