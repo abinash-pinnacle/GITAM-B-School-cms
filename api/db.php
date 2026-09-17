@@ -265,6 +265,7 @@ function init_db(): void
     undo_placement_roles_full();
     rename_drive_type_nta();
     hierarchy_labels_and_ticket_indexes();
+    drop_goods_requisitions();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -540,6 +541,24 @@ function hierarchy_labels_and_ticket_indexes(): void
     }
 }
 
+/* The standalone Goods Requisition module was retired: goods purchases now go
+   through the hierarchy approval flow (its Purchase / Expense type). The old
+   goods requests are cleared on the deploy that removes it. Book requisitions
+   share this table and are deliberately left untouched. Gated by a meta flag
+   so it runs exactly once, even though the DELETE is itself idempotent. */
+function drop_goods_requisitions(): void
+{
+    if (meta_value('goodsReqDropped') !== null) {
+        return;
+    }
+    try {
+        run_sql('DELETE FROM ' . qi('requisitions') . ' WHERE ' . qi('type') . " = 'Goods'");
+    } catch (PDOException $e) {
+        return;   // requisitions table not there yet -> nothing to drop, try again next deploy
+    }
+    meta_set('goodsReqDropped', date('c'));
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -548,7 +567,7 @@ function hierarchy_labels_and_ticket_indexes(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-18-notify-approvals-reports';
+const DB_MIGRATION_REV = '2026-09-18-drop-goods-requisitions';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

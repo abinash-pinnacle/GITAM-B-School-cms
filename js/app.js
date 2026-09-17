@@ -695,7 +695,7 @@
       [NAV_SECTION,'','Events & Notices'],
       ['events',ic('calendar'),'Events'],
       [NAV_SECTION,'','Helpdesk'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
       [NAV_SECTION,'','System'],
       ['accounts',ic('key'),'Login Accounts'], ['usersettings',ic('settings'),'User Management'],
       ['roles',ic('shield'),'Roles & Permissions'], ['adminmgmt',ic('users'),'Admin Management'],
@@ -711,7 +711,7 @@
       ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
       ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
       ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Reports'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
@@ -728,7 +728,7 @@
       ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'], ['chreports',ic('trending-up'),'Reports'],
       // the one thing this role decides rather than just watches
       ['requisitions',ic('package'),'Approvals'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
       ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     accountant: [
@@ -736,20 +736,20 @@
       ['finstudents',ic('cap'),'Student List'], ['assets',ic('building'),'Asset List'],
       ['fixedfee',ic('clipboard'),'Fixed Fee'], ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
       ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('package'),'Requisitions'],
-      ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     faculty: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
-      ['syllabus',ic('receipt'),'Subjects by Semester'], ['goodsreq',ic('package'),'Goods Requisition'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     // assigned classes only: attendance, marks and the timetable, no purchasing
     guest_faculty: [
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['events',ic('calendar'),'Events'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     student: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['myattendance',ic('check'),'My Attendance'], ['myresults',ic('notes'),'My Results'],
@@ -763,7 +763,7 @@
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
       ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
-      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     /* The coordinator runs attendance and reads what it is built from. Nothing
        here writes master data — the server refuses it either way. */
@@ -773,14 +773,14 @@
       ['students',ic('cap'),'Students'], ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['timetable',ic('calendar'),'Timetable'],
-      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     librarian: [
       ['dashboard',ic('chart'),'Dashboard'], ['library',ic('book'),'Library'], ['issueBook',ic('download'),'Issue a Book'],
       ['returnBook',ic('upload'),'Return a Book'], ['bookreq',ic('books'),'Book Requisition'],
       ['students',ic('cap'),'Students'], ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['events',ic('calendar'),'Events'], ['reports',ic('chart'),'Reports'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE,
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE,
     ],
   };
 
@@ -1266,7 +1266,7 @@
     finstudents:'Student List — Fee Overview', assets:'Asset List', fixedfee:'Fixed Fee Structure',
     semfee:'Semester-wise Fee', feecollect:'Fee Collection', payments:'Payment History',
     pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Accountants',
-    goodsreq:'Goods Requisition', bookreq:'Book Requisition', requisitions:'Requisitions & Approvals',
+    bookreq:'Book Requisition', requisitions:'Requisitions & Approvals',
     batchsem:'Batch Semester Update',
     departments:'Departments', branches:'Specialisations', chreports:'Reports',
     syllabus:'Subjects — Semester wise',
@@ -1274,7 +1274,7 @@
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
     offers:'Offers', plcalendar:'Placement Calendar', plreports:'Placement Reports',
     placementofficers:'Placement Officers',
-    tickets:'Tickets', orgtree:'Organization Tree', approvals:'Approval Requests', hreports:'Reports Centre',
+    tickets:'Tickets', orgtree:'Organization Tree', approvals:'Goods Requisition', hreports:'Reports Centre',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -1357,7 +1357,7 @@
       finstudents: viewFinStudents, assets: viewAssets, fixedfee: viewFixedFee, semfee: viewSemFee,
       feecollect: viewFeeCollection, payments: viewPayments, pendingfees: viewPendingFees,
       finreports: viewFinReports, accountants: viewAccountants,
-      goodsreq: viewGoodsRequisition, bookreq: viewBookRequisition, requisitions: viewRequisitions,
+      bookreq: viewBookRequisition, requisitions: viewRequisitions,
       batchsem: viewBatchSemester,
       departments: viewDepartments, branches: viewBranches, chreports: viewCenterReports,
       plstudents: viewPlacementStudents, companies: viewCompanies, drives: viewDrives,
@@ -16426,7 +16426,7 @@
     const pageRows = pageSlice(rows, st.page);
     box.innerHTML = `
       <div class="panel">
-        <div class="panel-head"><h3>Approval Requests</h3>
+        <div class="panel-head"><h3>Goods Requisition</h3>
           <div class="panel-tools">
             <button class="btn-outline btn-sm" id="apReload">${ic('refresh')}Refresh</button>
             ${me.role !== 'admin' ? `<button class="btn-primary" id="apNew">${ic('plus')}New Request</button>` : ''}
@@ -16485,7 +16485,7 @@
   async function approvalCreateModal() {
     const meta = await apMeta();
     if (meta.error) { toast(meta.error, 'err'); return; }
-    openModal('New Approval Request', `<form id="f">
+    openModal('New Goods Requisition', `<form id="f">
       <div class="form-grid">
         <div class="field"><label>Request Type</label><select name="type" id="apType">${meta.types.map(t => `<option>${esc(t.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Amount (₹) <small style="font-weight:400;color:var(--muted)">if any</small></label><input name="amount" type="number" min="0" step="1"></div>
@@ -16526,7 +16526,7 @@
   }
 
   function viewApprovalDetail(id) {
-    $('#pageTitle').textContent = 'Approval Request';
+    $('#pageTitle').textContent = 'Goods Requisition';
     viewApprovals.after = async () => {
       const d = await Store.apGet(id);
       const box = $('#apDetail');
