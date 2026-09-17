@@ -16413,6 +16413,10 @@
     const all = d.approvals;
     const now = tkNow();
     const waiting = all.filter(a => a.currentApprover === me.id && AP_OPEN.includes(a.status));
+    // only the Super Admin oversees every request; everyone else sees just the
+    // two that concern them, so a stale "all" scope is dropped for them here too
+    const canAll = me.role === 'admin';
+    if (st.scope === 'all' && !canAll) st.scope = null;
     if (!st.scope) st.scope = waiting.length ? 'waiting' : 'mine';
     const scoped = all.filter(a => (st.scope === 'waiting' ? a.currentApprover === me.id && AP_OPEN.includes(a.status)
       : st.scope === 'mine' ? a.requestedBy === me.id : true));
@@ -16434,7 +16438,7 @@
         <div class="tk-scopes">
           ${scopeBtn('waiting', 'Waiting for Me', waiting.length)}
           ${scopeBtn('mine', 'My Requests', all.filter(a => a.requestedBy === me.id).length)}
-          ${scopeBtn('all', 'All Visible', all.length)}
+          ${canAll ? scopeBtn('all', 'All Visible', all.length) : ''}
         </div>
         <div class="stat-grid tk-stats">
           ${statCard(ic('clipboard'), count('Pending') + count('Escalated'), 'Pending')}
