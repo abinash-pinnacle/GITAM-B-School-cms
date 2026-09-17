@@ -266,6 +266,7 @@ function init_db(): void
     rename_drive_type_nta();
     hierarchy_labels_and_ticket_indexes();
     drop_goods_requisitions();
+    students_login_as_studentid();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -559,6 +560,45 @@ function drop_goods_requisitions(): void
     meta_set('goodsReqDropped', date('c'));
 }
 
+/* One-time, for launch: every existing student signs in with their Student ID
+   (the `roll`) as BOTH username and password. New students already get this from
+   the form; this brings the students already on file into line. Passwords are
+   stored hashed like everywhere else. Gated by a meta flag so it runs once, and
+   each row is guarded so one clash cannot abort the whole pass. Book/other data
+   is untouched — this only writes the `users` rows whose role is student. */
+function students_login_as_studentid(): void
+{
+    if (meta_value('studentLoginIsRoll') !== null) {
+        return;
+    }
+    try {
+        $students = fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('roll') . ' AS roll, ' . qi('name') . ' AS name FROM ' . qi('students'));
+    } catch (PDOException $e) {
+        return;   // students table not there yet -> try again next deploy
+    }
+    foreach ($students as $s) {
+        $roll = trim((string) $s['roll']);
+        if ($roll === '') {
+            continue;
+        }
+        try {
+            $u = fetch_one('SELECT ' . qi('id') . ' AS id FROM ' . qi('users') . ' WHERE ' . qi('role')
+                . " = 'student' AND " . qi('refId') . ' = ?', [(string) $s['id']]);
+            if ($u) {
+                run_sql('UPDATE ' . qi('users') . ' SET ' . qi('username') . ' = ?, ' . qi('password')
+                    . ' = ? WHERE ' . qi('id') . ' = ?', [$roll, hash_password($roll), (string) $u['id']]);
+            } else {
+                upsert('users', ['id' => next_id('users'), 'username' => $roll, 'password' => hash_password($roll),
+                                 'role' => 'student', 'refId' => (string) $s['id'], 'name' => (string) $s['name']]);
+            }
+        } catch (Throwable $e) {
+            // a duplicate roll or other row-level clash: skip this one, keep going
+            error_log('[nmiet-db] student login backfill skipped ' . $s['id'] . ': ' . $e->getMessage());
+        }
+    }
+    meta_set('studentLoginIsRoll', date('c'));
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -567,7 +607,7 @@ function drop_goods_requisitions(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-18-drop-goods-requisitions';
+const DB_MIGRATION_REV = '2026-09-18-student-login-is-studentid';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

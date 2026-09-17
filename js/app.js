@@ -4789,7 +4789,8 @@
   }
 
   function ensureStudentLogin(s) {
-    Store.add('users', { username: s.roll, password: 'pass123', role: 'student', refId: s.id, name: s.name });
+    // the student signs in with their Student ID as both username and password
+    Store.add('users', { username: s.roll, password: s.roll || DEFAULT_IMPORT_PASSWORD, role: 'student', refId: s.id, name: s.name });
   }
 
   /* ==================== BULK UPLOAD (Excel / CSV) ====================
@@ -4988,7 +4989,7 @@
         emergencyName:'Bhikari Das', emergencyPhone:'7978851886', allergies:'None',
       },
       // students sign in with their registration number, same as the form does
-      login: (row) => ({ username: row.roll, password: DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
+      login: (row) => ({ username: row.roll, password: row.roll || DEFAULT_IMPORT_PASSWORD, role: 'student', name: row.name }),
     },
     faculty: {
       title: 'Employees',
@@ -5082,7 +5083,7 @@
         emergencyName:'Prativa Sahu', emergencyPhone:'7978851886',
         username:'meena', password:'pass123',
       },
-      login: (row) => ({ username: row.username || row.empId, password: row.password || DEFAULT_IMPORT_PASSWORD,
+      login: (row) => ({ username: row.username || row.empId, password: row.password || row.empId || DEFAULT_IMPORT_PASSWORD,
                          role: roleKeyFromLabel(row.role) || 'faculty', name: row.name }),
     },
   };
@@ -6312,7 +6313,7 @@
                    placeholder="auto from employee id"></div>
           <div class="field"><label>Password</label>
             <input name="password" type="text" value=""
-                   placeholder="${id ? 'leave blank to keep current' : DEFAULT_PASSWORD}"></div>
+                   placeholder="${id ? 'leave blank to keep current' : 'auto — same as Employee ID'}"></div>
         </div>` : ''}
       </div>
 
@@ -6575,9 +6576,10 @@
       // any real role the picker offered — built-in or a custom access role
       const role = allRoleKeys().includes(d.role) ? d.role : tableRole(col, f);
       d.role = role;
-      // a user id nobody else holds, from the employee id, unless one was typed
+      // a user id nobody else holds, the employee id itself unless one was typed
+      // (kept in its own case so the login is exactly the Employee ID)
       const uid = username || freeUsername(
-        String(d.empId || d.name || role).replace(/\s+/g, '').toLowerCase(), acct && acct.id);
+        String(d.empId || d.name || role).replace(/\s+/g, ''), acct && acct.id);
       let newId = id;
       if (id) {
         Store.update(col, id, d);
@@ -6585,14 +6587,14 @@
         if (withLogin) { patch.username = uid; if (password) patch.password = password; }
         if (acct) Store.update('users', acct.id, patch);
         else if (withLogin) {
-          Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
+          Store.add('users', { username: uid, password: password || uid,
                                role, refId: id, name: d.name });
         }
         if (acct && acct.id === user.id) { user.name = d.name; paintUser(); }
       } else {
         const rec = Store.add(col, d);
         newId = rec.id;
-        Store.add('users', { username: uid, password: password || DEFAULT_PASSWORD,
+        Store.add('users', { username: uid, password: password || uid,
                              role, refId: rec.id, name: rec.name });
       }
       closeModal(); toast('Employee saved.');
