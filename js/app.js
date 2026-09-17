@@ -16509,9 +16509,9 @@
       const t = meta.types.find(x => x.name === typeSel.value);
       document.querySelectorAll('#modalBody .ap-dates').forEach(el => el.classList.toggle('hidden', t.name !== 'Leave Request'));
       $('#apRoute').innerHTML = meta.manager
-        ? `${ic('arrow-right')}Goes first to <b>${esc(meta.manager.name)}</b> (${esc(roleLabel(meta.manager.role))}) · final decision needs <b>${esc(t.authority)}</b>${
-            meta.myRank >= t.rank ? '' : ' — it moves up your reporting line until someone with that authority decides'}.`
-        : `${ic('alert')}You have no approver in your reporting line. Ask the Super Admin to set your Reporting To.`;
+        ? `${ic('arrow-right')}Goes first to the <b>${esc(roleLabel(meta.manager.role))}</b> · final approval by the <b>${esc(t.authority)}</b>${
+            meta.myRank >= t.rank ? '' : ' — it moves up until someone with that authority decides'}.`
+        : `${ic('alert')}You have no approver set. Ask the Super Admin to set your Reporting To.`;
     };
     typeSel.onchange = hint; hint();
     $('#f').onsubmit = async (e) => {

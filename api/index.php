@@ -4518,6 +4518,34 @@ const APPROVAL_TYPES = [
 const APPROVAL_STAGE_ACTIONS = ['assigned', 'forwarded', 'escalated', 'resubmitted'];
 const APPROVAL_OPEN = ['Pending', 'Escalated', 'Returned'];
 
+/* A fixed approval ladder for the roles that use one. Their requests ignore the
+   day-to-day reporting line and always climb this chain, lowest rung first; the
+   last rung is the final approver. The Super Admin can still act on anything. */
+const APPROVAL_CHAINS = [
+    'faculty'       => ['academic_head', 'center_head'],
+    'guest_faculty' => ['academic_head', 'center_head'],
+];
+
+/** the authority a request needs to be decided, given who raised it */
+function ap_required_rank(string $requesterRole, string $type): int
+{
+    if (isset(APPROVAL_CHAINS[$requesterRole])) {
+        $chain = APPROVAL_CHAINS[$requesterRole];
+        return ap_rank((string) end($chain));
+    }
+    return (int) (APPROVAL_TYPES[$type]['rank'] ?? 80);
+}
+
+/** the label shown for who gives the final decision, given who raised it */
+function ap_authority_label(string $requesterRole, string $type): string
+{
+    if (isset(APPROVAL_CHAINS[$requesterRole])) {
+        $chain = APPROVAL_CHAINS[$requesterRole];
+        return role_title((string) end($chain));
+    }
+    return (string) (APPROVAL_TYPES[$type]['authority'] ?? 'Center Head');
+}
+
 function ap_rank(string $role): int
 {
     if (isset(AUTH_RANK[$role])) {
@@ -4529,6 +4557,21 @@ function ap_rank(string $role): int
 /** who an account's requests go to: its own manager, else a holder of a role it reports to */
 function ap_manager_of(array $u): ?array
 {
+    /* Roles with a fixed ladder skip their day-to-day reporting line: the
+       request goes to the first rung above them that has a holder (e.g. a
+       faculty member's request goes to the Academic Head, not their
+       Coordinator). The rungs above them are ordinary roles, so when they
+       forward it climbs on through the normal path below to the Center Head. */
+    $chain = APPROVAL_CHAINS[(string) $u['role']] ?? null;
+    if ($chain) {
+        foreach ($chain as $nextRole) {
+            foreach (tk_users_with_roles([$nextRole]) as $c) {
+                if ((string) $c['id'] !== (string) $u['id']) {
+                    return $c;
+                }
+            }
+        }
+    }
     $p = tk_user(trim((string) ($u['reportingTo'] ?? '')));
     if (tk_active($p) && (string) $p['id'] !== (string) $u['id']) {
         return $p;
@@ -4619,13 +4662,17 @@ const APPROVAL_TIME_FIELDS = ['assignedAt', 'level', 'createdAt', 'updatedAt', '
 
 function api_ap_meta(): void
 {
+    $me = current_user();
+    $role = (string) $me['role'];
     $types = [];
     foreach (APPROVAL_TYPES as $name => $d) {
-        $types[] = ['name' => $name, 'authority' => $d['authority'], 'rank' => $d['rank']];
+        // authority and rank follow who is asking, so a fixed-ladder role sees
+        // its own final approver (the Center Head), not the type's default
+        $types[] = ['name' => $name, 'authority' => ap_authority_label($role, $name),
+                    'rank' => ap_required_rank($role, $name)];
     }
-    $me = current_user();
-    $mgr = (string) $me['role'] === 'student' ? null : ap_manager_of(tk_user((string) $me['id']) ?? $me);
-    send_json(['types' => $types, 'myRank' => ap_rank((string) $me['role']),
+    $mgr = $role === 'student' ? null : ap_manager_of(tk_user((string) $me['id']) ?? $me);
+    send_json(['types' => $types, 'myRank' => ap_rank($role),
                'manager' => $mgr ? ['id' => $mgr['id'], 'name' => tk_name($mgr), 'role' => $mgr['role']] : null]);
 }
 
@@ -4674,7 +4721,7 @@ function api_ap_get(?string $id): void
     $decides = $approver ? ap_rank((string) $approver['role']) >= (int) $a['requiredRank'] || (string) $approver['role'] === 'admin' : false;
     $a = tk_int_fields($a, APPROVAL_TIME_FIELDS);
     send_json(['now' => time(), 'approval' => $a, 'steps' => $steps, 'allowed' => $allowed, 'next' => $next,
-               'approverDecides' => $decides, 'authority' => APPROVAL_TYPES[(string) $a['type']]['authority'] ?? '',
+               'approverDecides' => $decides, 'authority' => ap_authority_label((string) $a['requestedByRole'], (string) $a['type']),
                'me' => ['id' => (string) $me['id'], 'role' => (string) $me['role']]]);
 }
 
@@ -4726,7 +4773,7 @@ function api_ap_create(): void
     $a = [
         'id' => tk_id('AP'), 'approvalNo' => sprintf('APR-%s-%05d', $year, tk_take_seq('approval:' . $year)),
         'type' => $type, 'title' => $title, 'details' => $details, 'amount' => $amount,
-        'fromDate' => $from, 'toDate' => $to, 'requiredRank' => (string) APPROVAL_TYPES[$type]['rank'],
+        'fromDate' => $from, 'toDate' => $to, 'requiredRank' => (string) ap_required_rank($role, $type),
         'requestedBy' => (string) $me['id'], 'requestedByName' => tk_name($me), 'requestedByRole' => $role,
         'requestedReportsTo' => $boss ? tk_name($boss) . ' (' . role_title((string) $boss['role']) . ')' : '',
         'currentApprover' => $approver['id'], 'currentApproverName' => tk_name($approver),
