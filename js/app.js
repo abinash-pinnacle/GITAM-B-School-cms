@@ -260,6 +260,17 @@
     if (hasCustomAccess(user)) return WRITE_ACTIONS.some(a => can('placement', a));
     return PLACEMENT_MANAGE_ROLES.includes(user.role);
   }
+  /* Who may OPEN the placement pages at all — a wider circle than who may
+     change them. Mirrors the server's PLACEMENT_VIEW_ROLES (the managers plus
+     the centre head, which monitors), and for a custom-access account the
+     Placement grant at View or above. Without this a "View Only" grant lit the
+     sidebar but every page then refused itself, because the page guard was
+     asking the write question. */
+  function canViewPlacement() {
+    if (!user) return false;
+    if (hasCustomAccess(user)) return can('placement', 'view');
+    return PLACEMENT_MANAGE_ROLES.includes(user.role) || user.role === 'center_head';
+  }
   function isPlacementOfficer() { return !!user && user.role === 'placement_officer'; }
   /** true for a role that may only look at data, never change it */
   function roleReadOnly() { return !!user && READ_ONLY_ROLES.includes(user.role); }
@@ -1232,6 +1243,15 @@
   const ACTION_CONTROL_IDS = { impStu: 'import', impFac: 'import', dashImport: 'import' };
   function gateControls(root, viewKey) {
     const m = moduleOfView(viewKey);
+    /* Module-wide write gates, as classes on the view root so a table that
+       redraws itself (filters, paging) stays gated without every page having
+       to ask. The CSS hides the "+ Add …" control, the row Edit / Delete and
+       status buttons under each class. Pages that already omit their buttons
+       for a read-only account are unaffected; this catches the ones — the
+       placement cell, for instance — that only ever expected a writer. */
+    root.classList.toggle('ro-add', !!m && !can(m, 'add'));
+    root.classList.toggle('ro-edit', !!m && !can(m, 'edit'));
+    root.classList.toggle('ro-del', !!m && !can(m, 'delete'));
     if (!m) return;
     root.querySelectorAll('button[id]').forEach(b => {
       const act = ACTION_CONTROL_IDS[b.id]
@@ -13513,9 +13533,10 @@
 
   /** guard for every placement page — the server refuses these collections too */
   function placementGuard() {
-    return canManagePlacement() ? null
+    return canViewPlacement() ? null
       : `<div class="panel"><p class="empty">The placement modules are open to the
-         administrator and the placement officer only.</p></div>`;
+         administrator and the placement officer, or to an account granted the
+         Placement module by the Super Admin.</p></div>`;
   }
 
   /* ---------- offer letter upload (PDF or image, stored as a data URL) ---------- */

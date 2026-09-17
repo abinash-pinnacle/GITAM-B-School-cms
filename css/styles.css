@@ -369,6 +369,12 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap}
 .panel-head h3{font-size:17px;color:var(--primary-dark)}
 .panel-more{margin-top:12px;text-align:center;font-size:12.5px;color:var(--muted)}
+/* module-wide write gates set by gateControls() on the view root: a "View Only"
+   grant hides the add / edit / delete controls even when a page redraws its
+   table after a filter (the server refuses those writes regardless) */
+.ro-add button[id$="Add"],.ro-add [data-add]{display:none!important}
+.ro-edit .btn-edit,.ro-edit [data-edit],.ro-edit [data-status]{display:none!important}
+.ro-del .btn-del,.ro-del [data-del]{display:none!important}
 .panel-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .search-box{padding:9px 13px;border:1px solid var(--line);border-radius:8px;min-width:200px;background:#fbfcfe}
 .search-box:focus{outline:none;border-color:var(--primary)}
