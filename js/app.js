@@ -6216,7 +6216,18 @@
     col = col || 'faculty';
     const f = id ? (Store.find(col, id) || {}) : {};
     // existing login account linked to this employee (for edit)
-    const acct = id ? Store.all('users').find(u => u.refId === id) : null;
+    /* Matched loosely (an imported login can carry the id as a number or with
+       stray spaces). If no login points here, an unlinked login whose username
+       is this employee's id is theirs too — otherwise the form offers that id,
+       then calls it "already taken" by the person's own account. */
+    const sameId = (a, b) => String(a == null ? '' : a).trim() === String(b == null ? '' : b).trim();
+    const ownLogins = id ? Store.all('users').filter(u => sameId(u.refId, id)) : [];
+    const orphanOf = (u) => !u.refId || !STAFF_TABLES.concat('students')
+      .some(c => Store.all(c).some(r => sameId(r.id, u.refId)));
+    const acct = !id ? null : (ownLogins.find(u => u.username) || ownLogins[0] || (f.empId
+      ? Store.all('users').find(u => sameId((u.username || '').toLowerCase(), String(f.empId).toLowerCase())
+          && u.role !== 'student' && orphanOf(u))
+      : null) || null);
     /* Logins are the admin's to set. An accountant opening their own record
        from the accounts page sees the same fields they always saw — everything
        except the block that would let them change their own password. */
@@ -6490,9 +6501,11 @@
       // username must be unique across all login accounts
       if (username) {
         const clash = Store.all('users').find(u =>
-          (u.username || '').toLowerCase() === username.toLowerCase() && !(acct && u.id === acct.id));
+          (u.username || '').trim().toLowerCase() === username.toLowerCase()
+          && !(acct && sameId(u.id, acct.id)) && !ownLogins.some(o => sameId(o.id, u.id)));
         if (clash) {
-          return badField(form, 'username', 'Username "' + username + '" already taken.');
+          const who = clash.name ? ' by ' + clash.name + ' (' + roleLabel(clash.role) + ')' : '';
+          return badField(form, 'username', 'Username "' + username + '" is already used' + who + '.');
         }
       }
 
