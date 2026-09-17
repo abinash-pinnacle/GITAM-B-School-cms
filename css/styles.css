@@ -223,6 +223,9 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
   /* an external link carries a trailing ↗, so hiding only :last-child would
      leave its label showing — hide every span except the icon */
   .sidebar-collapsed .nav-link > span:not(.ico){display:none}
+  /* a group row keeps only its icon in the rail; its list is never drawn there */
+  .sidebar-collapsed .nav-parent > span:not(.ico){display:none}
+  .sidebar-collapsed .nav-group .nav-kids{display:none!important}
   .sidebar-collapsed .side-logo{width:43px;height:25px}
   .sidebar-collapsed .nav-item{justify-content:center;padding:10px 0}
   .sidebar-collapsed .nav-item.active::before{display:none}
@@ -689,6 +692,16 @@ a.install-btn:hover{background:var(--primary-light)}
 .nav-item.nav-child .ico{width:22px;height:22px;font-size:12px;background:transparent}
 .nav-item.nav-child.active{opacity:1}
 .sidebar-collapsed .nav-item.nav-child{display:none}
+/* a sidebar group is a dropdown: the row toggles, the list sits under a guide
+   line and is only drawn while the group is open (see buildNav) */
+.nav-parent{cursor:pointer}
+.nav-parent .nav-caret{margin-left:auto;display:flex;align-items:center;opacity:.65;transition:transform .2s ease}
+.nav-parent .nav-caret .ic{width:14px;height:14px;margin:0}
+.nav-parent.open .nav-caret{transform:rotate(180deg);opacity:1}
+.nav-parent.within:not(.active){color:#fff}
+.nav-group .nav-kids{display:none;margin:0 0 4px 21px;padding-left:4px;border-left:1px solid rgba(255,255,255,.16)}
+.nav-group.open .nav-kids{display:block}
+.nav-group .nav-item.nav-child{padding-left:10px}
 
 /* ===== REGISTER ATTENDANCE (the class-picker grid) ===== */
 .att-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 14px;

@@ -263,6 +263,7 @@ function init_db(): void
     seed_placement_roles();
     seed_academic_head_role();
     undo_placement_roles_full();
+    rename_drive_type_nta();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -490,6 +491,18 @@ function undo_placement_roles_full(): void
     }
 }
 
+/**
+ * The placement drive type once labelled "NTA" is NATS (National Apprenticeship
+ * Training Scheme). The browser's DRIVE_TYPES list now says NATS, and a drive
+ * type is stored as that literal string, so rows saved under the old label
+ * must move with it or they drop out of the NATS filter and lose the value in
+ * the edit form. Idempotent: once renamed nothing matches.
+ */
+function rename_drive_type_nta(): void
+{
+    run_sql('UPDATE ' . qi('drives') . ' SET ' . qi('driveType') . " = 'NATS' WHERE " . qi('driveType') . " = 'NTA'");
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -498,7 +511,7 @@ function undo_placement_roles_full(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-16-placement-roles-revert';
+const DB_MIGRATION_REV = '2026-09-17-drive-type-nats';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

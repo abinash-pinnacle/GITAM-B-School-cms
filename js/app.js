@@ -628,7 +628,9 @@
   /* What the cell is running, in its own words: a company visits campus, or
      recruits off it, or takes summer interns, or comes through the national
      test. Declared here because the sidebar lists them under Placement Drives. */
-  const DRIVE_TYPES = ['On Campus', 'Off Campus', 'Summer Placement', 'NTA'];
+  // NATS = National Apprenticeship Training Scheme (was labelled "NTA"; the
+  // server renames stored values in step — see rename_drive_type_nta in db.php)
+  const DRIVE_TYPES = ['On Campus', 'Off Campus', 'Summer Placement', 'NATS'];
   // the mark-attendance page itself, not the portal root — /emp/ only lands on
   // the login index, which is a step further from what staff actually need
   const EMP_ATTENDANCE_URL = 'https://pinnacle.myattendance.co.in/emp/add_attendance';
@@ -819,6 +821,11 @@
     });
   }
 
+  /* Which sidebar groups the person has opened or closed by hand this session,
+     keyed by the group's page ("drives"). Unset means: open while a page of
+     the group is showing, closed otherwise. */
+  const navOpen = {};
+
   function buildNav() {
     refreshPerms();
     const nav = $('#navMenu');
@@ -836,21 +843,36 @@
          child's key carries the filter — "drives::On Campus" — so the router
          needs no special case and the active highlight still works. */
       if (key === NAV_GROUP) {
+        /* A group is a dropdown: its row only opens and closes the list, and
+           the list is shown while a page of the group is on screen unless the
+           person has closed it by hand. "All" is the first child, since the
+           row itself no longer opens the unfiltered page. */
+        const inside = splitViewKey(currentView).view === url;
+        const open = navOpen[url] !== undefined ? navOpen[url] : inside;
+        const group = document.createElement('div');
+        group.className = 'nav-group' + (open ? ' open' : '');
         const parent = document.createElement('div');
-        parent.className = 'nav-item' + (currentView === url ? ' active' : '');
+        parent.className = 'nav-item nav-parent' + (open ? ' open' : '') + (inside ? ' within' : '');
         parent.title = txt;
-        parent.innerHTML = `<span class="ico">${ico}</span><span>${txt}</span>`;
-        parent.onclick = () => navigate(url);
-        nav.appendChild(parent);
-        (kids || []).forEach((kid) => {
-          const childKey = `${url}${NAV_GROUP}${kid}`;
+        parent.setAttribute('role', 'button');
+        parent.setAttribute('aria-expanded', open ? 'true' : 'false');
+        parent.innerHTML = `<span class="ico">${ico}</span><span>${txt}</span><span class="nav-caret">${ic('chevron-down')}</span>`;
+        parent.onclick = () => { navOpen[url] = !open; buildNav(); };
+        group.appendChild(parent);
+        const list = document.createElement('div');
+        list.className = 'nav-kids';
+        const entries = [['', 'All ' + txt.replace(/^Placement\s+/i, '')], ...(kids || []).map(k => [k, k])];
+        entries.forEach(([preset, label]) => {
+          const childKey = preset ? `${url}${NAV_GROUP}${preset}` : url;
           const child = document.createElement('div');
           child.className = 'nav-item nav-child' + (currentView === childKey ? ' active' : '');
-          child.title = kid;
-          child.innerHTML = `<span class="ico">•</span><span>${esc(kid)}</span>`;
-          child.onclick = () => navigate(childKey);
-          nav.appendChild(child);
+          child.title = label;
+          child.innerHTML = `<span class="ico">•</span><span>${esc(label)}</span>`;
+          child.onclick = () => { navOpen[url] = true; navigate(childKey); };
+          list.appendChild(child);
         });
+        group.appendChild(list);
+        nav.appendChild(group);
         return;
       }
       if (key === NAV_SECTION) {
