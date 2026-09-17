@@ -9,10 +9,10 @@
   <!-- installable app (PWA): icons, colours and the manifest an APK builder reads -->
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#123f8c" />
-  <link rel="icon" href="assets/icons/favicon.ico?b=20260917d" sizes="any" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260917d" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260917d" />
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260917d" />
+  <link rel="icon" href="assets/icons/favicon.ico?b=20260918a" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?b=20260918a" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?b=20260918a" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?b=20260918a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <!-- NOT black-translucent: that draws the page *under* the iPhone status
        bar, so in the installed app the topbar and the ☰ button end up beneath
@@ -25,7 +25,7 @@
        Bump this stamp whenever css/js changes, otherwise a phone that cached
        the old files (iOS Safari caches JS for days when no Cache-Control is
        sent) keeps running yesterday's app against today's API. -->
-  <link rel="stylesheet" href="css/styles.css?b=20260917d" />
+  <link rel="stylesheet" href="css/styles.css?b=20260918a" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
@@ -107,6 +107,8 @@
         <button id="menuToggle" class="menu-toggle" aria-label="Toggle menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
         <h2 id="pageTitle">Dashboard</h2>
         <div class="topbar-right">
+          <button id="ntBell" class="nt-bell" type="button" aria-label="Notifications"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span id="ntCount" class="nt-count hidden">0</span></button>
+          <div id="ntPanel" class="nt-panel hidden"></div>
           <span id="topUserName" class="user-chip"></span>
         </div>
       </header>
@@ -144,9 +146,9 @@
   <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
 
-  <script src="js/xlsx.js?b=20260917d"></script>
-  <script src="js/store.js?b=20260917d"></script>
-  <script src="js/app.js?b=20260917d"></script>
+  <script src="js/xlsx.js?b=20260918a"></script>
+  <script src="js/store.js?b=20260918a"></script>
+  <script src="js/app.js?b=20260918a"></script>
 
   <!-- PWA: register the shell cache and wire the install button.
        Kept inline and defensive so an unsupported browser is a no-op. -->

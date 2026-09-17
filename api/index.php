@@ -1204,7 +1204,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     if (in_array($resource, TICKET_TABLES, true)) {
         send_json(['error' => 'forbidden', 'message' => 'Tickets are reached through the helpdesk.'], 403);
     }
-    if (strncmp($resource, 'tk-', 3) === 0) {
+    if (preg_match('/^(tk|nt|ap|rp)-/', $resource)) {
         return;
     }
     // a reporting relationship is set by the Super Admin alone, and must make sense
@@ -3411,7 +3411,8 @@ $isCollection = isset(COLLECTIONS[$resource]) && $resource !== '';
    that has not arrived yet would take the whole API down.
    ===================================================================== */
 
-const TICKET_TABLES = ['tickets', 'tickethistory', 'ticketcomments'];
+/* the private tables: helpdesk, bell and approvals — reached only through their own endpoints */
+const TICKET_TABLES = ['tickets', 'tickethistory', 'ticketcomments', 'notifications', 'approvals', 'approvalsteps'];
 
 /** which roles an account of a role may report to (by role key) */
 const REPORTS_TO = [
@@ -4074,6 +4075,11 @@ function api_tk_create(): void
         }
         throw $e;
     }
+    if ($route) {
+        nt_push((string) $route['user']['id'], 'ticket_assigned', 'New ticket ' . $no,
+            $subject . ' — from ' . tk_name($me) . ' (' . role_title((string) $me['role']) . ')', 'tickets::' . $t['id'],
+            $t['id'], in_array($pri, ['High', 'Critical'], true) ? 'warning' : 'info');
+    }
     audit('ticket-create', 'tickets', $t['id'], $no,
         $subject . ' — ' . ($route ? 'assigned to ' . tk_name($route['user']) . ' (' . role_title($route['user']['role']) . ')'
                                    : 'no handler available, left open'));
@@ -4263,6 +4269,36 @@ function api_tk_action(): void
         }
         throw $e;
     }
+    $link = 'tickets::' . $t['id'];
+    $no = (string) $t['ticketNo'];
+    $sub = (string) $t['subject'];
+    $creator = (string) $t['createdBy'];
+    $holderNow = (string) $t['assignedTo'];
+    switch ($act) {
+        case 'escalate':
+            nt_push($holderNow, 'ticket_escalated', 'Escalated to you: ' . $no, $sub . ' — from ' . $meName . ': ' . $reason, $link, (string) $t['id'], 'warning');
+            nt_push($creator, 'ticket_escalated', 'Your ticket was escalated: ' . $no, 'Now with ' . $t['assignedName'] . ' (' . role_title((string) $t['assignedRole']) . ').', $link, (string) $t['id']);
+            break;
+        case 'reassign':
+        case 'assign':
+            nt_push($holderNow, 'ticket_assigned', 'Ticket assigned to you: ' . $no, $sub . ' — by ' . $meName . '.', $link, (string) $t['id']);
+            break;
+        case 'comment':
+            nt_push_many([$creator, $holderNow], 'ticket_comment', 'New message on ' . $no, $meName . ': ' . mb_substr(trim((string) ($b['message'] ?? 'sent an attachment')), 0, 140), $link, (string) $t['id']);
+            break;
+        case 'request_info':
+            nt_push($creator, 'ticket_info_requested', 'Information needed: ' . $no, $meName . ': ' . $comment, $link, (string) $t['id'], 'warning');
+            break;
+        case 'resolve':
+            nt_push($creator, 'ticket_resolved', 'Resolved: ' . $no, $sub . ' — resolved by ' . $meName . '. Please confirm and close.', $link, (string) $t['id'], 'success');
+            break;
+        case 'close':
+            nt_push_many([$holderNow, (string) $t['resolvedBy']], 'ticket_closed', 'Closed: ' . $no, $sub . ' — closed by ' . $meName . '.', $link, (string) $t['id'], 'success');
+            break;
+        case 'reopen':
+            nt_push($holderNow, 'ticket_reopened', 'Reopened: ' . $no, $sub . ' — reopened by ' . $meName . ': ' . $reason, $link, (string) $t['id'], 'warning');
+            break;
+    }
     if ($act !== 'comment') {
         audit('ticket-' . $act, 'tickets', (string) $t['id'], (string) $t['ticketNo'], $summary,
             ['from' => $prevStatus, 'to' => (string) $t['status']]);
@@ -4309,6 +4345,1255 @@ function api_tk_org(): void
         'active' => tk_active($u), 'reportingTo' => (string) ($u['reportingTo'] ?? ''),
         'empId' => (string) ($u['empId'] ?? '')], $rows);
     send_json(['users' => $out, 'reportsTo' => REPORTS_TO]);
+}
+
+/* =====================================================================
+   NOTIFICATIONS (in-app bell) — Phase 3
+   ---------------------------------------------------------------------
+   One row per person per event, written by the server at the moment the
+   event happens, never by a browser. SLA warnings are raised by a sweep that
+   runs at most once a minute, piggy-backed on the bell's own poll, so no
+   cron is needed on shared hosting.
+   ===================================================================== */
+
+/** a notification for one account; nobody is told about their own action */
+function nt_push(string $userId, string $kind, string $title, string $message, string $link,
+                 string $refId = '', string $severity = 'info'): void
+{
+    if ($userId === '') {
+        return;
+    }
+    $me = current_user();
+    if ($me && (string) $me['id'] === $userId && strncmp($kind, 'sla_', 4) !== 0) {
+        return;
+    }
+    try {
+        run_sql('INSERT INTO ' . qi('notifications') . ' (' . implode(', ', array_map('qi', COLLECTIONS['notifications']))
+            . ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                tk_id('NT'), $userId, $kind, mb_substr($title, 0, 190), $message, $link, $refId, $severity,
+                (string) time(), null,
+            ]);
+    } catch (Throwable $e) {
+        // a notification must never break the action that raised it
+        error_log('[nmiet-api] notify: ' . $e->getMessage());
+    }
+}
+
+function nt_push_many(array $userIds, string $kind, string $title, string $message, string $link,
+                      string $refId = '', string $severity = 'info'): void
+{
+    foreach (array_unique(array_filter(array_map('strval', $userIds))) as $uid) {
+        nt_push($uid, $kind, $title, $message, $link, $refId, $severity);
+    }
+}
+
+/** a small key/value in _meta, which is outside the live-poll signature */
+function nt_meta_get(string $k): string
+{
+    try {
+        $r = fetch_one('SELECT ' . qi('v') . ' AS v FROM ' . qi('_meta') . ' WHERE ' . qi('k') . ' = ?', [$k]);
+        return $r ? (string) $r['v'] : '';
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+function nt_meta_set(string $k, string $v): void
+{
+    $st = db()->prepare('UPDATE ' . qi('_meta') . ' SET ' . qi('v') . ' = ? WHERE ' . qi('k') . ' = ?');
+    $st->execute([$v, $k]);
+    if ($st->rowCount() === 0 && nt_meta_get($k) === '') {
+        try {
+            run_sql('INSERT INTO ' . qi('_meta') . ' (' . qi('k') . ', ' . qi('v') . ') VALUES (?, ?)', [$k, $v]);
+        } catch (PDOException $e) {
+            // a racing request wrote it first
+        }
+    }
+}
+
+/**
+ * SLA warnings, following the hierarchy: at 75% of the budget the holder is
+ * warned; past the deadline the holder and the next authority above them are
+ * told. Each ticket is warned once per threshold.
+ */
+function tk_sla_sweep(): void
+{
+    $now = time();
+    if ($now - (int) nt_meta_get('slaSweepAt') < 60) {
+        return;
+    }
+    nt_meta_set('slaSweepAt', (string) $now);
+    $rows = fetch_all('SELECT ' . implode(', ', array_map('qi', ['id', 'ticketNo', 'subject', 'status', 'assignedTo',
+        'assignedName', 'assignedRole', 'chain', 'escalationLevel', 'slaHours', 'createdAt', 'slaRiskNotifiedAt',
+        'slaBreachNotifiedAt'])) . ' FROM ' . qi('tickets') . ' WHERE ' . qi('status') . " NOT IN ('Resolved', 'Closed')");
+    foreach ($rows as $t) {
+        $budget = (int) round((float) $t['slaHours'] * 3600);
+        if ($budget <= 0) {
+            continue;
+        }
+        $used = $now - (int) $t['createdAt'];
+        $link = 'tickets::' . $t['id'];
+        if ($used > $budget && (string) ($t['slaBreachNotifiedAt'] ?? '') === '') {
+            $holder = tk_user((string) $t['assignedTo']);
+            $chain = TICKET_CHAINS[(string) $t['chain']] ?? [];
+            $cur = (int) $t['escalationLevel'];
+            $next = $cur + 1 < count($chain)
+                ? tk_route($chain, $cur + 1, $holder ? tk_line_above($holder) : [], (string) $t['assignedTo']) : null;
+            $msg = $t['subject'] . ' — SLA breached; now with ' . ($t['assignedName'] ?: 'nobody') . '.';
+            nt_push_many([(string) $t['assignedTo'], $next ? $next['user']['id'] : ''], 'sla_breach',
+                'SLA breached: ' . $t['ticketNo'], $msg, $link, (string) $t['id'], 'danger');
+            run_sql('UPDATE ' . qi('tickets') . ' SET ' . qi('slaBreachNotifiedAt') . ' = ?, ' . qi('slaRiskNotifiedAt')
+                . ' = COALESCE(NULLIF(' . qi('slaRiskNotifiedAt') . ", ''), ?) WHERE " . qi('id') . ' = ?',
+                [(string) $now, (string) $now, $t['id']]);
+        } elseif ($used >= $budget * 0.75 && $used <= $budget && (string) ($t['slaRiskNotifiedAt'] ?? '') === '') {
+            nt_push((string) $t['assignedTo'], 'sla_risk', 'SLA at risk: ' . $t['ticketNo'],
+                $t['subject'] . ' — ' . max(1, (int) round(($budget - $used) / 60)) . ' min left before the SLA deadline.',
+                $link, (string) $t['id'], 'warning');
+            run_sql('UPDATE ' . qi('tickets') . ' SET ' . qi('slaRiskNotifiedAt') . ' = ? WHERE ' . qi('id') . ' = ?',
+                [(string) $now, $t['id']]);
+        }
+    }
+}
+
+/** the bell: this account's latest notifications and how many are unread */
+function api_nt_list(): void
+{
+    $me = current_user();
+    try {
+        tk_sla_sweep();
+    } catch (Throwable $e) {
+        error_log('[nmiet-api] sla sweep: ' . $e->getMessage());
+    }
+    $uid = (string) $me['id'];
+    $rows = fetch_all('SELECT * FROM ' . qi('notifications') . ' WHERE ' . qi('userId') . ' = ? ORDER BY '
+        . qi('at') . ' DESC, ' . qi('id') . ' DESC LIMIT 40', [$uid]);
+    $unread = fetch_one('SELECT COUNT(*) AS n FROM ' . qi('notifications') . ' WHERE ' . qi('userId') . ' = ? AND ('
+        . qi('readAt') . ' IS NULL OR ' . qi('readAt') . " = '')", [$uid]);
+    send_json(['now' => time(), 'unread' => (int) ($unread['n'] ?? 0),
+               'items' => array_map(fn($r) => tk_int_fields($r, ['at', 'readAt']), $rows)]);
+}
+
+/** mark one, or all, of the caller's own notifications read */
+function api_nt_read(): void
+{
+    $me = current_user();
+    $b = body();
+    $now = (string) time();
+    if (!empty($b['all'])) {
+        run_sql('UPDATE ' . qi('notifications') . ' SET ' . qi('readAt') . ' = ? WHERE ' . qi('userId') . ' = ? AND ('
+            . qi('readAt') . ' IS NULL OR ' . qi('readAt') . " = '')", [$now, (string) $me['id']]);
+    } else {
+        run_sql('UPDATE ' . qi('notifications') . ' SET ' . qi('readAt') . ' = ? WHERE ' . qi('id') . ' = ? AND '
+            . qi('userId') . ' = ?', [$now, (string) ($b['id'] ?? ''), (string) $me['id']]);
+    }
+    send_json(['ok' => true]);
+}
+
+/* =====================================================================
+   APPROVALS — Phase 4
+   ---------------------------------------------------------------------
+   A request climbs the requester's reporting line. Each type names the
+   authority needed to finally approve it (a rank); an approver who holds
+   that authority decides, one who does not forwards it upward with their
+   approval recorded — so unnecessary levels are skipped and necessary ones
+   are not. Returned requests go back to the requester to correct.
+   ===================================================================== */
+
+/** how much authority a role carries — higher decides more */
+const AUTH_RANK = [
+    'admin' => 100, 'subadmin' => 90, 'center_head' => 80, 'academic_head' => 70,
+    'dean_placement' => 60, 'course_coordinator' => 60, 'admission' => 55, 'accountant' => 55,
+    'librarian' => 55, 'plmt_officer' => 50, 'placement_officer' => 50, 'plmt_coordinator' => 40,
+    'faculty' => 20, 'guest_faculty' => 15, 'student' => 0,
+];
+const APPROVAL_TYPES = [
+    'Leave Request'                 => ['rank' => 60, 'authority' => 'Course Coordinator / reporting manager'],
+    'Academic Change'               => ['rank' => 70, 'authority' => 'Academic Head'],
+    'Event / Activity'              => ['rank' => 70, 'authority' => 'Academic Head'],
+    'Training / Placement Activity' => ['rank' => 60, 'authority' => 'Dean T&P'],
+    'Purchase / Expense'            => ['rank' => 80, 'authority' => 'Center Head'],
+    'Policy / Exception'            => ['rank' => 90, 'authority' => 'Admin'],
+    'Other'                         => ['rank' => 80, 'authority' => 'Center Head'],
+];
+const APPROVAL_STAGE_ACTIONS = ['assigned', 'forwarded', 'escalated', 'resubmitted'];
+const APPROVAL_OPEN = ['Pending', 'Escalated', 'Returned'];
+
+function ap_rank(string $role): int
+{
+    if (isset(AUTH_RANK[$role])) {
+        return AUTH_RANK[$role];
+    }
+    return base_role($role) === 'admin' ? 50 : 10;
+}
+
+/** who an account's requests go to: its own manager, else a holder of a role it reports to */
+function ap_manager_of(array $u): ?array
+{
+    $p = tk_user(trim((string) ($u['reportingTo'] ?? '')));
+    if (tk_active($p) && (string) $p['id'] !== (string) $u['id']) {
+        return $p;
+    }
+    $roles = REPORTS_TO[(string) $u['role']] ?? ['center_head', 'subadmin', 'admin'];
+    foreach (array_merge($roles, ['center_head', 'admin']) as $role) {
+        foreach (tk_users_with_roles([$role]) as $c) {
+            if ((string) $c['id'] !== (string) $u['id'] && ap_rank((string) $c['role']) > ap_rank((string) $u['role'])) {
+                return $c;
+            }
+        }
+    }
+    return null;
+}
+
+function ap_load(string $id): ?array
+{
+    if ($id === '') {
+        return null;
+    }
+    $a = fetch_one('SELECT * FROM ' . qi('approvals') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    return $a ? row_out('approvals', $a) : null;
+}
+
+function ap_log(array $row): void
+{
+    $cols = COLLECTIONS['approvalsteps'];
+    $row['id'] = $row['id'] ?? tk_id('AS');
+    $vals = [];
+    foreach ($cols as $c) {
+        $vals[] = array_key_exists($c, $row) && $row[$c] !== null ? (string) $row[$c] : null;
+    }
+    run_sql('INSERT INTO ' . qi('approvalsteps') . ' (' . implode(', ', array_map('qi', $cols)) . ') VALUES ('
+        . implode(', ', array_fill(0, count($cols), '?')) . ')', $vals);
+}
+
+function ap_close_stage(string $approvalId, int $now): void
+{
+    $in = implode(', ', array_fill(0, count(APPROVAL_STAGE_ACTIONS), '?'));
+    $st = fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('assignedAt') . ' AS assignedAt FROM ' . qi('approvalsteps')
+        . ' WHERE ' . qi('approvalId') . ' = ? AND ' . qi('action') . ' IN (' . $in . ') AND (' . qi('completedAt')
+        . ' IS NULL OR ' . qi('completedAt') . " = '') ORDER BY " . qi('assignedAt') . ' DESC, ' . qi('id') . ' DESC LIMIT 1',
+        array_merge([$approvalId], APPROVAL_STAGE_ACTIONS));
+    if ($st) {
+        run_sql('UPDATE ' . qi('approvalsteps') . ' SET ' . qi('completedAt') . ' = ?, ' . qi('seconds') . ' = ? WHERE '
+            . qi('id') . ' = ?', [(string) $now, (string) max(0, $now - (int) $st['assignedAt']), $st['id']]);
+    }
+}
+
+function ap_can_see(array $a, array $me, ?bool $involved = null): bool
+{
+    $uid = (string) $me['id'];
+    if (in_array((string) $me['role'], ['admin', 'center_head', 'subadmin'], true)) {
+        return true;
+    }
+    if ((string) $a['requestedBy'] === $uid || (string) $a['currentApprover'] === $uid) {
+        return true;
+    }
+    if ($involved === null) {
+        $involved = (bool) fetch_one('SELECT 1 AS x FROM ' . qi('approvalsteps') . ' WHERE ' . qi('approvalId')
+            . ' = ? AND (' . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?) LIMIT 1', [(string) $a['id'], $uid, $uid]);
+    }
+    return $involved;
+}
+
+function ap_allowed(array $a, array $me): array
+{
+    $uid = (string) $me['id'];
+    $s = (string) $a['status'];
+    $approver = (string) $a['currentApprover'] === $uid && in_array($s, ['Pending', 'Escalated'], true);
+    $override = (string) $me['role'] === 'admin' && in_array($s, ['Pending', 'Escalated'], true)
+        && (string) $a['requestedBy'] !== $uid;
+    $requester = (string) $a['requestedBy'] === $uid;
+    return [
+        'approve'  => $approver || $override,
+        'reject'   => $approver || $override,
+        'return'   => $approver,
+        'escalate' => $approver,
+        'resubmit' => $requester && $s === 'Returned',
+    ];
+}
+
+const APPROVAL_LIST_FIELDS = ['id', 'approvalNo', 'type', 'title', 'amount', 'fromDate', 'toDate', 'requiredRank',
+    'requestedBy', 'requestedByName', 'requestedByRole', 'requestedReportsTo', 'currentApprover',
+    'currentApproverName', 'currentApproverRole', 'assignedAt', 'status', 'level', 'createdAt', 'updatedAt',
+    'decidedAt', 'decidedByName'];
+const APPROVAL_TIME_FIELDS = ['assignedAt', 'level', 'createdAt', 'updatedAt', 'decidedAt', 'requiredRank'];
+
+function api_ap_meta(): void
+{
+    $types = [];
+    foreach (APPROVAL_TYPES as $name => $d) {
+        $types[] = ['name' => $name, 'authority' => $d['authority'], 'rank' => $d['rank']];
+    }
+    $me = current_user();
+    $mgr = (string) $me['role'] === 'student' ? null : ap_manager_of(tk_user((string) $me['id']) ?? $me);
+    send_json(['types' => $types, 'myRank' => ap_rank((string) $me['role']),
+               'manager' => $mgr ? ['id' => $mgr['id'], 'name' => tk_name($mgr), 'role' => $mgr['role']] : null]);
+}
+
+function api_ap_list(): void
+{
+    $me = current_user();
+    $uid = (string) $me['id'];
+    $mine = [];
+    foreach (fetch_all('SELECT DISTINCT ' . qi('approvalId') . ' AS a FROM ' . qi('approvalsteps') . ' WHERE '
+        . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?', [$uid, $uid]) as $r) {
+        $mine[(string) $r['a']] = true;
+    }
+    $out = [];
+    foreach (fetch_all('SELECT ' . implode(', ', array_map('qi', APPROVAL_LIST_FIELDS)) . ' FROM ' . qi('approvals')
+        . ' ORDER BY ' . qi('createdAt') . ' DESC') as $a) {
+        if (!ap_can_see($a, $me, isset($mine[(string) $a['id']]))) {
+            continue;
+        }
+        $a = tk_int_fields($a, APPROVAL_TIME_FIELDS);
+        $a['involved'] = isset($mine[(string) $a['id']]);
+        $out[] = $a;
+    }
+    send_json(['now' => time(), 'me' => ['id' => $uid, 'role' => (string) $me['role']], 'approvals' => $out]);
+}
+
+function api_ap_get(?string $id): void
+{
+    $me = current_user();
+    $a = ap_load((string) $id);
+    if (!$a) {
+        send_json(['error' => 'not found', 'message' => 'Request not found.'], 404);
+    }
+    if (!ap_can_see($a, $me)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — this request is outside your scope.'], 403);
+    }
+    $steps = array_map(fn($s) => tk_int_fields($s, ['level', 'at', 'assignedAt', 'completedAt', 'seconds']),
+        fetch_all('SELECT * FROM ' . qi('approvalsteps') . ' WHERE ' . qi('approvalId') . ' = ? ORDER BY '
+            . qi('at') . ' ASC, ' . qi('id') . ' ASC', [(string) $a['id']]));
+    $allowed = ap_allowed($a, $me);
+    $approver = tk_user((string) $a['currentApprover']);
+    $next = null;
+    if ($approver && in_array((string) $a['status'], ['Pending', 'Escalated'], true)) {
+        $n = ap_manager_of($approver);
+        $next = $n ? ['id' => $n['id'], 'name' => tk_name($n), 'role' => $n['role']] : null;
+    }
+    $decides = $approver ? ap_rank((string) $approver['role']) >= (int) $a['requiredRank'] || (string) $approver['role'] === 'admin' : false;
+    $a = tk_int_fields($a, APPROVAL_TIME_FIELDS);
+    send_json(['now' => time(), 'approval' => $a, 'steps' => $steps, 'allowed' => $allowed, 'next' => $next,
+               'approverDecides' => $decides, 'authority' => APPROVAL_TYPES[(string) $a['type']]['authority'] ?? '',
+               'me' => ['id' => (string) $me['id'], 'role' => (string) $me['role']]]);
+}
+
+function api_ap_create(): void
+{
+    $me = current_user();
+    $role = (string) $me['role'];
+    if ($role === 'student') {
+        send_json(['error' => 'forbidden', 'message' => 'Students raise a ticket instead of an approval request.'], 403);
+    }
+    if ($role === 'admin') {
+        send_json(['error' => 'forbidden', 'message' => 'The Super Admin decides requests; there is nobody above to ask.'], 403);
+    }
+    $b = body();
+    $type = (string) ($b['type'] ?? '');
+    $title = trim((string) ($b['title'] ?? ''));
+    $details = trim((string) ($b['details'] ?? ''));
+    if (!isset(APPROVAL_TYPES[$type])) {
+        tk_bad('Choose a request type.');
+    }
+    if (mb_strlen($title) < 3 || mb_strlen($title) > 200) {
+        tk_bad('Give the request a title of 3 to 200 characters.');
+    }
+    if ($details === '') {
+        tk_bad('Describe what you are asking for.');
+    }
+    $amount = trim((string) ($b['amount'] ?? ''));
+    if ($amount !== '' && (!is_numeric($amount) || (float) $amount < 0)) {
+        tk_bad('Amount must be a positive number.');
+    }
+    $from = trim((string) ($b['fromDate'] ?? ''));
+    $to = trim((string) ($b['toDate'] ?? ''));
+    foreach ([$from, $to] as $d) {
+        if ($d !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) {
+            tk_bad('Dates must be in YYYY-MM-DD form.');
+        }
+    }
+    if ($from !== '' && $to !== '' && $to < $from) {
+        tk_bad('The end date is before the start date.');
+    }
+    $meRow = tk_user((string) $me['id']) ?? $me;
+    $approver = ap_manager_of($meRow);
+    if (!$approver) {
+        tk_bad('Nobody is available in your reporting line to approve this. Ask the Super Admin to set your Reporting To.');
+    }
+    $boss = tk_user(trim((string) ($meRow['reportingTo'] ?? '')));
+    $now = time();
+    $year = gmdate('Y', $now);
+    $a = [
+        'id' => tk_id('AP'), 'approvalNo' => sprintf('APR-%s-%05d', $year, tk_take_seq('approval:' . $year)),
+        'type' => $type, 'title' => $title, 'details' => $details, 'amount' => $amount,
+        'fromDate' => $from, 'toDate' => $to, 'requiredRank' => (string) APPROVAL_TYPES[$type]['rank'],
+        'requestedBy' => (string) $me['id'], 'requestedByName' => tk_name($me), 'requestedByRole' => $role,
+        'requestedReportsTo' => $boss ? tk_name($boss) . ' (' . role_title((string) $boss['role']) . ')' : '',
+        'currentApprover' => $approver['id'], 'currentApproverName' => tk_name($approver),
+        'currentApproverRole' => $approver['role'], 'assignedAt' => (string) $now,
+        'status' => 'Pending', 'level' => '1', 'createdAt' => (string) $now, 'updatedAt' => (string) $now,
+        'decidedAt' => '', 'decidedBy' => '', 'decidedByName' => '', 'finalRemarks' => '',
+        'attachments' => tk_clean_attachments($b['attachments'] ?? []),
+    ];
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        upsert('approvals', $a);
+        ap_log(['approvalId' => $a['id'], 'action' => 'requested', 'fromUser' => $me['id'], 'fromName' => tk_name($me),
+                'fromRole' => $role, 'status' => 'Pending', 'at' => $now]);
+        ap_log(['approvalId' => $a['id'], 'action' => 'assigned', 'fromUser' => $me['id'], 'fromName' => tk_name($me),
+                'fromRole' => $role, 'toUser' => $approver['id'], 'toName' => tk_name($approver),
+                'toRole' => $approver['role'], 'status' => 'Pending', 'level' => 1, 'at' => $now, 'assignedAt' => $now]);
+        if ($own) {
+            db()->commit();
+        }
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    nt_push((string) $approver['id'], 'approval_requested', 'Approval needed: ' . $a['approvalNo'],
+        $type . ' — ' . $title . ' (from ' . tk_name($me) . ', ' . role_title($role) . ')', 'approvals::' . $a['id'], $a['id'], 'warning');
+    audit('approval-request', 'approvals', $a['id'], $a['approvalNo'], $type . ': ' . $title . ' → ' . tk_name($approver));
+    send_json(['ok' => true, 'id' => $a['id'], 'approvalNo' => $a['approvalNo'],
+               'approverName' => tk_name($approver), 'approverRole' => $approver['role']], 201);
+}
+
+function api_ap_action(): void
+{
+    $me = current_user();
+    $b = body();
+    $a = ap_load((string) ($b['id'] ?? ''));
+    if (!$a) {
+        send_json(['error' => 'not found', 'message' => 'Request not found.'], 404);
+    }
+    if (!ap_can_see($a, $me)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — this request is outside your scope.'], 403);
+    }
+    $act = (string) ($b['action'] ?? '');
+    $allowed = ap_allowed($a, $me);
+    if (empty($allowed[$act])) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — you cannot do that on this request now.'], 403);
+    }
+    $remarks = trim((string) ($b['remarks'] ?? ''));
+    $now = time();
+    $uid = (string) $me['id'];
+    $meName = tk_name($me);
+    $link = 'approvals::' . $a['id'];
+    $requester = (string) $a['requestedBy'];
+    $prev = (string) $a['status'];
+    $notes = [];
+    $summary = '';
+    $step = function (array $row) use ($a, $now, $me, $meName) {
+        ap_log(array_merge(['approvalId' => $a['id'], 'fromUser' => $me['id'], 'fromName' => $meName,
+                            'fromRole' => $me['role'], 'at' => $now], $row));
+    };
+    $moveTo = function (array $to, string $action, string $status) use (&$a, $now, $step, $remarks) {
+        $a['level'] = (string) ((int) $a['level'] + 1);
+        $step(['action' => $action, 'toUser' => $to['id'], 'toName' => tk_name($to), 'toRole' => $to['role'],
+               'status' => $status, 'remarks' => $remarks, 'level' => $a['level'], 'assignedAt' => $now]);
+        $a['currentApprover'] = $to['id'];
+        $a['currentApproverName'] = tk_name($to);
+        $a['currentApproverRole'] = $to['role'];
+        $a['assignedAt'] = (string) $now;
+        $a['status'] = $status;
+    };
+    $decide = function (string $status) use (&$a, $now, $uid, $meName, $remarks) {
+        $a['status'] = $status;
+        $a['decidedAt'] = (string) $now;
+        $a['decidedBy'] = $uid;
+        $a['decidedByName'] = $meName;
+        $a['finalRemarks'] = $remarks;
+    };
+
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        switch ($act) {
+            case 'approve':
+                ap_close_stage((string) $a['id'], $now);
+                $authority = (string) $me['role'] === 'admin' || ap_rank((string) $me['role']) >= (int) $a['requiredRank'];
+                $up = $authority ? null : ap_manager_of(tk_user($uid) ?? $me);
+                if ($authority || !$up) {
+                    $step(['action' => 'approved', 'status' => 'Approved', 'remarks' => $remarks, 'level' => $a['level']]);
+                    $decide('Approved');
+                    $notes[] = [[$requester], 'approval_approved', 'Approved: ' . $a['approvalNo'],
+                                $a['title'] . ' — approved by ' . $meName . '.', 'success'];
+                    $summary = 'approved';
+                } else {
+                    // approved at this level, but it needs a higher authority
+                    $step(['action' => 'approved', 'status' => 'Pending', 'remarks' => $remarks, 'level' => $a['level']]);
+                    $moveTo($up, 'forwarded', 'Pending');
+                    $notes[] = [[$up['id']], 'approval_requested', 'Approval needed: ' . $a['approvalNo'],
+                                $a['type'] . ' — ' . $a['title'] . ' (approved by ' . $meName . ', needs your decision)', 'warning'];
+                    $notes[] = [[$requester], 'approval_forwarded', 'Moving up: ' . $a['approvalNo'],
+                                $meName . ' approved; forwarded to ' . tk_name($up) . ' (' . role_title((string) $up['role']) . ').', 'info'];
+                    $summary = 'approved at level, forwarded to ' . tk_name($up);
+                }
+                break;
+            case 'reject':
+                if ($remarks === '') {
+                    tk_bad('Give a reason for rejecting.');
+                }
+                ap_close_stage((string) $a['id'], $now);
+                $step(['action' => 'rejected', 'status' => 'Rejected', 'remarks' => $remarks, 'level' => $a['level']]);
+                $decide('Rejected');
+                $notes[] = [[$requester], 'approval_rejected', 'Rejected: ' . $a['approvalNo'],
+                            $a['title'] . ' — rejected by ' . $meName . ': ' . $remarks, 'danger'];
+                $summary = 'rejected: ' . $remarks;
+                break;
+            case 'return':
+                if ($remarks === '') {
+                    tk_bad('Say what needs to be corrected.');
+                }
+                ap_close_stage((string) $a['id'], $now);
+                $step(['action' => 'returned', 'toUser' => $requester, 'toName' => $a['requestedByName'],
+                       'toRole' => $a['requestedByRole'], 'status' => 'Returned', 'remarks' => $remarks, 'level' => $a['level']]);
+                $a['status'] = 'Returned';
+                $notes[] = [[$requester], 'approval_returned', 'Returned for correction: ' . $a['approvalNo'],
+                            $meName . ': ' . $remarks, 'warning'];
+                $summary = 'returned: ' . $remarks;
+                break;
+            case 'escalate':
+                if ($remarks === '') {
+                    tk_bad('Give a reason for escalating.');
+                }
+                $up = ap_manager_of(tk_user($uid) ?? $me);
+                if (!$up) {
+                    tk_bad('There is no higher authority to escalate to.');
+                }
+                ap_close_stage((string) $a['id'], $now);
+                $moveTo($up, 'escalated', 'Escalated');
+                $notes[] = [[$up['id']], 'approval_requested', 'Escalated to you: ' . $a['approvalNo'],
+                            $a['title'] . ' — escalated by ' . $meName . ': ' . $remarks, 'warning'];
+                $notes[] = [[$requester], 'approval_escalated', 'Escalated: ' . $a['approvalNo'],
+                            $meName . ' escalated it to ' . tk_name($up) . '.', 'info'];
+                $summary = 'escalated to ' . tk_name($up);
+                break;
+            case 'resubmit':
+                $details = trim((string) ($b['details'] ?? ''));
+                if ($details !== '') {
+                    $a['details'] = $details;
+                }
+                $approver = tk_user((string) $a['currentApprover']);
+                if (!tk_active($approver)) {
+                    $approver = ap_manager_of(tk_user($uid) ?? $me);
+                }
+                if (!$approver) {
+                    tk_bad('Nobody is available to review the resubmitted request.');
+                }
+                $step(['action' => 'resubmitted', 'toUser' => $approver['id'], 'toName' => tk_name($approver),
+                       'toRole' => $approver['role'], 'status' => 'Pending', 'remarks' => $remarks,
+                       'level' => $a['level'], 'assignedAt' => $now]);
+                $a['currentApprover'] = $approver['id'];
+                $a['currentApproverName'] = tk_name($approver);
+                $a['currentApproverRole'] = $approver['role'];
+                $a['assignedAt'] = (string) $now;
+                $a['status'] = 'Pending';
+                $notes[] = [[$approver['id']], 'approval_requested', 'Resubmitted: ' . $a['approvalNo'],
+                            $a['title'] . ' — corrected and resubmitted by ' . $meName . '.', 'warning'];
+                $summary = 'resubmitted';
+                break;
+            default:
+                tk_bad('Unknown action.');
+        }
+        $a['updatedAt'] = (string) $now;
+        upsert('approvals', $a);
+        if ($own) {
+            db()->commit();
+        }
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    foreach ($notes as [$ids, $kind, $title, $msg, $sev]) {
+        nt_push_many($ids, $kind, $title, $msg, $link, (string) $a['id'], $sev);
+    }
+    audit('approval-' . $act, 'approvals', (string) $a['id'], (string) $a['approvalNo'], $summary,
+        ['from' => $prev, 'to' => (string) $a['status']]);
+    send_json(['ok' => true, 'status' => $a['status'], 'approverName' => $a['currentApproverName']]);
+}
+
+/* =====================================================================
+   REPORTS — Phase 5
+   ---------------------------------------------------------------------
+   Every report is built on the server from rows the caller is already
+   allowed to see — the ticket and approval visibility rules, the reporting
+   line, assigned courses, and the RBAC grant — so filters and exports can
+   only ever narrow that set. Every export is written to the audit log.
+   ===================================================================== */
+
+const REPORT_CATALOG = [
+    'tickets'    => ['label' => 'Ticket Report', 'group' => 'Helpdesk'],
+    'approvals'  => ['label' => 'Approval Report', 'group' => 'Approvals'],
+    'myteam'     => ['label' => 'Team & Hierarchy Report', 'group' => 'Organisation'],
+    'attendance' => ['label' => 'Attendance Report', 'group' => 'Academic', 'module' => 'attendance',
+                     'roles' => ['center_head', 'course_coordinator', 'faculty', 'guest_faculty']],
+    'marks'      => ['label' => 'Marks & Results Report', 'group' => 'Academic', 'module' => 'marks',
+                     'roles' => ['center_head', 'course_coordinator', 'faculty', 'guest_faculty']],
+    'workload'   => ['label' => 'Faculty Workload Report', 'group' => 'Academic', 'module' => 'academics',
+                     'roles' => ['center_head', 'course_coordinator']],
+    'admissions' => ['label' => 'Admission Report', 'group' => 'Admission', 'module' => 'students',
+                     'roles' => ['center_head', 'admission']],
+    'fees'       => ['label' => 'Fee & Payment Report', 'group' => 'Finance', 'module' => 'fees',
+                     'roles' => ['center_head', 'accountant']],
+    'placement'  => ['label' => 'Training & Placement Report', 'group' => 'T&P', 'module' => 'placement',
+                     'roles' => ['center_head', 'placement_officer']],
+    'library'    => ['label' => 'Library Report', 'group' => 'Library', 'module' => 'library',
+                     'roles' => ['center_head', 'librarian']],
+];
+const REPORT_OPEN = ['tickets', 'approvals', 'myteam'];
+
+function rp_allowed(string $key, array $me, string $need = 'view'): bool
+{
+    $role = (string) $me['role'];
+    $def = REPORT_CATALOG[$key] ?? null;
+    if (!$def || $role === 'student') {
+        return false;
+    }
+    if ($role === 'admin' || in_array($key, REPORT_OPEN, true)) {
+        return true;
+    }
+    if (has_custom_access()) {
+        return in_array($need, effective_perms()[$def['module']] ?? [], true);
+    }
+    return in_array($role, $def['roles'], true);
+}
+
+function rp_tz(): DateTimeZone
+{
+    static $tz = null;
+    return $tz ?? ($tz = new DateTimeZone('Asia/Kolkata'));
+}
+
+/** epoch seconds -> Y-m-d in the college's own time zone */
+function rp_day(?int $ts): string
+{
+    return $ts ? (new DateTime('@' . $ts))->setTimezone(rp_tz())->format('Y-m-d') : '';
+}
+
+function rp_dt(?int $ts): string
+{
+    return $ts ? (new DateTime('@' . $ts))->setTimezone(rp_tz())->format('d M Y, H:i') : '';
+}
+
+function rp_in_range(string $day, array $f): bool
+{
+    if ($day === '') {
+        return ($f['from'] ?? '') === '' && ($f['to'] ?? '') === '';
+    }
+    if (($f['from'] ?? '') !== '' && $day < $f['from']) {
+        return false;
+    }
+    if (($f['to'] ?? '') !== '' && $day > $f['to']) {
+        return false;
+    }
+    return true;
+}
+
+/** every login below an account in the reporting tree */
+function rp_descendants(string $uid): array
+{
+    $rows = fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('reportingTo') . ' AS p FROM ' . qi('users'));
+    $kids = [];
+    foreach ($rows as $r) {
+        $kids[(string) $r['p']][] = (string) $r['id'];
+    }
+    $out = [];
+    $queue = $kids[$uid] ?? [];
+    while ($queue) {
+        $id = array_shift($queue);
+        if (isset($out[$id]) || $id === $uid) {
+            continue;
+        }
+        $out[$id] = true;
+        foreach ($kids[$id] ?? [] as $k) {
+            $queue[] = $k;
+        }
+    }
+    return array_keys($out);
+}
+
+/**
+ * The courses an academic report may cover: a teacher's own, a coordinator's
+ * team's (when a team has been placed under them), everyone else's all.
+ */
+function rp_course_scope(array $me): ?array
+{
+    $role = (string) $me['role'];
+    if (in_array($role, ['faculty', 'guest_faculty'], true)) {
+        return array_column(fetch_all('SELECT ' . qi('id') . ' AS id FROM ' . qi('courses') . ' WHERE '
+            . qi('facultyId') . ' = ?', [(string) ($me['refId'] ?? '')]), 'id');
+    }
+    if ($role === 'course_coordinator' && !has_custom_access()) {
+        $team = rp_descendants((string) $me['id']);
+        $refs = [];
+        foreach ($team as $tid) {
+            $u = fetch_one('SELECT ' . qi('role') . ' AS role, ' . qi('refId') . ' AS refId FROM ' . qi('users')
+                . ' WHERE ' . qi('id') . ' = ?', [$tid]);
+            if ($u && in_array((string) $u['role'], ['faculty', 'guest_faculty'], true) && (string) $u['refId'] !== '') {
+                $refs[] = (string) $u['refId'];
+            }
+        }
+        if ($refs) {
+            $ph = implode(', ', array_fill(0, count($refs), '?'));
+            return array_column(fetch_all('SELECT ' . qi('id') . ' AS id FROM ' . qi('courses') . ' WHERE '
+                . qi('facultyId') . ' IN (' . $ph . ')', $refs), 'id');
+        }
+    }
+    return null;
+}
+
+function rp_opts(array $values): array
+{
+    $v = array_values(array_unique(array_filter(array_map('strval', $values), fn($x) => $x !== '')));
+    sort($v, SORT_NATURAL | SORT_FLAG_CASE);
+    return $v;
+}
+
+function rp_filters(): array
+{
+    $f = [];
+    foreach (['from', 'to', 'status', 'course', 'semester', 'category', 'priority', 'type', 'role', 'department',
+              'result', 'academicYear', 'driveType'] as $k) {
+        $f[$k] = trim((string) ($_GET[$k] ?? ''));
+    }
+    foreach (['from', 'to'] as $k) {
+        if ($f[$k] !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $f[$k])) {
+            $f[$k] = '';
+        }
+    }
+    return $f;
+}
+
+function rp_build(string $key, array $me, array $f): array
+{
+    $now = time();
+    $col = fn($k, $l, $t = 'text') => ['key' => $k, 'label' => $l, 'type' => $t];
+    switch ($key) {
+        case 'tickets': {
+            $uid = (string) $me['id'];
+            $mine = [];
+            foreach (fetch_all('SELECT DISTINCT ' . qi('ticketId') . ' AS t FROM ' . qi('tickethistory') . ' WHERE '
+                . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?', [$uid, $uid]) as $r) {
+                $mine[(string) $r['t']] = true;
+            }
+            $esc = [];
+            foreach (fetch_all('SELECT ' . qi('ticketId') . ' AS t FROM ' . qi('tickethistory') . ' WHERE ' . qi('action')
+                . " = 'escalated'") as $r) {
+                $esc[(string) $r['t']] = ($esc[(string) $r['t']] ?? 0) + 1;
+            }
+            $rows = [];
+            $opts = ['status' => [], 'category' => [], 'priority' => []];
+            $breached = 0; $resTimes = []; $met = 0; $finished = 0; $open = 0; $escalated = 0;
+            foreach (fetch_all('SELECT * FROM ' . qi('tickets') . ' ORDER BY ' . qi('createdAt') . ' DESC') as $t) {
+                if (!tk_can_see($t, $me, isset($mine[(string) $t['id']]))) {
+                    continue;
+                }
+                $opts['status'][] = $t['status']; $opts['category'][] = $t['category']; $opts['priority'][] = $t['priority'];
+                if (!rp_in_range(rp_day((int) $t['createdAt']), $f)
+                    || ($f['status'] !== '' && $t['status'] !== $f['status'])
+                    || ($f['category'] !== '' && $t['category'] !== $f['category'])
+                    || ($f['priority'] !== '' && $t['priority'] !== $f['priority'])) {
+                    continue;
+                }
+                $done = in_array($t['status'], ['Resolved', 'Closed'], true);
+                $budget = (int) round((float) $t['slaHours'] * 3600);
+                $end = (int) $t['resolvedAt'] ?: ($t['status'] === 'Closed' ? (int) $t['closedAt'] : $now) ?: $now;
+                $used = $end - (int) $t['createdAt'];
+                $sla = $used > $budget ? 'SLA BREACHED' : ($done ? 'SLA MET' : ($used >= $budget * 0.75 ? 'AT RISK' : 'ON TRACK'));
+                if ($sla === 'SLA BREACHED') { $breached++; }
+                if (!$done) { $open++; }
+                if ($t['status'] === 'Escalated' || !empty($esc[(string) $t['id']])) { $escalated++; }
+                if ((int) $t['resolvedAt']) {
+                    $finished++;
+                    $resTimes[] = (int) $t['resolvedAt'] - (int) $t['createdAt'];
+                    if ((int) $t['resolvedAt'] <= (int) $t['slaDueAt']) { $met++; }
+                }
+                $rows[] = [
+                    'ticketNo' => $t['ticketNo'], 'subject' => $t['subject'], 'category' => $t['category'],
+                    'subcategory' => $t['subcategory'], 'priority' => $t['priority'], 'status' => $t['status'],
+                    'createdBy' => $t['createdByName'], 'createdRole' => role_title((string) $t['createdByRole']),
+                    'with' => $done ? '' : (string) $t['assignedName'],
+                    'withRole' => $done || !$t['assignedRole'] ? '' : role_title((string) $t['assignedRole']),
+                    'created' => rp_dt((int) $t['createdAt']),
+                    'ageHours' => round(((($t['status'] === 'Closed' && (int) $t['closedAt']) ? (int) $t['closedAt'] : $now) - (int) $t['createdAt']) / 3600, 1),
+                    'sla' => $sla, 'escalations' => $esc[(string) $t['id']] ?? 0,
+                    'resolutionHours' => (int) $t['resolvedAt'] ? round(((int) $t['resolvedAt'] - (int) $t['createdAt']) / 3600, 1) : '',
+                ];
+            }
+            return [
+                'columns' => [$col('ticketNo', 'Ticket ID'), $col('subject', 'Subject'), $col('category', 'Category'),
+                    $col('subcategory', 'Subcategory'), $col('priority', 'Priority'), $col('status', 'Status'),
+                    $col('createdBy', 'Created By'), $col('createdRole', 'Creator Role'), $col('with', 'Currently With'),
+                    $col('withRole', 'Current Role'), $col('created', 'Created'), $col('ageHours', 'Age (h)', 'number'),
+                    $col('sla', 'SLA Status'), $col('escalations', 'Escalations', 'number'),
+                    $col('resolutionHours', 'Resolution (h)', 'number')],
+                'rows' => $rows,
+                'summary' => [['Tickets', count($rows)], ['Open', $open], ['Escalated', $escalated], ['SLA Breached', $breached],
+                    ['Avg Resolution', $resTimes ? round(array_sum($resTimes) / count($resTimes) / 3600, 1) . ' h' : '—'],
+                    ['SLA Compliance', $finished ? round($met / $finished * 100) . '%' : '—']],
+                'filters' => ['status' => rp_opts($opts['status']), 'category' => rp_opts($opts['category']),
+                              'priority' => rp_opts($opts['priority'])],
+                'note' => 'Tickets you raised, handled, or oversee in the reporting hierarchy.',
+            ];
+        }
+        case 'approvals': {
+            $uid = (string) $me['id'];
+            $mine = [];
+            foreach (fetch_all('SELECT DISTINCT ' . qi('approvalId') . ' AS a FROM ' . qi('approvalsteps') . ' WHERE '
+                . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?', [$uid, $uid]) as $r) {
+                $mine[(string) $r['a']] = true;
+            }
+            $rows = [];
+            $opts = ['status' => [], 'type' => []];
+            $count = ['Pending' => 0, 'Approved' => 0, 'Rejected' => 0, 'Returned' => 0, 'Escalated' => 0];
+            $times = [];
+            foreach (fetch_all('SELECT * FROM ' . qi('approvals') . ' ORDER BY ' . qi('createdAt') . ' DESC') as $a) {
+                if (!ap_can_see($a, $me, isset($mine[(string) $a['id']]))) {
+                    continue;
+                }
+                $opts['status'][] = $a['status']; $opts['type'][] = $a['type'];
+                if (!rp_in_range(rp_day((int) $a['createdAt']), $f)
+                    || ($f['status'] !== '' && $a['status'] !== $f['status'])
+                    || ($f['type'] !== '' && $a['type'] !== $f['type'])) {
+                    continue;
+                }
+                $count[$a['status']] = ($count[$a['status']] ?? 0) + 1;
+                if ((int) $a['decidedAt']) {
+                    $times[] = (int) $a['decidedAt'] - (int) $a['createdAt'];
+                }
+                $open = in_array($a['status'], APPROVAL_OPEN, true);
+                $rows[] = [
+                    'approvalNo' => $a['approvalNo'], 'type' => $a['type'], 'title' => $a['title'],
+                    'requestedBy' => $a['requestedByName'], 'role' => role_title((string) $a['requestedByRole']),
+                    'reportsTo' => $a['requestedReportsTo'], 'approver' => $open ? $a['currentApproverName'] : '',
+                    'approverRole' => $open ? role_title((string) $a['currentApproverRole']) : '',
+                    'status' => $a['status'], 'created' => rp_dt((int) $a['createdAt']),
+                    'decidedBy' => $a['decidedByName'], 'decided' => rp_dt((int) $a['decidedAt']),
+                    'remarks' => $a['finalRemarks'],
+                    'amount' => $a['amount'] === '' || $a['amount'] === null ? '' : (float) $a['amount'],
+                ];
+            }
+            return [
+                'columns' => [$col('approvalNo', 'Request ID'), $col('type', 'Type'), $col('title', 'Title'),
+                    $col('requestedBy', 'Requested By'), $col('role', 'Role'), $col('reportsTo', 'Reporting To'),
+                    $col('approver', 'Pending With'), $col('approverRole', 'Approver Role'), $col('status', 'Status'),
+                    $col('amount', 'Amount', 'money'), $col('created', 'Requested'), $col('decidedBy', 'Decided By'),
+                    $col('decided', 'Decided'), $col('remarks', 'Remarks')],
+                'rows' => $rows,
+                'summary' => [['Requests', count($rows)], ['Pending', $count['Pending'] + $count['Escalated']],
+                    ['Approved', $count['Approved']], ['Rejected', $count['Rejected']], ['Returned', $count['Returned']],
+                    ['Avg Decision Time', $times ? round(array_sum($times) / count($times) / 3600, 1) . ' h' : '—']],
+                'filters' => ['status' => rp_opts($opts['status']), 'type' => rp_opts($opts['type'])],
+                'note' => 'Requests you made, decided, or oversee.',
+            ];
+        }
+        case 'myteam': {
+            $all = in_array((string) $me['role'], ['admin', 'center_head'], true);
+            $users = fetch_all('SELECT ' . tk_user_cols() . ', ' . qi('empId') . ' AS empId FROM ' . qi('users') . ' WHERE '
+                . qi('role') . " <> 'student'");
+            $byId = [];
+            foreach ($users as $u) { $byId[(string) $u['id']] = $u; }
+            $scope = $all ? array_keys($byId) : rp_descendants((string) $me['id']);
+            $direct = [];
+            foreach ($users as $u) { if ((string) $u['reportingTo'] !== '') { $direct[(string) $u['reportingTo']] = ($direct[(string) $u['reportingTo']] ?? 0) + 1; } }
+            $held = [];
+            foreach (fetch_all('SELECT ' . qi('assignedTo') . ' AS u, COUNT(*) AS n FROM ' . qi('tickets') . ' WHERE ' . qi('status')
+                . " NOT IN ('Resolved', 'Closed') GROUP BY " . qi('assignedTo')) as $r) { $held[(string) $r['u']] = (int) $r['n']; }
+            $pend = [];
+            foreach (fetch_all('SELECT ' . qi('currentApprover') . ' AS u, COUNT(*) AS n FROM ' . qi('approvals') . ' WHERE '
+                . qi('status') . " IN ('Pending', 'Escalated') GROUP BY " . qi('currentApprover')) as $r) { $pend[(string) $r['u']] = (int) $r['n']; }
+            $rows = [];
+            $opts = ['role' => [], 'status' => []];
+            foreach ($scope as $id) {
+                $u = $byId[$id] ?? null;
+                if (!$u) { continue; }
+                $rt = role_title((string) $u['role']);
+                $st = tk_active($u) ? 'Active' : 'Inactive';
+                $opts['role'][] = $rt; $opts['status'][] = $st;
+                if (($f['role'] !== '' && $rt !== $f['role']) || ($f['status'] !== '' && $st !== $f['status'])) { continue; }
+                $boss = $byId[(string) $u['reportingTo']] ?? null;
+                $rows[] = ['name' => tk_name($u), 'empId' => (string) $u['empId'], 'role' => $rt,
+                    'reportsTo' => $boss ? tk_name($boss) : '', 'status' => $st, 'direct' => $direct[$id] ?? 0,
+                    'tickets' => $held[$id] ?? 0, 'approvals' => $pend[$id] ?? 0];
+            }
+            usort($rows, fn($a, $b) => strcmp($a['role'], $b['role']) ?: strcmp($a['name'], $b['name']));
+            return [
+                'columns' => [$col('name', 'Name'), $col('empId', 'Employee ID'), $col('role', 'Role'),
+                    $col('reportsTo', 'Reports To'), $col('status', 'Status'), $col('direct', 'Direct Reports', 'number'),
+                    $col('tickets', 'Open Tickets Held', 'number'), $col('approvals', 'Approvals Pending With', 'number')],
+                'rows' => $rows,
+                'summary' => [['People', count($rows)], ['Active', count(array_filter($rows, fn($r) => $r['status'] === 'Active'))],
+                    ['Open Tickets Held', array_sum(array_column($rows, 'tickets'))],
+                    ['Approvals Pending', array_sum(array_column($rows, 'approvals'))]],
+                'filters' => ['role' => rp_opts($opts['role']), 'status' => rp_opts($opts['status'])],
+                'note' => $all ? 'Everyone at the centre.' : 'Everyone below you in the reporting hierarchy.',
+            ];
+        }
+        case 'attendance':
+        case 'marks': {
+            $scope = rp_course_scope($me);
+            $courses = [];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('code') . ' AS code, ' . qi('name') . ' AS name, '
+                . qi('semester') . ' AS semester FROM ' . qi('courses')) as $c) {
+                if ($scope === null || in_array((string) $c['id'], $scope, true)) { $courses[(string) $c['id']] = $c; }
+            }
+            $students = [];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('roll') . ' AS roll, ' . qi('name') . ' AS name, '
+                . qi('section') . ' AS section FROM ' . qi('students')) as $s) { $students[(string) $s['id']] = $s; }
+            $label = fn($c) => trim(($c['code'] ?? '') . ' — ' . ($c['name'] ?? ''), ' —');
+            $opts = ['course' => [], 'semester' => []];
+            foreach ($courses as $c) { $opts['course'][] = $label($c); $opts['semester'][] = (string) $c['semester']; }
+            $okCourse = fn($c) => ($f['course'] === '' || $label($c) === $f['course'])
+                && ($f['semester'] === '' || (string) $c['semester'] === $f['semester']);
+            if ($key === 'attendance') {
+                $agg = []; $sessions = 0;
+                foreach (fetch_all('SELECT ' . qi('courseId') . ' AS courseId, ' . qi('date') . ' AS date, ' . qi('records')
+                    . ' AS records FROM ' . qi('attendance')) as $a) {
+                    $c = $courses[(string) $a['courseId']] ?? null;
+                    if (!$c || !$okCourse($c) || !rp_in_range((string) $a['date'], $f)) { continue; }
+                    $sessions++;
+                    foreach ((json_decode((string) $a['records'], true) ?: []) as $sid => $v) {
+                        $k = $a['courseId'] . '|' . $sid;
+                        $agg[$k] = $agg[$k] ?? ['c' => (string) $a['courseId'], 's' => (string) $sid, 'n' => 0, 'p' => 0];
+                        $agg[$k]['n']++;
+                        if ($v === 'P') { $agg[$k]['p']++; }
+                    }
+                }
+                $rows = []; $low = 0; $pcts = [];
+                foreach ($agg as $g) {
+                    $s = $students[$g['s']] ?? ['roll' => $g['s'], 'name' => '(removed student)', 'section' => ''];
+                    $c = $courses[$g['c']];
+                    $pct = $g['n'] ? round($g['p'] / $g['n'] * 100) : 0;
+                    $pcts[] = $pct;
+                    if ($pct < 75) { $low++; }
+                    $rows[] = ['roll' => $s['roll'], 'name' => $s['name'], 'section' => $s['section'], 'course' => $label($c),
+                        'semester' => $c['semester'], 'sessions' => $g['n'], 'present' => $g['p'], 'absent' => $g['n'] - $g['p'],
+                        'percent' => $pct];
+                }
+                usort($rows, fn($a, $b) => strcmp((string) $a['course'], (string) $b['course']) ?: strnatcmp((string) $a['roll'], (string) $b['roll']));
+                return [
+                    'columns' => [$col('roll', 'Reg No'), $col('name', 'Student'), $col('section', 'Section'), $col('course', 'Course'),
+                        $col('semester', 'Sem'), $col('sessions', 'Sessions', 'number'), $col('present', 'Present', 'number'),
+                        $col('absent', 'Absent', 'number'), $col('percent', 'Attendance %', 'number')],
+                    'rows' => $rows,
+                    'summary' => [['Courses', count($courses)], ['Class Sessions', $sessions], ['Student Records', count($rows)],
+                        ['Average Attendance', $pcts ? round(array_sum($pcts) / count($pcts)) . '%' : '—'], ['Below 75%', $low]],
+                    'filters' => ['course' => rp_opts($opts['course']), 'semester' => rp_opts($opts['semester'])],
+                    'note' => $scope === null ? 'All courses at the centre.' : 'Only the courses assigned to you or your team.',
+                ];
+            }
+            $rows = []; $pass = 0; $fail = 0; $pending = 0; $optsResult = [];
+            foreach (fetch_all('SELECT ' . qi('studentId') . ' AS studentId, ' . qi('courseId') . ' AS courseId, '
+                . qi('internal') . ' AS internal, ' . qi('external') . ' AS external FROM ' . qi('marks')) as $m) {
+                $c = $courses[(string) $m['courseId']] ?? null;
+                if (!$c || !$okCourse($c)) { continue; }
+                $has = $m['internal'] !== null && $m['internal'] !== '';
+                $pct = $has ? (int) round((float) $m['internal'] / 40 * 100) : null;   // INTERNAL_MAX, as the app grades
+                $result = $pct === null ? 'Pending' : ($pct >= 40 ? 'Pass' : 'Fail');
+                $optsResult[] = $result;
+                if ($f['result'] !== '' && $result !== $f['result']) { continue; }
+                if ($result === 'Pass') { $pass++; } elseif ($result === 'Fail') { $fail++; } else { $pending++; }
+                $grade = $pct === null ? '' : ($pct >= 90 ? 'O' : ($pct >= 80 ? 'A+' : ($pct >= 70 ? 'A' : ($pct >= 60 ? 'B+'
+                    : ($pct >= 50 ? 'B' : ($pct >= 40 ? 'C' : 'F'))))));
+                $s = $students[(string) $m['studentId']] ?? ['roll' => $m['studentId'], 'name' => '(removed student)'];
+                $rows[] = ['roll' => $s['roll'], 'name' => $s['name'], 'course' => $label($c), 'semester' => $c['semester'],
+                    'internal' => $has ? (float) $m['internal'] : '', 'external' => $m['external'] === null || $m['external'] === '' ? '' : (float) $m['external'],
+                    'percent' => $pct ?? '', 'grade' => $grade, 'result' => $result];
+            }
+            usort($rows, fn($a, $b) => strcmp((string) $a['course'], (string) $b['course']) ?: strnatcmp((string) $a['roll'], (string) $b['roll']));
+            return [
+                'columns' => [$col('roll', 'Reg No'), $col('name', 'Student'), $col('course', 'Course'), $col('semester', 'Sem'),
+                    $col('internal', 'Internal', 'number'), $col('external', 'External', 'number'),
+                    $col('percent', 'Percent', 'number'), $col('grade', 'Grade'), $col('result', 'Result')],
+                'rows' => $rows,
+                'summary' => [['Mark Records', count($rows)], ['Pass', $pass], ['Fail', $fail], ['Pending', $pending],
+                    ['Pass Rate', ($pass + $fail) ? round($pass / ($pass + $fail) * 100) . '%' : '—']],
+                'filters' => ['course' => rp_opts($opts['course']), 'semester' => rp_opts($opts['semester']),
+                              'result' => rp_opts($optsResult)],
+                'note' => $scope === null ? 'All courses at the centre.' : 'Only the courses assigned to you or your team.',
+            ];
+        }
+        case 'workload': {
+            $scope = rp_course_scope($me);
+            $courses = fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('code') . ' AS code, ' . qi('credits') . ' AS credits, '
+                . qi('facultyId') . ' AS facultyId FROM ' . qi('courses'));
+            $byFac = [];
+            $courseFac = [];
+            foreach ($courses as $c) {
+                if ($scope !== null && !in_array((string) $c['id'], $scope, true)) { continue; }
+                $courseFac[(string) $c['id']] = (string) $c['facultyId'];
+                $byFac[(string) $c['facultyId']]['codes'][] = (string) $c['code'];
+                $byFac[(string) $c['facultyId']]['credits'] = ($byFac[(string) $c['facultyId']]['credits'] ?? 0) + (float) $c['credits'];
+            }
+            $periods = [];
+            foreach (fetch_all('SELECT ' . qi('courseId') . ' AS c FROM ' . qi('timetable')) as $t) {
+                $fid = $courseFac[(string) $t['c']] ?? null;
+                if ($fid !== null) { $periods[$fid] = ($periods[$fid] ?? 0) + 1; }
+            }
+            $taken = [];
+            foreach (fetch_all('SELECT ' . qi('courseId') . ' AS c, ' . qi('date') . ' AS d FROM ' . qi('attendance')) as $a) {
+                $fid = $courseFac[(string) $a['c']] ?? null;
+                if ($fid !== null && rp_in_range((string) $a['d'], $f)) { $taken[$fid] = ($taken[$fid] ?? 0) + 1; }
+            }
+            $rows = []; $opts = ['department' => [], 'role' => []];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('name') . ' AS name, ' . qi('role') . ' AS role, '
+                . qi('department') . ' AS department, ' . qi('designation') . ' AS designation, ' . qi('status') . ' AS status FROM '
+                . qi('faculty')) as $fac) {
+                $role = (string) ($fac['role'] ?: 'faculty');
+                if (!in_array($role, ['faculty', 'guest_faculty'], true)) { continue; }
+                if ($scope !== null && empty($byFac[(string) $fac['id']])) { continue; }
+                $rt = role_title($role);
+                $opts['department'][] = (string) $fac['department']; $opts['role'][] = $rt;
+                if (($f['department'] !== '' && (string) $fac['department'] !== $f['department']) || ($f['role'] !== '' && $rt !== $f['role'])) { continue; }
+                $w = $byFac[(string) $fac['id']] ?? ['codes' => [], 'credits' => 0];
+                $rows[] = ['name' => $fac['name'], 'role' => $rt, 'department' => $fac['department'],
+                    'designation' => $fac['designation'], 'courses' => count($w['codes'] ?? []),
+                    'codes' => implode(', ', $w['codes'] ?? []), 'credits' => $w['credits'] ?? 0,
+                    'periods' => $periods[(string) $fac['id']] ?? 0, 'sessions' => $taken[(string) $fac['id']] ?? 0];
+            }
+            usort($rows, fn($a, $b) => $b['credits'] <=> $a['credits'] ?: strcmp($a['name'], $b['name']));
+            return [
+                'columns' => [$col('name', 'Faculty'), $col('role', 'Type'), $col('department', 'Department'),
+                    $col('designation', 'Designation'), $col('courses', 'Courses', 'number'), $col('codes', 'Course Codes'),
+                    $col('credits', 'Credits', 'number'), $col('periods', 'Weekly Periods', 'number'),
+                    $col('sessions', 'Classes Taken', 'number')],
+                'rows' => $rows,
+                'summary' => [['Faculty', count($rows)], ['Courses Assigned', array_sum(array_column($rows, 'courses'))],
+                    ['Total Credits', array_sum(array_column($rows, 'credits'))], ['Classes Taken', array_sum(array_column($rows, 'sessions'))],
+                    ['Without Courses', count(array_filter($rows, fn($r) => !$r['courses']))]],
+                'filters' => ['department' => rp_opts($opts['department']), 'role' => rp_opts($opts['role'])],
+                'note' => $scope === null ? 'All teaching staff. Classes Taken follows the date range.' : 'Your team only.',
+            ];
+        }
+        case 'admissions': {
+            $rows = []; $opts = ['status' => [], 'course' => []]; $count = [];
+            foreach (fetch_all('SELECT ' . implode(', ', array_map('qi', ['roll', 'name', 'email', 'phone', 'course', 'branchName',
+                'semester', 'status', 'submittedAt', 'reviewedAt', 'reviewedBy', 'reviewNote'])) . ' FROM ' . qi('submissions')
+                . ' ORDER BY ' . qi('submittedAt') . ' DESC') as $s) {
+                $opts['status'][] = (string) $s['status']; $opts['course'][] = (string) $s['course'];
+                if (!rp_in_range(substr((string) $s['submittedAt'], 0, 10), $f) || ($f['status'] !== '' && $s['status'] !== $f['status'])
+                    || ($f['course'] !== '' && $s['course'] !== $f['course'])) { continue; }
+                $count[$s['status'] ?: 'Pending'] = ($count[$s['status'] ?: 'Pending'] ?? 0) + 1;
+                $rows[] = ['roll' => $s['roll'], 'name' => $s['name'], 'phone' => $s['phone'], 'course' => $s['course'],
+                    'branch' => $s['branchName'], 'semester' => $s['semester'], 'status' => $s['status'] ?: 'Pending',
+                    'submitted' => substr(str_replace('T', ' ', (string) $s['submittedAt']), 0, 16),
+                    'reviewed' => substr(str_replace('T', ' ', (string) $s['reviewedAt']), 0, 16),
+                    'reviewer' => $s['reviewedBy'], 'note' => $s['reviewNote']];
+            }
+            $students = fetch_one('SELECT COUNT(*) AS n FROM ' . qi('students'));
+            $summary = [['Applications', count($rows)]];
+            foreach ($count as $st => $n) { $summary[] = [$st, $n]; }
+            $summary[] = ['Students Enrolled', (int) ($students['n'] ?? 0)];
+            return [
+                'columns' => [$col('roll', 'Reg / Ref No'), $col('name', 'Applicant'), $col('phone', 'Phone'), $col('course', 'Course'),
+                    $col('branch', 'Branch'), $col('semester', 'Sem'), $col('status', 'Status'), $col('submitted', 'Submitted'),
+                    $col('reviewed', 'Reviewed'), $col('reviewer', 'Reviewed By'), $col('note', 'Review Note')],
+                'rows' => $rows, 'summary' => $summary,
+                'filters' => ['status' => rp_opts($opts['status']), 'course' => rp_opts($opts['course'])],
+                'note' => 'Online admission applications. Date range follows the submission date.',
+            ];
+        }
+        case 'fees': {
+            $students = [];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('roll') . ' AS roll, ' . qi('name') . ' AS name FROM ' . qi('students')) as $s) {
+                $students[(string) $s['id']] = $s;
+            }
+            $rows = []; $opts = ['academicYear' => [], 'semester' => [], 'status' => []];
+            $billed = 0; $paid = 0;
+            foreach (fetch_all('SELECT * FROM ' . qi('fees')) as $fe) {
+                $total = (float) $fe['total']; $pd = min($total, (float) $fe['paid']);
+                $st = $pd >= $total && $total > 0 ? 'Paid' : ($pd > 0 ? 'Partial' : 'Unpaid');
+                $opts['academicYear'][] = (string) $fe['academicYear']; $opts['semester'][] = (string) $fe['semester']; $opts['status'][] = $st;
+                if (($f['academicYear'] !== '' && (string) $fe['academicYear'] !== $f['academicYear'])
+                    || ($f['semester'] !== '' && (string) $fe['semester'] !== $f['semester']) || ($f['status'] !== '' && $st !== $f['status'])) { continue; }
+                $billed += $total; $paid += $pd;
+                $s = $students[(string) $fe['studentId']] ?? ['roll' => $fe['studentId'], 'name' => '(removed student)'];
+                $rows[] = ['roll' => $s['roll'], 'name' => $s['name'], 'semester' => $fe['semester'], 'academicYear' => $fe['academicYear'],
+                    'total' => $total, 'paid' => $pd, 'pending' => max(0, $total - $pd), 'dueDate' => $fe['dueDate'], 'status' => $st];
+            }
+            $collected = 0; $receipts = 0;
+            foreach (fetch_all('SELECT ' . qi('amount') . ' AS amount, ' . qi('date') . ' AS date, ' . qi('status') . ' AS status FROM ' . qi('payments')) as $p) {
+                if (rp_in_range((string) $p['date'], $f) && strtolower((string) $p['status']) !== 'cancelled') { $collected += (float) $p['amount']; $receipts++; }
+            }
+            return [
+                'columns' => [$col('roll', 'Reg No'), $col('name', 'Student'), $col('semester', 'Sem'), $col('academicYear', 'Academic Year'),
+                    $col('total', 'Total Fee', 'money'), $col('paid', 'Paid', 'money'), $col('pending', 'Pending', 'money'),
+                    $col('dueDate', 'Due Date'), $col('status', 'Status')],
+                'rows' => $rows,
+                'summary' => [['Fee Records', count($rows)], ['Billed', '₹' . number_format($billed)], ['Collected', '₹' . number_format($paid)],
+                    ['Pending', '₹' . number_format(max(0, $billed - $paid))], ['Collection', $billed ? round($paid / $billed * 100) . '%' : '—'],
+                    ['Receipts in Period', $receipts . ' · ₹' . number_format($collected)]],
+                'filters' => ['academicYear' => rp_opts($opts['academicYear']), 'semester' => rp_opts($opts['semester']),
+                              'status' => rp_opts($opts['status'])],
+                'note' => 'Fee status per student. "Receipts in Period" follows the date range.',
+                'totals' => ['total' => $billed, 'paid' => $paid, 'pending' => max(0, $billed - $paid)],
+            ];
+        }
+        case 'placement': {
+            $companies = [];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('name') . ' AS name FROM ' . qi('companies')) as $c) { $companies[(string) $c['id']] = $c['name']; }
+            $apps = []; $short = []; $sel = [];
+            foreach (fetch_all('SELECT ' . qi('driveId') . ' AS d, ' . qi('status') . ' AS s FROM ' . qi('applications')) as $a) {
+                $apps[(string) $a['d']] = ($apps[(string) $a['d']] ?? 0) + 1;
+                if (in_array($a['s'], ['Shortlisted', 'Selected'], true)) { $short[(string) $a['d']] = ($short[(string) $a['d']] ?? 0) + 1; }
+                if ($a['s'] === 'Selected') { $sel[(string) $a['d']] = ($sel[(string) $a['d']] ?? 0) + 1; }
+            }
+            $ivs = [];
+            foreach (fetch_all('SELECT ' . qi('driveId') . ' AS d FROM ' . qi('interviews')) as $i) { $ivs[(string) $i['d']] = ($ivs[(string) $i['d']] ?? 0) + 1; }
+            $offers = []; $placed = [];
+            foreach (fetch_all('SELECT ' . qi('driveId') . ' AS d, ' . qi('studentId') . ' AS s, ' . qi('status') . ' AS st FROM ' . qi('offers')) as $o) {
+                $offers[(string) $o['d']] = ($offers[(string) $o['d']] ?? 0) + 1;
+                if (in_array($o['st'], ['Accepted', 'Joined'], true)) { $placed[(string) $o['s']] = true; }
+            }
+            $rows = []; $opts = ['status' => [], 'driveType' => []];
+            foreach (fetch_all('SELECT * FROM ' . qi('drives') . ' ORDER BY ' . qi('driveDate') . ' DESC') as $d) {
+                $type = (string) ($d['driveType'] ?: 'On Campus');
+                $opts['status'][] = (string) $d['status']; $opts['driveType'][] = $type;
+                if (!rp_in_range((string) $d['driveDate'], $f) || ($f['status'] !== '' && $d['status'] !== $f['status'])
+                    || ($f['driveType'] !== '' && $type !== $f['driveType'])) { continue; }
+                $id = (string) $d['id'];
+                $rows[] = ['company' => $companies[(string) $d['companyId']] ?? '', 'role' => $d['jobRole'], 'type' => $type,
+                    'package' => $d['package'], 'date' => $d['driveDate'], 'status' => $d['status'], 'applications' => $apps[$id] ?? 0,
+                    'shortlisted' => $short[$id] ?? 0, 'interviews' => $ivs[$id] ?? 0, 'selected' => $sel[$id] ?? 0, 'offers' => $offers[$id] ?? 0];
+            }
+            $students = fetch_one('SELECT COUNT(*) AS n FROM ' . qi('students'));
+            $ns = (int) ($students['n'] ?? 0);
+            return [
+                'columns' => [$col('company', 'Company'), $col('role', 'Job Role'), $col('type', 'Drive Type'), $col('package', 'Package'),
+                    $col('date', 'Drive Date'), $col('status', 'Status'), $col('applications', 'Applications', 'number'),
+                    $col('shortlisted', 'Shortlisted', 'number'), $col('interviews', 'Interviews', 'number'),
+                    $col('selected', 'Selected', 'number'), $col('offers', 'Offers', 'number')],
+                'rows' => $rows,
+                'summary' => [['Companies', count($companies)], ['Drives', count($rows)], ['Applications', array_sum(array_column($rows, 'applications'))],
+                    ['Offers', array_sum(array_column($rows, 'offers'))], ['Students Placed', count($placed)],
+                    ['Placement Rate', $ns ? round(count($placed) / $ns * 100) . '%' : '—']],
+                'filters' => ['status' => rp_opts($opts['status']), 'driveType' => rp_opts($opts['driveType'])],
+                'note' => 'Drives with their funnel. Date range follows the drive date.',
+            ];
+        }
+        case 'library': {
+            $books = [];
+            $copies = 0; $available = 0;
+            foreach (fetch_all('SELECT * FROM ' . qi('books')) as $b) { $books[(string) $b['id']] = $b; $copies += (int) $b['total']; $available += (int) $b['available']; }
+            $students = [];
+            foreach (fetch_all('SELECT ' . qi('id') . ' AS id, ' . qi('roll') . ' AS roll, ' . qi('name') . ' AS name FROM ' . qi('students')) as $s) { $students[(string) $s['id']] = $s; }
+            $today = (new DateTime('now', rp_tz()))->format('Y-m-d');
+            $rows = []; $opts = ['status' => []]; $overdue = 0; $onLoan = 0;
+            foreach (fetch_all('SELECT * FROM ' . qi('issues') . ' ORDER BY ' . qi('issueDate') . ' DESC') as $i) {
+                $returned = (string) $i['returnDate'] !== '';
+                $late = !$returned && (string) $i['dueDate'] !== '' && (string) $i['dueDate'] < $today;
+                $st = $returned ? 'Returned' : ($late ? 'Overdue' : 'On Loan');
+                $opts['status'][] = $st;
+                if (!rp_in_range((string) $i['issueDate'], $f) || ($f['status'] !== '' && $st !== $f['status'])) { continue; }
+                if (!$returned) { $onLoan++; }
+                $days = $late ? (int) ((new DateTime($today))->diff(new DateTime((string) $i['dueDate']))->days) : 0;
+                if ($late) { $overdue++; }
+                $b = $books[(string) $i['bookId']] ?? ['title' => '(removed book)', 'author' => ''];
+                $s = $students[(string) $i['studentId']] ?? ['roll' => $i['studentId'], 'name' => ''];
+                $rows[] = ['title' => $b['title'], 'author' => $b['author'], 'roll' => $s['roll'], 'name' => $s['name'],
+                    'issued' => $i['issueDate'], 'due' => $i['dueDate'], 'returned' => $i['returnDate'], 'status' => $st, 'overdueDays' => $days];
+            }
+            return [
+                'columns' => [$col('title', 'Book'), $col('author', 'Author'), $col('roll', 'Reg No'), $col('name', 'Borrower'),
+                    $col('issued', 'Issued'), $col('due', 'Due'), $col('returned', 'Returned'), $col('status', 'Status'),
+                    $col('overdueDays', 'Overdue Days', 'number')],
+                'rows' => $rows,
+                'summary' => [['Titles', count($books)], ['Copies', $copies], ['Available', $available], ['On Loan', $onLoan], ['Overdue', $overdue]],
+                'filters' => ['status' => rp_opts($opts['status'])],
+                'note' => 'Issue and return register. The CMS has no fine rate configured, so fines are not computed — overdue days are shown instead.',
+            ];
+        }
+    }
+    return ['columns' => [], 'rows' => [], 'summary' => [], 'filters' => [], 'note' => ''];
+}
+
+function api_rp_catalog(): void
+{
+    $me = current_user();
+    $out = [];
+    foreach (REPORT_CATALOG as $key => $def) {
+        if (rp_allowed($key, $me)) {
+            $out[] = ['key' => $key, 'label' => $def['label'], 'group' => $def['group'],
+                      'canExport' => rp_allowed($key, $me, in_array($key, REPORT_OPEN, true) ? 'view' : 'export')];
+        }
+    }
+    send_json(['reports' => $out]);
+}
+
+function rp_guard(?string $key, string $need): array
+{
+    $me = current_user();
+    $key = (string) $key;
+    if (!isset(REPORT_CATALOG[$key])) {
+        send_json(['error' => 'not found', 'message' => 'Unknown report.'], 404);
+    }
+    $need = in_array($key, REPORT_OPEN, true) ? 'view' : $need;
+    if (!rp_allowed($key, $me, $need)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — this report is outside your role or permissions.'], 403);
+    }
+    return [$me, $key];
+}
+
+function api_rp_data(?string $key): void
+{
+    [$me, $key] = rp_guard($key, 'view');
+    $f = rp_filters();
+    $r = rp_build($key, $me, $f);
+    $r['summary'] = array_map(fn($s) => ['label' => $s[0], 'value' => $s[1]], $r['summary']);
+    send_json(array_merge(['key' => $key, 'label' => REPORT_CATALOG[$key]['label'], 'applied' => $f,
+        'canExport' => rp_allowed($key, $me, in_array($key, REPORT_OPEN, true) ? 'view' : 'export'),
+        'generatedAt' => rp_dt(time())], $r));
+}
+
+/** CSV straight from the server — so it carries exactly the scoped rows, and is audited */
+function api_rp_csv(?string $key): void
+{
+    [$me, $key] = rp_guard($key, 'export');
+    $f = rp_filters();
+    $r = rp_build($key, $me, $f);
+    audit('report-export', 'reports', $key, REPORT_CATALOG[$key]['label'], 'CSV — ' . count($r['rows']) . ' rows',
+        ['format' => 'csv', 'rows' => count($r['rows']), 'filters' => array_filter($f, fn($v) => $v !== '')]);
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    $name = preg_replace('/[^A-Za-z0-9]+/', '-', REPORT_CATALOG[$key]['label']) . '-' . (new DateTime('now', rp_tz()))->format('Y-m-d') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $name . '"');
+    header('Cache-Control: no-store');
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, array_map(fn($c) => $c['label'], $r['columns']));
+    foreach ($r['rows'] as $row) {
+        // a cell that opens with = + - @ would run as a formula in Excel
+        fputcsv($out, array_map(function ($c) use ($row) {
+            $v = (string) ($row[$c['key']] ?? '');
+            return ($v !== '' && strpos('=+-@', $v[0]) !== false && !is_numeric($v)) ? "'" . $v : $v;
+        }, $r['columns']));
+    }
+    fclose($out);
+    exit;
+}
+
+/** Excel and PDF are drawn in the browser; the server still records that they were taken */
+function api_rp_log(): void
+{
+    $b = body();
+    [$me, $key] = rp_guard((string) ($b['key'] ?? ''), 'export');
+    $format = in_array($b['format'] ?? '', ['excel', 'pdf'], true) ? $b['format'] : 'excel';
+    $filters = is_array($b['filters'] ?? null) ? array_filter(array_map('strval', $b['filters']), fn($v) => $v !== '') : [];
+    audit('report-export', 'reports', $key, REPORT_CATALOG[$key]['label'],
+        strtoupper($format) . ' — ' . (int) ($b['rows'] ?? 0) . ' rows',
+        ['format' => $format, 'rows' => (int) ($b['rows'] ?? 0), 'filters' => $filters]);
+    send_json(['ok' => true]);
 }
 
 function dispatch(string $method, string $resource, ?string $id, bool $isCollection): void
@@ -4385,6 +5670,40 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'GET' && $resource === 'tk-org') {
         api_tk_org();
+    }
+    // notifications, approvals and reports — each authorises the caller itself
+    if ($method === 'GET' && $resource === 'nt-list') {
+        api_nt_list();
+    }
+    if ($method === 'POST' && $resource === 'nt-read') {
+        api_nt_read();
+    }
+    if ($method === 'GET' && $resource === 'ap-meta') {
+        api_ap_meta();
+    }
+    if ($method === 'GET' && $resource === 'ap-list') {
+        api_ap_list();
+    }
+    if ($method === 'GET' && $resource === 'ap-get') {
+        api_ap_get($id);
+    }
+    if ($method === 'POST' && $resource === 'ap-create') {
+        api_ap_create();
+    }
+    if ($method === 'POST' && $resource === 'ap-action') {
+        api_ap_action();
+    }
+    if ($method === 'GET' && $resource === 'rp-catalog') {
+        api_rp_catalog();
+    }
+    if ($method === 'GET' && $resource === 'rp-data') {
+        api_rp_data($id);
+    }
+    if ($method === 'GET' && $resource === 'rp-csv') {
+        api_rp_csv($id);
+    }
+    if ($method === 'POST' && $resource === 'rp-log') {
+        api_rp_log();
     }
     /* What the next id would be, without taking it. Signed in only — it says
        how many students the college has admitted this year. */

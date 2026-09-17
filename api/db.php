@@ -527,7 +527,11 @@ function hierarchy_labels_and_ticket_indexes(): void
               ['ix_tk_assigned', 'tickets', 'assignedTo'],
               ['ix_tk_created', 'tickets', 'createdBy'],
               ['ix_tkh_to', 'tickethistory', 'toUser'],
-              ['ix_users_reporting', 'users', 'reportingTo']] as [$name, $table, $col]) {
+              ['ix_users_reporting', 'users', 'reportingTo'],
+              ['ix_nt_user', 'notifications', 'userId'],
+              ['ix_ap_approver', 'approvals', 'currentApprover'],
+              ['ix_ap_requester', 'approvals', 'requestedBy'],
+              ['ix_aps_approval', 'approvalsteps', 'approvalId']] as [$name, $table, $col]) {
         try {
             db()->exec('CREATE INDEX ' . qi($name) . ' ON ' . qi($table) . ' (' . qi($col) . ')');
         } catch (PDOException $e) {
@@ -544,7 +548,7 @@ function hierarchy_labels_and_ticket_indexes(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-17-hierarchy-helpdesk';
+const DB_MIGRATION_REV = '2026-09-18-notify-approvals-reports';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

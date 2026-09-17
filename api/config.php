@@ -291,7 +291,9 @@ const COLLECTIONS = [
                      'assignedTo', 'assignedName', 'assignedRole', 'assignedAt',
                      'status', 'chain', 'escalationLevel', 'slaHours', 'slaDueAt',
                      'createdAt', 'updatedAt', 'resolution', 'resolvedBy', 'resolvedByName',
-                     'resolvedAt', 'closedBy', 'closedByName', 'closedAt', 'attachments'],
+                     'resolvedAt', 'closedBy', 'closedByName', 'closedAt', 'attachments',
+                     // when the SLA sweep last warned about this ticket, once per threshold
+                     'slaRiskNotifiedAt', 'slaBreachNotifiedAt'],
     /* One row per thing that happened to a ticket — append-only. A row whose
        action hands the ticket to somebody (assigned / escalated / reassigned /
        reopened) is also a STAGE: assignedAt when it arrived, completedAt and
@@ -302,6 +304,17 @@ const COLLECTIONS = [
                         'at', 'assignedAt', 'completedAt', 'seconds'],
     'ticketcomments' => ['id', 'ticketId', 'userId', 'userName', 'userRole', 'kind',
                          'message', 'attachment', 'at'],
+    // the bell: one row per person per event, written by the server only
+    'notifications' => ['id', 'userId', 'kind', 'title', 'message', 'link', 'refId', 'severity', 'at', 'readAt'],
+    /* A request that climbs the requester's reporting line until someone with
+       the authority the type needs decides it. Private like the helpdesk. */
+    'approvals'  => ['id', 'approvalNo', 'type', 'title', 'details', 'amount', 'fromDate', 'toDate',
+                     'requiredRank', 'requestedBy', 'requestedByName', 'requestedByRole', 'requestedReportsTo',
+                     'currentApprover', 'currentApproverName', 'currentApproverRole', 'assignedAt',
+                     'status', 'level', 'createdAt', 'updatedAt', 'decidedAt', 'decidedBy', 'decidedByName',
+                     'finalRemarks', 'attachments'],
+    'approvalsteps' => ['id', 'approvalId', 'action', 'fromUser', 'fromName', 'fromRole', 'toUser', 'toName',
+                        'toRole', 'status', 'remarks', 'level', 'at', 'assignedAt', 'completedAt', 'seconds'],
 ];
 
 /** columns stored as a JSON string but exposed to the UI as an object */
@@ -323,6 +336,7 @@ const JSON_FIELDS = [
     'admissions' => STAFF_JSON,
     'tickets'    => ['attachments'],
     'ticketcomments' => ['attachment'],
+    'approvals'  => ['attachments'],
 ];
 
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
@@ -331,6 +345,9 @@ const LONGTEXT_FIELDS = [
     'tickets' => ['description', 'resolution'],
     'tickethistory' => ['reason', 'comment'],
     'ticketcomments' => ['message'],
+    'notifications' => ['message'],
+    'approvals' => ['details', 'finalRemarks'],
+    'approvalsteps' => ['remarks'],
     'faculty' => STAFF_LONGTEXT,
     'accountants' => STAFF_LONGTEXT,
     'centerheads' => STAFF_LONGTEXT,

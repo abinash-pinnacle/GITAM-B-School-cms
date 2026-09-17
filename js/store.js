@@ -399,6 +399,30 @@ const Store = {
   tkAction(payload) { return this._tk('tk-action', 'POST', payload); },
   tkSettings(sla) { return this._tk('tk-settings', 'POST', { sla }); },
   tkOrg() { return this._tk('tk-org'); },
+  ntList() { return this._tk('nt-list'); },
+  ntRead(p) { return this._tk('nt-read', 'POST', p); },
+  apMeta() { return this._tk('ap-meta'); },
+  apList() { return this._tk('ap-list'); },
+  apGet(id) { return this._tk('ap-get/' + encodeURIComponent(id)); },
+  apCreate(req) { return this._tk('ap-create', 'POST', req); },
+  apAction(p) { return this._tk('ap-action', 'POST', p); },
+  rpCatalog() { return this._tk('rp-catalog'); },
+  rpData(key, qs) { return this._tk('rp-data/' + encodeURIComponent(key) + (qs ? '?' + qs : '')); },
+  rpLog(p) { return this._tk('rp-log', 'POST', p); },
+  /* The CSV is built and audited on the server; this only carries it home. */
+  async rpCsv(key, qs) {
+    try {
+      const res = await fetch(`${API}/rp-csv/${encodeURIComponent(key)}${qs ? '?' + qs : ''}`, { headers: this._headers() });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        return { error: (d && d.message) || 'The export could not be completed.' };
+      }
+      const m = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+      return { blob: await res.blob(), name: m ? m[1] : key + '.csv' };
+    } catch (e) {
+      return { error: 'Could not reach the server.' };
+    }
+  },
 
   async renumberStudents() {
     try {

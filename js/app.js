@@ -289,7 +289,7 @@
      that separate Add from Import from Export. */
   function readOnly() {
     // the helpdesk and the org tree are everyone's own work, never a read-only lens
-    if (['tickets', 'orgtree'].includes(splitViewKey(currentView).view)) return false;
+    if (['tickets', 'orgtree', 'approvals', 'hreports'].includes(splitViewKey(currentView).view)) return false;
     const m = moduleOfView(splitViewKey(currentView).view);
     if (!m) return roleReadOnly();
     return !can(m, 'add') && !can(m, 'edit') && !can(m, 'delete');
@@ -570,6 +570,7 @@
 
   function startLivePolling() {
     stopLivePolling();
+    ntStart();            // the notification bell rides the same session
     liveSig = dataSignature();
     liveServerSig = undefined;
     livePollTimer = setInterval(async () => {
@@ -613,6 +614,7 @@
     }, 12000);
   }
   function stopLivePolling() {
+    ntStop();
     if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
   }
 
@@ -683,7 +685,7 @@
       [NAV_SECTION,'','Events & Notices'],
       ['events',ic('calendar'),'Events'],
       [NAV_SECTION,'','Helpdesk'],
-      ['tickets',ic('receipt'),'Tickets'], ['orgtree',ic('users'),'Organization Tree'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
       [NAV_SECTION,'','System'],
       ['accounts',ic('key'),'Login Accounts'], ['usersettings',ic('settings'),'User Management'],
       ['roles',ic('shield'),'Roles & Permissions'], ['adminmgmt',ic('users'),'Admin Management'],
@@ -699,7 +701,7 @@
       ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
       ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
       ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Reports'],
-      ['tickets',ic('receipt'),'Tickets'], ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
@@ -716,7 +718,7 @@
       ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'], ['chreports',ic('trending-up'),'Reports'],
       // the one thing this role decides rather than just watches
       ['requisitions',ic('package'),'Approvals'],
-      ['tickets',ic('receipt'),'Tickets'], ['orgtree',ic('users'),'Organization Tree'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
       ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     accountant: [
@@ -724,20 +726,20 @@
       ['finstudents',ic('cap'),'Student List'], ['assets',ic('building'),'Asset List'],
       ['fixedfee',ic('clipboard'),'Fixed Fee'], ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
       ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('package'),'Requisitions'],
-      ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     faculty: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['goodsreq',ic('package'),'Goods Requisition'],
-      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     // assigned classes only: attendance, marks and the timetable, no purchasing
     guest_faculty: [
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['events',ic('calendar'),'Events'],
-      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     student: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['myattendance',ic('check'),'My Attendance'], ['myresults',ic('notes'),'My Results'],
@@ -751,7 +753,7 @@
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
       ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
-      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     /* The coordinator runs attendance and reads what it is built from. Nothing
        here writes master data — the server refuses it either way. */
@@ -761,14 +763,14 @@
       ['students',ic('cap'),'Students'], ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['timetable',ic('calendar'),'Timetable'],
-      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     librarian: [
       ['dashboard',ic('chart'),'Dashboard'], ['library',ic('book'),'Library'], ['issueBook',ic('download'),'Issue a Book'],
       ['returnBook',ic('upload'),'Return a Book'], ['bookreq',ic('books'),'Book Requisition'],
       ['students',ic('cap'),'Students'], ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['events',ic('calendar'),'Events'], ['reports',ic('chart'),'Reports'],
-      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE,
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('clipboard'),'Approval Requests'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE,
     ],
   };
 
@@ -811,6 +813,7 @@
     }
     const allowed = (key) => {
       if (key === 'orgtree') return !!uObj && ORG_TREE_ROLES.includes(uObj.role);
+      if (key === 'approvals' || key === 'hreports') return !!uObj && uObj.role !== 'student';
       if (ALWAYS_ALLOWED.includes(key)) return true;
       const m = moduleOfView(key);
       return m ? can(m, 'view') : true;
@@ -944,6 +947,7 @@
   function canView(key) {
     const { view } = splitViewKey(key);
     if (view === 'orgtree') return !!user && ORG_TREE_ROLES.includes(user.role);
+    if (view === 'approvals' || view === 'hreports') return !!user && user.role !== 'student';
     if (ALWAYS_ALLOWED.includes(view)) return true;
     /* A student's file is reached from the roll rather than from the sidebar,
        so it is open to whoever may open the roll itself. */
@@ -1026,7 +1030,7 @@
   /* Pages nobody is ever narrowed out of: the dashboard they land on and the
      pages that are about themselves. */
   const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
-                          'mybooks', 'myplacement', 'tickets'];
+                          'mybooks', 'myplacement', 'tickets', 'approvals', 'hreports'];
   /** the organisation tree is for the leadership roles (mirrors ORG_TREE_ROLES on the server) */
   const ORG_TREE_ROLES = ['admin', 'subadmin', 'center_head', 'academic_head'];
 
@@ -1260,7 +1264,7 @@
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
     offers:'Offers', plcalendar:'Placement Calendar', plreports:'Placement Reports',
     placementofficers:'Placement Officers',
-    tickets:'Tickets', orgtree:'Organization Tree',
+    tickets:'Tickets', orgtree:'Organization Tree', approvals:'Approval Requests', hreports:'Reports Centre',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -1353,6 +1357,7 @@
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
       usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
       adminmgmt: viewAdminManagement, tickets: viewTickets, orgtree: viewOrgTree,
+      approvals: viewApprovals, hreports: viewReportsCentre,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     /* The app-install offer and the Android APK sit at the top of everyone's
@@ -9604,7 +9609,7 @@
           `<td${c.money ? ' style="text-align:right"' : ''}>${esc(cellText(c, row))}</td>`).join('')}</tr>`).join('')}</tbody>
         ${totalsRow}</table>
       <p style="font-size:11px;color:#777;margin-top:10px">${r.rows.length} record(s)</p>
-      <div class="sign"><span>${esc(reportSignatory())}</span><span>Principal / Director</span></div>`);
+      <div class="sign"><span>${esc(r.signatory || reportSignatory())}</span><span>Principal / Director</span></div>`);
   }
   function downloadXlsx(r) {
     if (!window.XLSXLite) { toast('Excel module failed to load.', 'err'); return; }
@@ -16262,6 +16267,498 @@
     box.querySelectorAll('[data-org-set]').forEach(b => b.onclick = () => userForm(b.dataset.orgSet, () => render()));
   }
 
+  /* =========================================================================
+     NOTIFICATION BELL — Phase 3
+     Polls the server every 30 seconds while signed in. The server writes every
+     notification and runs the SLA sweep on this same call, so the bell is also
+     what raises "SLA at risk" and "SLA breached" alerts.
+     ========================================================================= */
+  const NT_ICON = {
+    ticket_assigned: 'receipt', ticket_escalated: 'trending-up', ticket_comment: 'mail',
+    ticket_info_requested: 'pending', ticket_resolved: 'check', ticket_closed: 'lock', ticket_reopened: 'undo',
+    sla_risk: 'clock', sla_breach: 'alert', approval_requested: 'clipboard', approval_approved: 'check',
+    approval_rejected: 'x', approval_returned: 'undo', approval_forwarded: 'arrow-right', approval_escalated: 'trending-up',
+  };
+  let ntTimer = null;
+  let ntSeen = null;
+  let ntItems = [];
+  let ntUnread = 0;
+
+  async function ntRefresh(announce) {
+    if (!user) return;
+    const d = await Store.ntList();
+    if (d.error || !user) return;
+    tkSync(d.now);
+    const fresh = ntSeen ? d.items.filter(i => !i.readAt && !ntSeen.has(i.id)) : [];
+    ntSeen = new Set(d.items.map(i => i.id));
+    ntItems = d.items;
+    ntUnread = d.unread;
+    const badge = $('#ntCount');
+    if (badge) {
+      badge.textContent = ntUnread > 99 ? '99+' : String(ntUnread);
+      badge.classList.toggle('hidden', !ntUnread);
+    }
+    const bell = $('#ntBell');
+    if (bell) bell.classList.toggle('nt-alert', d.items.some(i => !i.readAt && i.kind === 'sla_breach'));
+    if (announce && fresh.length) {
+      const top = fresh[0];
+      toast(fresh.length > 1 ? `${fresh.length} new notifications — ${top.title}` : top.title,
+        top.severity === 'danger' ? 'err' : 'ok');
+    }
+    const panel = $('#ntPanel');
+    if (panel && !panel.classList.contains('hidden')) ntDrawPanel();
+  }
+  function ntStart() { ntStop(); ntSeen = null; ntRefresh(false); ntTimer = setInterval(() => ntRefresh(true), 30000); }
+  function ntStop() { if (ntTimer) { clearInterval(ntTimer); ntTimer = null; } }
+
+  function ntDrawPanel() {
+    const p = $('#ntPanel');
+    const now = tkNow();
+    p.innerHTML = `<div class="nt-head"><b>Notifications</b>
+        ${ntUnread ? `<button type="button" class="nt-all" id="ntAll">Mark all read</button>` : ''}</div>
+      <div class="nt-list">${ntItems.length ? ntItems.map(i => `
+        <button type="button" class="nt-item ${i.readAt ? '' : 'unread'} nt-${esc(i.severity || 'info')}"
+                data-nt="${esc(i.id)}" data-link="${esc(i.link || '')}">
+          <span class="nt-ico">${ic(NT_ICON[i.kind] || 'bell')}</span>
+          <span class="nt-body"><b>${esc(i.title)}</b>${i.message ? `<small>${esc(i.message)}</small>` : ''}
+            <em>${tkDur(now - i.at)} ago</em></span>
+        </button>`).join('') : '<p class="empty">You are all caught up.</p>'}</div>`;
+    const all = $('#ntAll');
+    if (all) all.onclick = async (e) => { e.stopPropagation(); await Store.ntRead({ all: true }); ntRefresh(false); };
+    p.querySelectorAll('[data-nt]').forEach(b => b.onclick = async () => {
+      p.classList.add('hidden');
+      const item = ntItems.find(x => x.id === b.dataset.nt);
+      if (item && !item.readAt) { Store.ntRead({ id: item.id }).then(() => ntRefresh(false)); }
+      if (b.dataset.link) navigate(b.dataset.link);
+    });
+  }
+  function wireBell() {
+    const bell = $('#ntBell');
+    if (!bell) return;
+    bell.onclick = (e) => {
+      e.stopPropagation();
+      const p = $('#ntPanel');
+      const nowHidden = p.classList.toggle('hidden');
+      if (!nowHidden) { ntDrawPanel(); ntRefresh(false); }
+    };
+    document.addEventListener('click', (e) => {
+      const p = $('#ntPanel');
+      if (p && !p.classList.contains('hidden') && !p.contains(e.target) && !bell.contains(e.target)) p.classList.add('hidden');
+    });
+  }
+
+  /* =========================================================================
+     APPROVAL REQUESTS — Phase 4
+     ========================================================================= */
+  const AP_STATUS_CLASS = { Pending: 'st-assigned', Escalated: 'st-escalated', Returned: 'st-waiting',
+                            Approved: 'st-resolved', Rejected: 'sla-breach' };
+  const AP_STATUSES = Object.keys(AP_STATUS_CLASS);
+  const AP_OPEN = ['Pending', 'Escalated'];
+  const AP_ACTION_LABEL = {
+    requested: 'Request Raised', assigned: 'Sent for Approval', approved: 'Approved', forwarded: 'Forwarded Up',
+    returned: 'Returned for Correction', resubmitted: 'Resubmitted', escalated: 'Escalated', rejected: 'Rejected',
+  };
+  const AP_STAGE = ['assigned', 'forwarded', 'escalated', 'resubmitted'];
+  let apMetaCache = null;
+  const apState = { scope: '', status: '', type: '', q: '', page: 1 };
+  const apBadge = (s) => tkBadge(s, AP_STATUS_CLASS[s]);
+
+  async function apMeta() {
+    if (apMetaCache) return apMetaCache;
+    const m = await Store.apMeta();
+    if (!m.error) apMetaCache = m;
+    return m;
+  }
+
+  function viewApprovals() {
+    const { preset } = splitViewKey(currentView);
+    if (preset) return viewApprovalDetail(preset);
+    viewApprovals.after = async () => {
+      const [meta, d] = await Promise.all([apMeta(), Store.apList()]);
+      const box = $('#apPage');
+      if (!box) return;
+      if (meta.error || d.error) { box.innerHTML = `<div class="panel"><p class="empty">${esc(d.error || meta.error)}</p></div>`; return; }
+      tkSync(d.now);
+      drawApprovalList(box, meta, d);
+    };
+    return `<div id="apPage"><div class="panel"><p class="empty">Loading requests…</p></div></div>`;
+  }
+
+  function drawApprovalList(box, meta, d) {
+    const me = d.me;
+    const st = apState;
+    const all = d.approvals;
+    const now = tkNow();
+    const waiting = all.filter(a => a.currentApprover === me.id && AP_OPEN.includes(a.status));
+    if (!st.scope) st.scope = waiting.length ? 'waiting' : 'mine';
+    const scoped = all.filter(a => (st.scope === 'waiting' ? a.currentApprover === me.id && AP_OPEN.includes(a.status)
+      : st.scope === 'mine' ? a.requestedBy === me.id : true));
+    const q = st.q.trim().toLowerCase();
+    const rows = scoped.filter(a => (!st.status || a.status === st.status) && (!st.type || a.type === st.type)
+      && (!q || [a.approvalNo, a.title, a.requestedByName, a.currentApproverName].some(v => String(v || '').toLowerCase().includes(q))));
+    const count = (s) => scoped.filter(a => a.status === s).length;
+    const decided = scoped.filter(a => a.decidedAt);
+    const avgDecision = tkAvg(decided.map(a => a.decidedAt - a.createdAt));
+    const scopeBtn = (key, label, n) => `<button type="button" class="tk-scope ${st.scope === key ? 'on' : ''}" data-ap-scope="${key}">${label} <span>${n}</span></button>`;
+    const pageRows = pageSlice(rows, st.page);
+    box.innerHTML = `
+      <div class="panel">
+        <div class="panel-head"><h3>Approval Requests</h3>
+          <div class="panel-tools">
+            <button class="btn-outline btn-sm" id="apReload">${ic('refresh')}Refresh</button>
+            ${me.role !== 'admin' ? `<button class="btn-primary" id="apNew">${ic('plus')}New Request</button>` : ''}
+          </div></div>
+        <div class="tk-scopes">
+          ${scopeBtn('waiting', 'Waiting for Me', waiting.length)}
+          ${scopeBtn('mine', 'My Requests', all.filter(a => a.requestedBy === me.id).length)}
+          ${scopeBtn('all', 'All Visible', all.length)}
+        </div>
+        <div class="stat-grid tk-stats">
+          ${statCard(ic('clipboard'), count('Pending') + count('Escalated'), 'Pending')}
+          ${statCard(ic('trending-up'), count('Escalated'), 'Escalated', 'c4')}
+          ${statCard(ic('undo'), count('Returned'), 'Returned', 'c2')}
+          ${statCard(ic('check'), count('Approved'), 'Approved', 'c3')}
+          ${statCard(ic('x'), count('Rejected'), 'Rejected', 'c4')}
+          ${statCard(ic('clock'), avgDecision === null ? '—' : tkDur(avgDecision), 'Avg Decision Time')}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="tk-filters">
+          <input class="search-box" id="apQ" placeholder="Search request id / title / person..." value="${esc(st.q)}">
+          <select class="filter-sel" data-ap-sel="status"><option value="">All Statuses</option>${AP_STATUSES.map(s => `<option ${s === st.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          <select class="filter-sel" data-ap-sel="type"><option value="">All Types</option>${meta.types.map(t => `<option ${t.name === st.type ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>
+        </div>
+        <div class="tbl-wrap"><table class="tk-table"><thead><tr>
+          <th>Request ID</th><th>Type</th><th>Title</th><th>Requested By</th><th>Reporting To</th>
+          <th>Pending With</th><th>Approver Role</th><th>Status</th><th>Waiting</th><th>Requested</th>
+        </tr></thead><tbody>${pageRows.length ? pageRows.map(a => {
+          const open = AP_OPEN.includes(a.status);
+          return `<tr class="tk-row" data-ap-open="${esc(a.id)}">
+            <td class="mono">${esc(a.approvalNo)}</td><td>${esc(a.type)}</td>
+            <td class="tk-subj"><b>${esc(a.title)}</b>${a.amount ? `<small>${money(a.amount)}</small>` : ''}</td>
+            <td>${esc(a.requestedByName)}<small class="tk-sub">${esc(roleLabel(a.requestedByRole))}</small></td>
+            <td>${esc(a.requestedReportsTo || '—')}</td>
+            <td><b>${open ? esc(a.currentApproverName) : '—'}</b></td>
+            <td>${open ? esc(roleLabel(a.currentApproverRole)) : '—'}</td>
+            <td>${apBadge(a.status)}</td>
+            <td ${open ? `data-tk-since="${a.assignedAt}"` : ''}>${open ? tkDur(now - a.assignedAt) : '—'}</td>
+            <td>${tkWhen(a.createdAt)}</td></tr>`;
+        }).join('') : `<tr><td colspan="10" class="empty">No requests here.</td></tr>`}</tbody></table></div>
+        <div id="apPager">${pagerHtml(rows.length, st.page)}</div>
+      </div>`;
+    const redraw = () => drawApprovalList(box, meta, d);
+    $('#apReload').onclick = () => render();
+    const nb = $('#apNew'); if (nb) nb.onclick = () => approvalCreateModal();
+    box.querySelectorAll('[data-ap-scope]').forEach(b => b.onclick = () => { st.scope = b.dataset.apScope; st.page = 1; redraw(); });
+    box.querySelectorAll('[data-ap-sel]').forEach(s => s.onchange = () => { st[s.dataset.apSel] = s.value; st.page = 1; redraw(); });
+    const qEl = $('#apQ');
+    qEl.oninput = () => { st.q = qEl.value; st.page = 1; clearTimeout(qEl._t); qEl._t = setTimeout(() => {
+      redraw(); const again = $('#apQ'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } }, 250); };
+    box.querySelectorAll('[data-ap-open]').forEach(tr => tr.onclick = () => navigate('approvals::' + tr.dataset.apOpen));
+    bindPager($('#apPager'), rows.length, st.page, (p) => { st.page = p; }, redraw);
+    tkTick();
+  }
+
+  async function approvalCreateModal() {
+    const meta = await apMeta();
+    if (meta.error) { toast(meta.error, 'err'); return; }
+    openModal('New Approval Request', `<form id="f">
+      <div class="form-grid">
+        <div class="field"><label>Request Type</label><select name="type" id="apType">${meta.types.map(t => `<option>${esc(t.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Amount (₹) <small style="font-weight:400;color:var(--muted)">if any</small></label><input name="amount" type="number" min="0" step="1"></div>
+        <div class="field full"><label>Title</label><input name="title" maxlength="200" required placeholder="What is being requested"></div>
+        <div class="field ap-dates"><label>From</label><input name="fromDate" type="date"></div>
+        <div class="field ap-dates"><label>To</label><input name="toDate" type="date"></div>
+        <div class="field full"><label>Details</label><textarea name="details" rows="5" required placeholder="Why it is needed, and anything the approver should know"></textarea></div>
+        <div class="field full"><label>Attachments <small style="font-weight:400;color:var(--muted)">PDF, Word, Excel, JPG, PNG · up to 3 · 2 MB each</small></label>
+          <input type="file" id="apFiles" multiple accept="${TK_FILE_ACCEPT}"></div>
+      </div>
+      <div class="tk-route-hint" id="apRoute"></div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Submit Request</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    const typeSel = $('#apType');
+    const hint = () => {
+      const t = meta.types.find(x => x.name === typeSel.value);
+      document.querySelectorAll('#modalBody .ap-dates').forEach(el => el.classList.toggle('hidden', t.name !== 'Leave Request'));
+      $('#apRoute').innerHTML = meta.manager
+        ? `${ic('arrow-right')}Goes first to <b>${esc(meta.manager.name)}</b> (${esc(roleLabel(meta.manager.role))}) · final decision needs <b>${esc(t.authority)}</b>${
+            meta.myRank >= t.rank ? '' : ' — it moves up your reporting line until someone with that authority decides'}.`
+        : `${ic('alert')}You have no approver in your reporting line. Ask the Super Admin to set your Reporting To.`;
+    };
+    typeSel.onchange = hint; hint();
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      let attachments;
+      try { attachments = await tkReadFiles($('#apFiles').files, 3); } catch (err) { toast(err.message, 'err'); return; }
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const res = await Store.apCreate(Object.assign(v, { attachments }));
+      btn.disabled = false;
+      if (res.error) { toast(res.error, 'err'); return; }
+      closeModal();
+      toast(`${res.approvalNo} submitted — with ${res.approverName} (${roleLabel(res.approverRole)}).`);
+      navigate('approvals::' + res.id);
+    };
+  }
+
+  function viewApprovalDetail(id) {
+    $('#pageTitle').textContent = 'Approval Request';
+    viewApprovals.after = async () => {
+      const d = await Store.apGet(id);
+      const box = $('#apDetail');
+      if (!box) return;
+      if (d.error) {
+        box.innerHTML = `<div class="panel"><p class="empty">${esc(d.error)}</p><p style="text-align:center">
+          <button class="btn-outline btn-sm" id="apBack">${ic('arrow-left')}All Requests</button></p></div>`;
+        $('#apBack').onclick = () => navigate('approvals');
+        return;
+      }
+      tkSync(d.now);
+      drawApprovalDetail(box, d);
+    };
+    return `<div id="apDetail"><div class="panel"><p class="empty">Loading request…</p></div></div>`;
+  }
+
+  function drawApprovalDetail(box, d) {
+    const a = d.approval;
+    const now = tkNow();
+    const open = AP_OPEN.includes(a.status);
+    const A = d.allowed;
+    $('#pageTitle').textContent = 'Request ' + a.approvalNo;
+    const stages = d.steps.filter(s => AP_STAGE.includes(s.action));
+    const steps = [{ state: 'done', title: 'Request Raised', who: `${a.requestedByName} · ${roleLabel(a.requestedByRole)}`, foot: tkWhen(a.createdAt) }];
+    stages.forEach((s, i) => {
+      const current = open && i === stages.length - 1;
+      const end = s.completedAt || now;
+      const outcome = d.steps.find(x => x.at >= s.assignedAt && x.fromUser === s.toUser && ['approved', 'returned', 'rejected', 'escalated'].includes(x.action) && x !== s);
+      steps.push({
+        state: current ? 'current' : 'done', title: roleLabel(s.toRole), who: s.toName,
+        tag: s.action === 'assigned' ? '' : AP_ACTION_LABEL[s.action],
+        foot: current ? `<span data-tk-since="${s.assignedAt}">${tkDur(now - s.assignedAt)}</span> so far`
+          : `${outcome ? AP_ACTION_LABEL[outcome.action] + ' · ' : ''}${tkDur(end - s.assignedAt)}`,
+      });
+    });
+    if (a.status === 'Returned') steps.push({ state: 'current', title: 'With Requester', who: a.requestedByName, foot: 'to correct and resubmit' });
+    if (a.status === 'Approved' || a.status === 'Rejected') steps.push({ state: 'done', title: a.status, who: a.decidedByName, foot: tkWhen(a.decidedAt) });
+    if (open && d.next && !d.approverDecides) steps.push({ state: 'upcoming', title: roleLabel(d.next.role), who: d.next.name, foot: 'if approved or escalated' });
+    const marker = (s) => (s === 'done' ? ic('check') : s === 'current' ? '<i></i>' : '');
+    const act = (key, label, cls, icon) => (A[key] ? `<button class="${cls}" data-ap-act="${key}">${ic(icon)}${label}</button>` : '');
+    const actions = [act('approve', 'Approve', 'btn-primary', 'check'), act('reject', 'Reject', 'btn-outline', 'x'),
+      act('return', 'Return for Correction', 'btn-outline', 'undo'), act('escalate', 'Escalate', 'btn-outline', 'trending-up'),
+      act('resubmit', 'Resubmit', 'btn-primary', 'refresh')].join('');
+    box.innerHTML = `
+      <div class="panel tk-head">
+        <div class="tk-head-top">
+          <button class="btn-outline btn-sm" id="apBack">${ic('arrow-left')}All Requests</button>
+          <span class="tk-no mono">${esc(a.approvalNo)}</span>${apBadge(a.status)}${tkBadge(a.type, 'st-open')}
+          <button class="btn-outline btn-sm tk-push" id="apRefresh">${ic('refresh')}Refresh</button>
+        </div>
+        <h2 class="tk-subject">${esc(a.title)}</h2>
+        <div class="tk-meta">
+          <span>${ic('user')}${esc(a.requestedByName)} · ${esc(roleLabel(a.requestedByRole))}</span>
+          <span>${ic('calendar')}${tkWhen(a.createdAt)}</span>
+          ${a.requestedReportsTo ? `<span>${ic('link')}Reports to ${esc(a.requestedReportsTo)}</span>` : ''}
+          <span>${ic('building')}Bhubaneswar Centre</span>
+          ${a.amount ? `<span>${ic('money')}${money(a.amount)}</span>` : ''}
+          ${a.fromDate ? `<span>${ic('calendar')}${esc(a.fromDate)}${a.toDate ? ' → ' + esc(a.toDate) : ''}</span>` : ''}
+        </div>
+        ${actions ? `<div class="tk-actions">${actions}</div>` : ''}
+      </div>
+      <div class="tk-cards">
+        <div class="tk-card tk-owner ${open ? '' : 'is-done'}">
+          <div class="tk-card-label">${open ? 'Pending With' : a.status === 'Returned' ? 'Back With' : 'Outcome'}</div>
+          ${open ? `<div class="tk-owner-name">${esc(a.currentApproverName)}</div>
+              <div class="tk-owner-role">${esc(roleLabel(a.currentApproverRole))}</div>
+              <div class="tk-kv"><span>Since</span><b>${tkWhen(a.assignedAt)}</b></div>
+              <div class="tk-kv"><span>Waiting</span><b data-tk-since="${a.assignedAt}" data-tk-long="1">${tkDurLong(now - a.assignedAt)}</b></div>`
+            : a.status === 'Returned' ? `<div class="tk-owner-name">${esc(a.requestedByName)}</div><div class="tk-owner-role">Requester — to correct and resubmit</div>`
+            : `<div class="tk-owner-name">${esc(a.status)}</div><div class="tk-owner-role">by ${esc(a.decidedByName || '—')}</div>
+               <div class="tk-kv"><span>Decided</span><b>${tkWhen(a.decidedAt)}</b></div>
+               <div class="tk-kv"><span>Total time</span><b>${tkDurLong(a.decidedAt - a.createdAt)}</b></div>`}
+        </div>
+        <div class="tk-card tk-next">
+          <div class="tk-card-label">Decision Authority</div>
+          <div class="tk-kv"><span>Needs</span><b>${esc(d.authority)}</b></div>
+          <div class="tk-kv"><span>Level</span><b>${esc(String(a.level))}</b></div>
+          <div class="tk-next-do">${open ? (d.approverDecides ? `${esc(a.currentApproverName)} can decide this.`
+              : `${esc(a.currentApproverName)} can approve at their level; it then goes to ${esc(d.next ? d.next.name + ' (' + roleLabel(d.next.role) + ')' : 'the next authority')}.`)
+            : a.status === 'Returned' ? 'Requester to correct and resubmit.' : 'No further action.'}</div>
+        </div>
+        <div class="tk-card">
+          <div class="tk-card-label">Details</div>
+          <div class="tk-desc">${esc(a.details).replace(/\n/g, '<br>')}</div>
+          ${(a.attachments || []).length ? `<div class="tk-attachments">${a.attachments.map(tkAttachLink).join('')}</div>` : ''}
+          ${a.finalRemarks ? `<div class="tk-resolution"><b>Final remarks</b><div>${esc(a.finalRemarks)}</div></div>` : ''}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Approval Chain</h3></div>
+        <ol class="tk-journey">${steps.map(s => `<li class="tk-step ${s.state}"><span class="tk-mark">${marker(s.state)}</span>
+          <div class="tk-step-txt"><b>${esc(s.title)}${s.state === 'current' ? ' <em>CURRENT</em>' : ''}</b>
+            ${s.who ? `<small>${esc(s.who)}</small>` : ''}${s.tag ? `<span class="tk-tag">${esc(s.tag)}</span>` : ''}
+            <span class="tk-foot">${s.foot}</span></div></li>`).join('')}</ol>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>History</h3></div>
+        <ul class="tk-timeline">${d.steps.map(s => `<li class="tl-${esc(s.action === 'rejected' ? 'escalated' : s.action === 'approved' ? 'resolved' : s.action === 'returned' ? 'waiting' : s.action)}">
+          <div class="tl-time">${tkWhen(s.at)}</div>
+          <div class="tl-body"><b>${esc(AP_ACTION_LABEL[s.action] || s.action)}</b>
+            <div>${esc(s.fromName || '')} <small>(${esc(roleLabel(s.fromRole))})</small>${s.toName ? ` ${ic('arrow-right')} ${esc(s.toName)} <small>(${esc(roleLabel(s.toRole))})</small>` : ''}</div>
+            ${s.remarks ? `<div class="tl-note">${esc(s.remarks)}</div>` : ''}
+            ${AP_STAGE.includes(s.action) && s.completedAt ? `<div class="tl-dur">Time at this level: ${tkDur(s.seconds)}</div>` : ''}
+          </div></li>`).join('')}</ul>
+      </div>`;
+    $('#apBack').onclick = () => navigate('approvals');
+    $('#apRefresh').onclick = () => render();
+    box.querySelectorAll('[data-ap-act]').forEach(b => b.onclick = () => approvalActionModal(b.dataset.apAct, a, d));
+    tkTick();
+  }
+
+  function approvalActionModal(action, a, d) {
+    const cfg = {
+      approve: ['Approve', d.approverDecides || a.currentApprover !== user.id ? 'This is the final approval.'
+        : `Your approval moves it to ${d.next ? d.next.name + ' (' + roleLabel(d.next.role) + ')' : 'the next authority'}.`, false, 'Remarks (optional)'],
+      reject: ['Reject', 'The request is closed as rejected.', true, 'Reason for rejecting'],
+      return: ['Return for Correction', 'It goes back to the requester to fix and resubmit.', true, 'What needs to be corrected'],
+      escalate: ['Escalate', `It moves to ${d.next ? d.next.name + ' (' + roleLabel(d.next.role) + ')' : 'the next authority'} without your decision.`, true, 'Why it needs a higher authority'],
+      resubmit: ['Resubmit', 'It goes back to the approver who returned it.', false, 'What you changed'],
+    }[action];
+    if (!cfg) return;
+    openModal(`${cfg[0]} — ${a.approvalNo}`, `<form id="f"><p class="ac-sub">${esc(cfg[1])}</p><div class="form-grid">
+      ${action === 'resubmit' ? `<div class="field full"><label>Details</label><textarea name="details" rows="4">${esc(a.details)}</textarea></div>` : ''}
+      <div class="field full"><label>${esc(cfg[3])}</label><textarea name="remarks" rows="3" ${cfg[2] ? 'required' : ''}></textarea></div></div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">${esc(cfg[0])}</button></div></form>`);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const res = await Store.apAction({ id: a.id, action, remarks: v.remarks || '', details: v.details });
+      btn.disabled = false;
+      if (res.error) { toast(res.error, 'err'); return; }
+      closeModal();
+      toast(res.status === 'Pending' && action === 'approve' ? `Approved at your level — now with ${res.approverName}.` : `Request ${res.status.toLowerCase()}.`);
+      render();
+    };
+  }
+
+  /* =========================================================================
+     REPORTS CENTRE — Phase 5
+     The server builds each report from what this account may see; the page
+     only filters, draws and exports. CSV comes straight from the server and
+     is audited there; Excel and PDF are drawn here and logged before download.
+     ========================================================================= */
+  const rpState = { key: '', filters: {}, page: 1 };
+  const RP_FILTER_LABEL = { status: 'Status', course: 'Course', semester: 'Semester', category: 'Category', priority: 'Priority',
+    type: 'Type', role: 'Role', department: 'Department', result: 'Result', academicYear: 'Academic Year', driveType: 'Drive Type' };
+  const RP_FILTER_ALL = { status: 'All Statuses', course: 'All Courses', semester: 'All Semesters', category: 'All Categories',
+    priority: 'All Priorities', type: 'All Types', role: 'All Roles', department: 'All Departments', result: 'All Results',
+    academicYear: 'All Academic Years', driveType: 'All Drive Types' };
+
+  function viewReportsCentre() {
+    viewReportsCentre.after = async () => {
+      const cat = await Store.rpCatalog();
+      const box = $('#rpPage');
+      if (!box) return;
+      if (cat.error) { box.innerHTML = `<div class="panel"><p class="empty">${esc(cat.error)}</p></div>`; return; }
+      if (!cat.reports.length) { box.innerHTML = '<div class="panel"><p class="empty">No reports are available to your account.</p></div>'; return; }
+      if (!cat.reports.some(r => r.key === rpState.key)) { rpState.key = cat.reports[0].key; rpState.filters = {}; rpState.page = 1; }
+      const groups = {};
+      cat.reports.forEach(r => { (groups[r.group] = groups[r.group] || []).push(r); });
+      box.innerHTML = `<div class="rp-layout">
+        <div class="panel rp-menu">${Object.entries(groups).map(([g, list]) => `<div class="rp-group">${esc(g)}</div>${
+          list.map(r => `<button type="button" class="rp-link ${r.key === rpState.key ? 'on' : ''}" data-rp="${r.key}">${esc(r.label)}</button>`).join('')}`).join('')}</div>
+        <div id="rpBody"><div class="panel"><p class="empty">Loading report…</p></div></div></div>`;
+      box.querySelectorAll('[data-rp]').forEach(b => b.onclick = () => {
+        rpState.key = b.dataset.rp; rpState.filters = {}; rpState.page = 1;
+        box.querySelectorAll('[data-rp]').forEach(x => x.classList.toggle('on', x === b));
+        rpLoad();
+      });
+      rpLoad();
+    };
+    return `<div id="rpPage"><div class="panel"><p class="empty">Loading reports…</p></div></div>`;
+  }
+
+  const rpQuery = () => Object.entries(rpState.filters).filter(([, v]) => v).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+
+  async function rpLoad() {
+    const body = $('#rpBody');
+    if (!body) return;
+    body.innerHTML = '<div class="panel"><p class="empty">Loading report…</p></div>';
+    const d = await Store.rpData(rpState.key, rpQuery());
+    if (!$('#rpBody')) return;
+    if (d.error) { body.innerHTML = `<div class="panel"><p class="empty">${esc(d.error)}</p></div>`; return; }
+    rpDraw(body, d);
+  }
+
+  function rpDraw(body, d) {
+    const f = rpState.filters;
+    const cell = (c, r) => {
+      const v = r[c.key];
+      if (v === '' || v === null || v === undefined) return '—';
+      return c.type === 'money' ? money(v) : esc(String(v));
+    };
+    const pageRows = pageSlice(d.rows, rpState.page);
+    body.innerHTML = `<div class="panel">
+        <div class="panel-head"><h3>${esc(d.label)}</h3>
+          <div class="panel-tools">${d.canExport ? `
+            <button class="btn-outline btn-sm" id="rpCsv">${ic('download')}CSV</button>
+            <button class="btn-outline btn-sm" id="rpXls">${ic('download')}Excel</button>
+            <button class="btn-outline btn-sm" id="rpPdf">${ic('printer')}PDF</button>`
+            : '<small style="color:var(--muted)">View only — your account cannot export this report</small>'}</div></div>
+        <p class="ac-sub">${esc(d.note)} · Generated ${esc(d.generatedAt)} · Bhubaneswar Centre</p>
+        <div class="tk-filters">
+          <label class="rp-date">From <input type="date" data-rp-f="from" value="${esc(f.from || '')}"></label>
+          <label class="rp-date">To <input type="date" data-rp-f="to" value="${esc(f.to || '')}"></label>
+          ${Object.entries(d.filters || {}).map(([k, vals]) => `<select class="filter-sel" data-rp-f="${k}">
+            <option value="">${esc(RP_FILTER_ALL[k] || 'All')}</option>${vals.map(v => `<option ${v === f[k] ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`).join('')}
+          <button class="btn-outline btn-sm" id="rpClear">Clear</button>
+        </div>
+        <div class="tk-perf">${d.summary.map(s => `<div><span>${esc(s.label)}</span><b>${esc(String(s.value))}</b></div>`).join('')}</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>${d.rows.length} record${d.rows.length === 1 ? '' : 's'}</h3></div>
+        <div class="tbl-wrap"><table><thead><tr>${d.columns.map(c => `<th${c.type !== 'text' ? ' style="text-align:right"' : ''}>${esc(c.label)}</th>`).join('')}</tr></thead>
+          <tbody>${pageRows.length ? pageRows.map(r => `<tr>${d.columns.map(c => `<td${c.type !== 'text' ? ' style="text-align:right"' : ''}>${cell(c, r)}</td>`).join('')}</tr>`).join('')
+            : `<tr><td colspan="${d.columns.length}" class="empty">Nothing to show for these filters.</td></tr>`}</tbody></table></div>
+        <div id="rpPager">${pagerHtml(d.rows.length, rpState.page)}</div>
+      </div>`;
+    body.querySelectorAll('[data-rp-f]').forEach(el => el.onchange = () => { rpState.filters[el.dataset.rpF] = el.value; rpState.page = 1; rpLoad(); });
+    $('#rpClear').onclick = () => { rpState.filters = {}; rpState.page = 1; rpLoad(); };
+    bindPager($('#rpPager'), d.rows.length, rpState.page, (p) => { rpState.page = p; }, () => rpDraw(body, d));
+    if (!d.canExport) return;
+    const applied = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${RP_FILTER_LABEL[k] || k}: ${v}`).join(' · ');
+    const doc = () => ({
+      title: d.label, sheetName: d.label.slice(0, 28),
+      subtitle: `NMIET B-SCHOOL · Bhubaneswar Centre · ${roleLabel(user.role)} · Generated ${d.generatedAt}${applied ? ' · ' + applied : ''}`,
+      signatory: roleLabel(user.role),
+      columns: d.columns.map(c => ({ header: c.label, key: c.key, width: c.type === 'text' ? 22 : 14,
+        money: c.type === 'money', type: c.type === 'number' ? 'number' : undefined })),
+      rows: d.rows,
+    });
+    $('#rpCsv').onclick = async () => {
+      if (!d.rows.length) { toast('Nothing to export for these filters.', 'err'); return; }
+      const res = await Store.rpCsv(d.key, rpQuery());
+      if (res.error) { toast(res.error, 'err'); return; }
+      const url = URL.createObjectURL(res.blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = res.name;
+      document.body.appendChild(link); link.click(); link.remove();
+      URL.revokeObjectURL(url);
+      toast('CSV downloaded — the export is recorded in the audit log.');
+    };
+    const logged = async (format, fn) => {
+      if (!d.rows.length) { toast('Nothing to export for these filters.', 'err'); return; }
+      const res = await Store.rpLog({ key: d.key, format, rows: d.rows.length, filters: f });
+      if (res.error) { toast(res.error, 'err'); return; }
+      fn(doc());
+    };
+    $('#rpXls').onclick = () => logged('excel', downloadXlsx);
+    $('#rpPdf').onclick = () => logged('pdf', (r) => { printReport(r); toast('Choose "Save as PDF" in the print dialog.'); });
+  }
+
   /** the last time this account actually signed in, from the audit log */
   function adminLastLogin(uid) {
     const rows = Store.all('auditlog').filter(r =>
@@ -18429,6 +18926,7 @@
     };
     $('#loginForm').onsubmit = doLogin;
     $('#logoutBtn').onclick = logout;
+    wireBell();
     $('#pwdBtn').onclick = changePasswordModal;
     $('#modalClose').onclick = closeModal;
     $('#modal2Close').onclick = closeModal2;
