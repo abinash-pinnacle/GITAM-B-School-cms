@@ -374,6 +374,32 @@ const Store = {
      deleted, only the roll and its matching login are rewritten. Resolves to
      { ok, changed, total, mapping:[{id,name,was,roll}] } or { error }. The store
      is reloaded by the caller afterwards, so the local copy is not patched here. */
+  /* ---- helpdesk + organisation ----
+     Tickets never ride in the bootstrap: every call goes to a tk-* endpoint
+     that authorises the caller against the ticket itself. Each resolves to
+     the parsed body, or { error, status } when the server refused. */
+  async _tk(path, method = 'GET', body) {
+    try {
+      const res = await fetch(`${API}/${path}`, {
+        method,
+        headers: this._headers(method !== 'GET'),
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { error: (data && data.message) || 'The request could not be completed.', status: res.status };
+      return data || {};
+    } catch (e) {
+      return { error: 'Could not reach the server.', status: 0 };
+    }
+  },
+  tkMeta() { return this._tk('tk-meta'); },
+  tkList() { return this._tk('tk-list'); },
+  tkGet(id) { return this._tk('tk-get/' + encodeURIComponent(id)); },
+  tkCreate(ticket) { return this._tk('tk-create', 'POST', ticket); },
+  tkAction(payload) { return this._tk('tk-action', 'POST', payload); },
+  tkSettings(sla) { return this._tk('tk-settings', 'POST', { sla }); },
+  tkOrg() { return this._tk('tk-org'); },
+
   async renumberStudents() {
     try {
       const res = await fetch(`${API}/renumber-students`, {

@@ -1033,6 +1033,9 @@ const ROLE_WRITABLE = [
     // the desk that enrols people: the student, their login, and the form it came from
     'admission'          => ['students', 'users', 'submissions'],
     'faculty'            => ['attendance', 'marks', 'requisitions'],
+    // a guest teacher registers attendance and marks for the classes given to
+    // them; no purchasing, no staff files
+    'guest_faculty'      => ['attendance', 'marks'],
     'librarian'          => ['books', 'issues', 'requisitions'],
     // a student applies to a drive and nothing else; the placement rule below
     // narrows even that to a POST
@@ -1050,6 +1053,7 @@ const ROLE_WRITABLE_OWN = [
     'course_coordinator' => ['coordinators'],
     'admission'          => ['admissions'],
     'faculty'            => ['faculty'],
+    'guest_faculty'      => ['faculty'],
     'librarian'          => ['faculty'],
 ];
 
@@ -1095,6 +1099,8 @@ const ROLE_READABLE = [
     'faculty'            => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
                              'attendance', 'marks', 'requisitions', 'timetable', 'books',
                              'issues', 'events', 'settings'],
+    'guest_faculty'      => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
+                             'attendance', 'marks', 'timetable', 'events', 'settings'],
     'librarian'          => ['users', 'roles', 'students', 'faculty', 'courses', 'syllabus',
                              'requisitions', 'timetable', 'books', 'issues', 'events',
                              'settings'],
@@ -1188,6 +1194,22 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
        network allows. */
     if ($isWrite && !in_array($resource, OPEN_ENDPOINTS, true)) {
         rate_check();
+    }
+
+    /* The helpdesk. Its tables are never reached through the generic collection
+       API — the history is append-only and a ticket is visible only to the
+       people it concerns — and its tk-* endpoints authorise every call against
+       the ticket and the reporting hierarchy themselves, so the collection and
+       role rules below have nothing to add for them. */
+    if (in_array($resource, TICKET_TABLES, true)) {
+        send_json(['error' => 'forbidden', 'message' => 'Tickets are reached through the helpdesk.'], 403);
+    }
+    if (strncmp($resource, 'tk-', 3) === 0) {
+        return;
+    }
+    // a reporting relationship is set by the Super Admin alone, and must make sense
+    if ($isWrite && $resource === 'users') {
+        guard_reporting_to($id);
     }
 
     /* Collections first, and by grant rather than by exception. Only then the
@@ -1346,7 +1368,7 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     if ($resource === 'attendance' && $isWrite && !may_mark_attendance() && !has_custom_access()) {
         send_json([
             'error'   => 'forbidden',
-            'message' => current_role() === 'faculty'
+            'message' => in_array(current_role(), ['faculty', 'guest_faculty'], true)
                 ? 'Attendance entry is currently handled by the course coordinator.'
                 : 'Your role cannot register attendance.',
         ], 403);
@@ -2443,6 +2465,10 @@ function bootstrap_data(): array
     $out = [];
     $isAdmin = current_role() === 'admin';
     foreach (COLLECTIONS as $col => $_) {
+        // tickets are served per caller by the helpdesk endpoints, never in bulk
+        if (in_array($col, TICKET_TABLES, true)) {
+            continue;
+        }
         /* Every session needs the role table: it is how the browser works out
            what its own account may do, and it holds no data about anybody —
            only which boxes are ticked for which role. The audit log does name
@@ -3373,6 +3399,918 @@ $isCollection = isset(COLLECTIONS[$resource]) && $resource !== '';
  * Everything after the health check, in one callable so it can be retried
  * once if the schema turns out to be behind (see the catch below).
  */
+/* =====================================================================
+   REPORTING HIERARCHY + HELPDESK
+   ---------------------------------------------------------------------
+   One relationship — users.reportingTo — and one set of role chains drive
+   the org tree, ticket routing and escalation. The CMS runs a single centre,
+   so "the Course Coordinator" of a ticket is resolved first through the
+   requester's own reporting line and otherwise to the first active account
+   holding that role. Everything here lives in index.php on purpose: a
+   Hostinger deploy lands file by file, and a constant or a required file
+   that has not arrived yet would take the whole API down.
+   ===================================================================== */
+
+const TICKET_TABLES = ['tickets', 'tickethistory', 'ticketcomments'];
+
+/** which roles an account of a role may report to (by role key) */
+const REPORTS_TO = [
+    'subadmin'           => ['admin'],
+    'center_head'        => ['subadmin', 'admin'],
+    'academic_head'      => ['center_head'],
+    'admission'          => ['academic_head', 'center_head'],
+    'accountant'         => ['academic_head', 'center_head'],
+    'librarian'          => ['academic_head', 'center_head'],
+    'course_coordinator' => ['academic_head'],
+    'dean_placement'     => ['academic_head'],
+    'plmt_officer'       => ['dean_placement'],
+    'placement_officer'  => ['dean_placement'],
+    'plmt_coordinator'   => ['plmt_officer', 'placement_officer'],
+    'faculty'            => ['course_coordinator', 'academic_head'],
+    'guest_faculty'      => ['course_coordinator', 'academic_head'],
+    'student'            => [],
+];
+
+/** names used in server messages when a role has no row of its own */
+const ROLE_TITLES = [
+    'admin' => 'Super Admin', 'subadmin' => 'Admin', 'center_head' => 'Center Head',
+    'academic_head' => 'Academic Head', 'admission' => 'Admission', 'accountant' => 'Finance',
+    'librarian' => 'Library', 'course_coordinator' => 'Course Coordinator',
+    'dean_placement' => 'Dean T&P', 'plmt_officer' => 'Placement Officer',
+    'placement_officer' => 'Placement Officer (Cell)', 'plmt_coordinator' => 'Assistant TPO',
+    'faculty' => 'Faculty', 'guest_faculty' => 'Guest Faculty', 'student' => 'Student',
+];
+
+/* The escalation ladder of each function, lowest level first. A level lists
+   the role keys that can hold it — the built-in placement cell officer and the
+   Placement Officer access role are the same rung. A ticket climbs only as far
+   as somebody escalates it; nothing forces it through every level. */
+const TICKET_CHAINS = [
+    'academic'  => [['course_coordinator'], ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
+    'admission' => [['admission'], ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
+    'finance'   => [['accountant'], ['center_head'], ['subadmin'], ['admin']],
+    'tnp'       => [['plmt_coordinator'], ['plmt_officer', 'placement_officer'], ['dean_placement'],
+                    ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
+    'library'   => [['librarian'], ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
+    'technical' => [['subadmin'], ['admin']],
+    'other'     => [['center_head'], ['subadmin'], ['admin']],
+];
+
+const TICKET_CATEGORIES = [
+    'Academic'  => ['chain' => 'academic',
+                    'subs' => ['Attendance', 'Examination', 'Marks', 'Results', 'Subject', 'Course',
+                               'Timetable', 'Faculty', 'Student']],
+    'Admission' => ['chain' => 'admission', 'subs' => ['Application', 'Admission', 'Documents', 'Registration']],
+    'Finance'   => ['chain' => 'finance', 'subs' => ['Fees', 'Payment', 'Receipt', 'Refund']],
+    'T&P'       => ['chain' => 'tnp', 'subs' => ['Placement', 'Company', 'Drive', 'Interview', 'Training', 'Offer']],
+    'Library'   => ['chain' => 'library', 'subs' => ['Book', 'Issue/Return', 'Inventory', 'Fine']],
+    'Technical' => ['chain' => 'technical', 'subs' => ['Login', 'Password', 'CMS Bug', 'System Error']],
+    'Other'     => ['chain' => 'other', 'subs' => ['General Request', 'Complaint', 'Suggestion', 'Other']],
+];
+const TICKET_PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
+/** hours; the Super Admin overrides these in the `ticketSla` setting */
+const TICKET_SLA_DEFAULT = ['Low' => 72, 'Medium' => 48, 'High' => 24, 'Critical' => 4];
+/** history actions that hand the ticket to somebody — each one opens a stage */
+const TICKET_STAGE_ACTIONS = ['assigned', 'escalated', 'reassigned', 'reopened'];
+const TICKET_ATTACH_TYPES = [
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg', 'image/png',
+];
+const TICKET_ATTACH_MAX = 2 * 1024 * 1024;
+/** who may see the whole organisation tree */
+const ORG_TREE_ROLES = ['admin', 'subadmin', 'center_head', 'academic_head'];
+
+function role_title(string $key): string
+{
+    $r = role_record($key);
+    if ($r && trim((string) ($r['label'] ?? '')) !== '') {
+        return (string) $r['label'];
+    }
+    return ROLE_TITLES[$key] ?? ucwords(str_replace('_', ' ', $key));
+}
+
+/** why this reporting relationship is not allowed, or null when it is */
+function reporting_problem(string $selfId, string $role, string $parentId): ?string
+{
+    if ($selfId !== '' && $parentId === $selfId) {
+        return 'An account cannot report to itself.';
+    }
+    if ($role === 'admin') {
+        return 'The Super Admin reports to nobody.';
+    }
+    $cols = qi('id') . ' AS id, ' . qi('role') . ' AS role, ' . qi('reportingTo') . ' AS reportingTo';
+    $parent = fetch_one('SELECT ' . $cols . ' FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?', [$parentId]);
+    if (!$parent) {
+        return 'The selected Reporting To account does not exist.';
+    }
+    $allowed = REPORTS_TO[$role] ?? null;
+    if ($allowed === []) {
+        return 'A ' . role_title($role) . ' does not report to a staff account.';
+    }
+    if ($allowed !== null && !in_array((string) $parent['role'], $allowed, true)) {
+        return 'A ' . role_title($role) . ' must report to '
+            . implode(' or ', array_map('role_title', $allowed)) . '.';
+    }
+    // walking up from the new manager must never arrive back here
+    $cur = $parent;
+    for ($i = 0; $i < 25 && $cur; $i++) {
+        if ($selfId !== '' && (string) $cur['id'] === $selfId) {
+            return 'That would create a reporting loop.';
+        }
+        $up = trim((string) ($cur['reportingTo'] ?? ''));
+        if ($up === '') {
+            break;
+        }
+        $cur = fetch_one('SELECT ' . $cols . ' FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?', [$up]);
+    }
+    return null;
+}
+
+/**
+ * The login table's reportingTo, guarded: only the Super Admin changes it,
+ * and the new manager must hold a role this account may report to. A role
+ * change on its own is checked too, so it cannot leave a relationship wrong.
+ */
+function guard_reporting_to(?string $id): void
+{
+    $rows = body();
+    $rows = (array_is_list($rows) && $rows !== []) ? $rows : [$rows];
+    $existing = $id !== null
+        ? fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('role') . ' AS role, ' . qi('reportingTo')
+            . ' AS reportingTo FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?', [$id])
+        : null;
+    foreach ($rows as $r) {
+        if (!is_array($r)) {
+            continue;
+        }
+        $role = (string) ($r['role'] ?? ($existing['role'] ?? ''));
+        $selfId = (string) ($existing['id'] ?? ($r['id'] ?? ''));
+        if (array_key_exists('reportingTo', $r)) {
+            $new = trim((string) ($r['reportingTo'] ?? ''));
+            $old = trim((string) ($existing['reportingTo'] ?? ''));
+            if ($new === $old && !array_key_exists('role', $r)) {
+                continue;
+            }
+            if ($new !== $old && current_role() !== 'admin') {
+                send_json(['error' => 'forbidden',
+                           'message' => 'Only the Super Admin changes who an account reports to.'], 403);
+            }
+            if ($new !== '' && ($problem = reporting_problem($selfId, $role, $new))) {
+                send_json(['error' => 'invalid', 'message' => $problem], 422);
+            }
+        } elseif ($existing && array_key_exists('role', $r)) {
+            $p = trim((string) ($existing['reportingTo'] ?? ''));
+            if ($p !== '' && ($problem = reporting_problem($selfId, $role, $p))) {
+                send_json(['error' => 'invalid',
+                           'message' => $problem . ' Change Reporting To along with the role.'], 422);
+            }
+        }
+    }
+}
+
+/* ---------------- helpdesk helpers ---------------- */
+
+function tk_bad(string $message, int $code = 422): void
+{
+    send_json(['error' => 'invalid', 'message' => $message], $code);
+}
+
+/** a time-ordered, collision-safe id — history grows fast and next_id() probes row by row */
+function tk_id(string $prefix): string
+{
+    return $prefix . str_pad(dechex((int) round(microtime(true) * 1000)), 12, '0', STR_PAD_LEFT)
+        . bin2hex(random_bytes(3));
+}
+
+/** the next number of a named counter in _id_seq (ticket:2026 -> 1, 2, 3 …) */
+function tk_take_seq(string $key): int
+{
+    seq_table();
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        $bump = db()->prepare('UPDATE ' . qi('_id_seq') . ' SET ' . qi('n') . ' = ' . qi('n')
+            . ' + 1 WHERE ' . qi('k') . ' = ?');
+        $bump->execute([$key]);
+        if ($bump->rowCount() === 0) {
+            try {
+                run_sql('INSERT INTO ' . qi('_id_seq') . ' (' . qi('k') . ', ' . qi('n') . ') VALUES (?, 1)', [$key]);
+            } catch (PDOException $e) {
+                run_sql('UPDATE ' . qi('_id_seq') . ' SET ' . qi('n') . ' = ' . qi('n') . ' + 1 WHERE '
+                    . qi('k') . ' = ?', [$key]);
+            }
+        }
+        $row = fetch_one('SELECT ' . qi('n') . ' AS n FROM ' . qi('_id_seq') . ' WHERE ' . qi('k') . ' = ?', [$key]);
+        if ($own) {
+            db()->commit();
+        }
+        return (int) ($row['n'] ?? 1);
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function tk_user_cols(): string
+{
+    return qi('id') . ' AS id, ' . qi('name') . ' AS name, ' . qi('username') . ' AS username, '
+        . qi('role') . ' AS role, ' . qi('status') . ' AS status, ' . qi('reportingTo') . ' AS reportingTo';
+}
+
+function tk_user(string $id): ?array
+{
+    if ($id === '') {
+        return null;
+    }
+    return fetch_one('SELECT ' . tk_user_cols() . ' FROM ' . qi('users') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+}
+
+function tk_active(?array $u): bool
+{
+    return $u !== null && (string) ($u['status'] ?? 'Active') !== 'Inactive';
+}
+
+function tk_name(array $u): string
+{
+    $n = trim((string) ($u['name'] ?? ''));
+    return $n !== '' ? $n : (string) ($u['username'] ?? '');
+}
+
+/** active accounts holding any of these roles, in a stable order */
+function tk_users_with_roles(array $roles): array
+{
+    if (!$roles) {
+        return [];
+    }
+    $ph = implode(', ', array_fill(0, count($roles), '?'));
+    $rows = fetch_all('SELECT ' . tk_user_cols() . ' FROM ' . qi('users') . ' WHERE ' . qi('role')
+        . ' IN (' . $ph . ')', array_values($roles));
+    $rows = array_values(array_filter($rows, 'tk_active'));
+    usort($rows, fn($a, $b) => strnatcmp((string) $a['id'], (string) $b['id']));
+    return $rows;
+}
+
+/** the chain of people above an account, nearest first */
+function tk_line_above(array $u): array
+{
+    $out = [];
+    $cur = $u;
+    for ($i = 0; $i < 12; $i++) {
+        $p = trim((string) ($cur['reportingTo'] ?? ''));
+        if ($p === '' || in_array($p, $out, true)) {
+            break;
+        }
+        $out[] = $p;
+        $cur = tk_user($p);
+        if (!$cur) {
+            break;
+        }
+    }
+    return $out;
+}
+
+function tk_level_of(array $chain, string $role): int
+{
+    foreach ($chain as $i => $roles) {
+        if (in_array($role, $roles, true)) {
+            return $i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * The first account that can take a ticket at or above $from: somebody on the
+ * requester's own reporting line if they hold the level, otherwise the first
+ * active holder of it. Levels nobody holds are skipped.
+ */
+function tk_route(array $chain, int $from, array $line, string $excludeId = ''): ?array
+{
+    for ($lvl = max(0, $from); $lvl < count($chain); $lvl++) {
+        foreach ($line as $hid) {
+            $u = tk_user((string) $hid);
+            if (tk_active($u) && $u['id'] !== $excludeId && in_array((string) $u['role'], $chain[$lvl], true)) {
+                return ['user' => $u, 'level' => $lvl];
+            }
+        }
+        foreach (tk_users_with_roles($chain[$lvl]) as $u) {
+            if ($u['id'] !== $excludeId) {
+                return ['user' => $u, 'level' => $lvl];
+            }
+        }
+    }
+    return null;
+}
+
+/** every active account on levels $lo..$hi, tagged with its level */
+function tk_targets(array $chain, int $lo, int $hi, string $excludeId, ?array $suggest): array
+{
+    $out = [];
+    for ($lvl = max(0, $lo); $lvl <= min($hi, count($chain) - 1); $lvl++) {
+        foreach (tk_users_with_roles($chain[$lvl]) as $u) {
+            if ($u['id'] === $excludeId) {
+                continue;
+            }
+            $out[] = ['id' => $u['id'], 'name' => tk_name($u), 'role' => $u['role'], 'level' => $lvl,
+                      'suggested' => $suggest !== null && $suggest['user']['id'] === $u['id']];
+        }
+    }
+    return $out;
+}
+
+function tk_sla_hours(): array
+{
+    $out = TICKET_SLA_DEFAULT;
+    $d = json_decode(setting_value('ticketSla', ''), true);
+    if (is_array($d)) {
+        foreach (TICKET_PRIORITIES as $p) {
+            if (isset($d[$p]) && is_numeric($d[$p]) && (float) $d[$p] > 0 && (float) $d[$p] <= 8760) {
+                $out[$p] = (float) $d[$p];
+            }
+        }
+    }
+    return $out;
+}
+
+/** data-URL attachments, checked for type and size before anything is stored */
+function tk_clean_attachments($list, int $max = 3): array
+{
+    if (!is_array($list)) {
+        return [];
+    }
+    $out = [];
+    foreach (array_slice($list, 0, $max) as $a) {
+        if (!is_array($a) || ($a['data'] ?? '') === '') {
+            continue;
+        }
+        $data = (string) $a['data'];
+        $comma = strpos($data, ',');
+        $head = $comma === false ? '' : substr($data, 0, $comma);
+        if (strncmp($head, 'data:', 5) !== 0 || substr($head, -7) !== ';base64') {
+            tk_bad('An attachment could not be read.');
+        }
+        $type = strtolower(substr($head, 5, -7));
+        if (!in_array($type, TICKET_ATTACH_TYPES, true)) {
+            tk_bad('Only PDF, Word, Excel, JPG and PNG files can be attached.');
+        }
+        $b64 = substr($data, $comma + 1);
+        if ($b64 === '' || strspn($b64, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=') !== strlen($b64)) {
+            tk_bad('An attachment could not be read.');
+        }
+        // decoded size: every 4 characters are 3 bytes, less the '=' padding
+        $bytes = (int) floor(strlen($b64) * 3 / 4) - (substr($b64, -2) === '==' ? 2 : (substr($b64, -1) === '=' ? 1 : 0));
+        if ($bytes > TICKET_ATTACH_MAX) {
+            tk_bad('Each attachment must be 2 MB or smaller.');
+        }
+        $name = substr(preg_replace('/[^\w.\- ()]+/u', '_', basename((string) ($a['name'] ?? 'file'))), 0, 120);
+        $out[] = ['name' => $name !== '' ? $name : 'file', 'type' => $type, 'size' => $bytes, 'data' => $data];
+    }
+    return $out;
+}
+
+function tk_load(string $id): ?array
+{
+    if ($id === '') {
+        return null;
+    }
+    $t = fetch_one('SELECT * FROM ' . qi('tickets') . ' WHERE ' . qi('id') . ' = ?', [$id]);
+    return $t ? row_out('tickets', $t) : null;
+}
+
+function tk_save(array $t): void
+{
+    upsert('tickets', $t);
+}
+
+/** append one row to a ticket's history; missing columns are stored empty */
+function tk_log(array $row): void
+{
+    $cols = COLLECTIONS['tickethistory'];
+    $row['id'] = $row['id'] ?? tk_id('TH');
+    $vals = [];
+    foreach ($cols as $c) {
+        $vals[] = array_key_exists($c, $row) && $row[$c] !== null ? (string) $row[$c] : null;
+    }
+    run_sql('INSERT INTO ' . qi('tickethistory') . ' (' . implode(', ', array_map('qi', $cols)) . ') VALUES ('
+        . implode(', ', array_fill(0, count($cols), '?')) . ')', $vals);
+}
+
+/** the stage the ticket is sitting in now ends at $now */
+function tk_close_stage(string $ticketId, int $now): void
+{
+    $in = implode(', ', array_fill(0, count(TICKET_STAGE_ACTIONS), '?'));
+    $st = fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('assignedAt') . ' AS assignedAt FROM '
+        . qi('tickethistory') . ' WHERE ' . qi('ticketId') . ' = ? AND ' . qi('action') . ' IN (' . $in
+        . ') AND (' . qi('completedAt') . ' IS NULL OR ' . qi('completedAt') . " = '') ORDER BY "
+        . qi('assignedAt') . ' DESC, ' . qi('id') . ' DESC LIMIT 1',
+        array_merge([$ticketId], TICKET_STAGE_ACTIONS));
+    if ($st) {
+        run_sql('UPDATE ' . qi('tickethistory') . ' SET ' . qi('completedAt') . ' = ?, ' . qi('seconds')
+            . ' = ? WHERE ' . qi('id') . ' = ?',
+            [(string) $now, (string) max(0, $now - (int) $st['assignedAt']), $st['id']]);
+    }
+}
+
+/**
+ * Who sees a ticket. The Super Admin and the Center Head see every one (a
+ * single centre); anybody who raised it, holds it or ever handled it sees it;
+ * and the people on the ticket's own function ladder — the team it belongs to
+ * and the authorities it can climb to — see it.
+ */
+function tk_can_see(array $t, array $me, ?bool $involved = null): bool
+{
+    $role = (string) ($me['role'] ?? '');
+    $uid = (string) ($me['id'] ?? '');
+    if (in_array($role, ['admin', 'center_head'], true)) {
+        return true;
+    }
+    if ((string) $t['createdBy'] === $uid || (string) $t['assignedTo'] === $uid) {
+        return true;
+    }
+    if ($involved === null) {
+        $involved = (bool) fetch_one('SELECT 1 AS x FROM ' . qi('tickethistory') . ' WHERE ' . qi('ticketId')
+            . ' = ? AND (' . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?) LIMIT 1',
+            [(string) $t['id'], $uid, $uid]);
+    }
+    if ($involved) {
+        return true;
+    }
+    return tk_level_of(TICKET_CHAINS[(string) $t['chain']] ?? [], $role) >= 0;
+}
+
+/** what the caller may do to this ticket right now */
+function tk_allowed(array $t, array $me): array
+{
+    $chain = TICKET_CHAINS[(string) $t['chain']] ?? [];
+    $myLevel = tk_level_of($chain, (string) $me['role']);
+    $cur = (int) $t['escalationLevel'];
+    $uid = (string) $me['id'];
+    $assigned = (string) $t['assignedTo'] !== '';
+    $holder = $assigned && (string) $t['assignedTo'] === $uid;
+    $isAdmin = (string) $me['role'] === 'admin';
+    // a higher rung of the same ladder may step in; the Super Admin always may
+    $super = $isAdmin || ($assigned ? $myLevel > $cur : $myLevel >= 0);
+    $creator = (string) $t['createdBy'] === $uid;
+    $s = (string) $t['status'];
+    $done = in_array($s, ['Resolved', 'Closed'], true);
+    $act = $holder || $super;
+    return [
+        'holder'       => $holder,
+        'supervisor'   => $super,
+        'myLevel'      => $myLevel,
+        'assign'       => !$assigned && !$done && $super,
+        'start'        => $act && $assigned && in_array($s, ['Assigned', 'Escalated', 'Reopened', 'Waiting for Information'], true),
+        'request_info' => $holder && in_array($s, ['Assigned', 'In Progress', 'Escalated', 'Reopened'], true),
+        'escalate'     => $act && $assigned && !$done && $cur + 1 < count($chain),
+        'reassign'     => $act && $assigned && !$done,
+        'resolve'      => $act && $assigned && !$done,
+        'close'        => $s === 'Resolved' && ($creator || $holder || $super),
+        'reopen'       => $done && ($creator || $super),
+        'comment'      => $s !== 'Closed',
+    ];
+}
+
+function tk_int_fields(array $row, array $fields): array
+{
+    foreach ($fields as $f) {
+        if (array_key_exists($f, $row)) {
+            $row[$f] = ($row[$f] === null || $row[$f] === '') ? null : (int) $row[$f];
+        }
+    }
+    return $row;
+}
+
+const TICKET_TIME_FIELDS = ['assignedAt', 'escalationLevel', 'slaDueAt', 'createdAt', 'updatedAt',
+                            'resolvedAt', 'closedAt'];
+const TICKET_LIST_FIELDS = ['id', 'ticketNo', 'subject', 'category', 'subcategory', 'priority', 'department',
+                            'course', 'module', 'createdBy', 'createdByName', 'createdByRole', 'assignedTo',
+                            'assignedName', 'assignedRole', 'assignedAt', 'status', 'chain',
+                            'escalationLevel', 'slaHours', 'slaDueAt', 'createdAt', 'updatedAt',
+                            'resolvedAt', 'closedAt'];
+
+/* ---------------- helpdesk endpoints ---------------- */
+
+/** categories, priorities, SLA hours and ladders — what the forms and badges need */
+function api_tk_meta(): void
+{
+    $me = current_user();
+    $cats = [];
+    foreach (TICKET_CATEGORIES as $name => $def) {
+        $cats[] = ['name' => $name, 'chain' => $def['chain'], 'subs' => $def['subs']];
+    }
+    send_json([
+        'now' => time(), 'categories' => $cats, 'priorities' => TICKET_PRIORITIES,
+        'sla' => tk_sla_hours(), 'chains' => TICKET_CHAINS, 'reportsTo' => REPORTS_TO,
+        'canConfigure' => (string) ($me['role'] ?? '') === 'admin',
+        'orgTree' => in_array((string) ($me['role'] ?? ''), ORG_TREE_ROLES, true),
+    ]);
+}
+
+/** every ticket the caller may see, lean, plus the counters the dashboards draw */
+function api_tk_list(): void
+{
+    $me = current_user();
+    $uid = (string) $me['id'];
+    $rows = fetch_all('SELECT ' . implode(', ', array_map('qi', TICKET_LIST_FIELDS)) . ' FROM ' . qi('tickets')
+        . ' ORDER BY ' . qi('createdAt') . ' DESC');
+    $mine = [];
+    foreach (fetch_all('SELECT DISTINCT ' . qi('ticketId') . ' AS t FROM ' . qi('tickethistory') . ' WHERE '
+        . qi('toUser') . ' = ? OR ' . qi('fromUser') . ' = ?', [$uid, $uid]) as $r) {
+        $mine[(string) $r['t']] = true;
+    }
+    $out = [];
+    $ids = [];
+    foreach ($rows as $t) {
+        if (!tk_can_see($t, $me, isset($mine[(string) $t['id']]))) {
+            continue;
+        }
+        $t = tk_int_fields($t, TICKET_TIME_FIELDS);
+        $t['slaHours'] = (float) $t['slaHours'];
+        $t['involved'] = isset($mine[(string) $t['id']]);
+        $t['escalations'] = 0;
+        $t['reopens'] = 0;
+        $t['firstStartAt'] = null;
+        $out[(string) $t['id']] = $t;
+    }
+    if ($out) {
+        foreach (fetch_all('SELECT ' . qi('ticketId') . ' AS t, ' . qi('action') . ' AS a, ' . qi('at') . ' AS at FROM '
+            . qi('tickethistory') . ' WHERE ' . qi('action') . " IN ('escalated', 'reopened', 'started')") as $h) {
+            $k = (string) $h['t'];
+            if (!isset($out[$k])) {
+                continue;
+            }
+            if ($h['a'] === 'escalated') {
+                $out[$k]['escalations']++;
+            } elseif ($h['a'] === 'reopened') {
+                $out[$k]['reopens']++;
+            } elseif ($out[$k]['firstStartAt'] === null || (int) $h['at'] < $out[$k]['firstStartAt']) {
+                $out[$k]['firstStartAt'] = (int) $h['at'];
+            }
+        }
+    }
+    send_json(['now' => time(), 'me' => ['id' => $uid, 'role' => (string) $me['role']],
+               'sla' => tk_sla_hours(), 'tickets' => array_values($out)]);
+}
+
+/** one ticket with its whole story and what the caller may do with it */
+function api_tk_get(?string $id): void
+{
+    $me = current_user();
+    $t = tk_load((string) $id);
+    if (!$t) {
+        send_json(['error' => 'not found', 'message' => 'Ticket not found.'], 404);
+    }
+    if (!tk_can_see($t, $me)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — this ticket is outside your scope.'], 403);
+    }
+    $hist = array_map(fn($h) => tk_int_fields($h, ['level', 'at', 'assignedAt', 'completedAt', 'seconds']),
+        fetch_all('SELECT * FROM ' . qi('tickethistory') . ' WHERE ' . qi('ticketId') . ' = ? ORDER BY '
+            . qi('at') . ' ASC, ' . qi('id') . ' ASC', [(string) $t['id']]));
+    $comments = array_map(fn($c) => tk_int_fields(row_out('ticketcomments', $c), ['at']),
+        fetch_all('SELECT * FROM ' . qi('ticketcomments') . ' WHERE ' . qi('ticketId') . ' = ? ORDER BY '
+            . qi('at') . ' ASC, ' . qi('id') . ' ASC', [(string) $t['id']]));
+    $allowed = tk_allowed($t, $me);
+    $chain = TICKET_CHAINS[(string) $t['chain']] ?? [];
+    $cur = (int) $t['escalationLevel'];
+    $holder = tk_user((string) $t['assignedTo']);
+    $line = $holder ? tk_line_above($holder) : [];
+    $next = $cur + 1 < count($chain) ? tk_route($chain, $cur + 1, $line, (string) $t['assignedTo']) : null;
+    $escalate = $allowed['escalate'] ? tk_targets($chain, $cur + 1, count($chain) - 1, (string) $t['assignedTo'], $next) : [];
+    $reHi = (string) $me['role'] === 'admin' ? count($chain) - 1 : max($cur, (int) $allowed['myLevel']);
+    $reassign = ($allowed['reassign'] || $allowed['assign'])
+        ? tk_targets($chain, 0, $allowed['assign'] ? count($chain) - 1 : $reHi, (string) $t['assignedTo'], null)
+        : [];
+    $t = tk_int_fields($t, TICKET_TIME_FIELDS);
+    $t['slaHours'] = (float) $t['slaHours'];
+    send_json([
+        'now' => time(), 'ticket' => $t, 'history' => $hist, 'comments' => $comments,
+        'allowed' => $allowed, 'chain' => $chain,
+        'next' => $next ? ['id' => $next['user']['id'], 'name' => tk_name($next['user']),
+                           'role' => $next['user']['role'], 'level' => $next['level']] : null,
+        'escalateTargets' => $escalate, 'reassignTargets' => $reassign,
+        'me' => ['id' => (string) $me['id'], 'role' => (string) $me['role']],
+    ]);
+}
+
+function api_tk_create(): void
+{
+    $me = current_user();
+    $b = body();
+    $subject = trim((string) ($b['subject'] ?? ''));
+    $desc = trim((string) ($b['description'] ?? ''));
+    $cat = (string) ($b['category'] ?? '');
+    $sub = (string) ($b['subcategory'] ?? '');
+    $pri = (string) ($b['priority'] ?? 'Medium');
+    if (mb_strlen($subject) < 3 || mb_strlen($subject) > 200) {
+        tk_bad('Give the ticket a subject of 3 to 200 characters.');
+    }
+    if ($desc === '') {
+        tk_bad('Describe the issue.');
+    }
+    if (!isset(TICKET_CATEGORIES[$cat])) {
+        tk_bad('Choose a category.');
+    }
+    if (!in_array($sub, TICKET_CATEGORIES[$cat]['subs'], true)) {
+        tk_bad('Choose a subcategory.');
+    }
+    if (!in_array($pri, TICKET_PRIORITIES, true)) {
+        tk_bad('Choose a priority.');
+    }
+    $attachments = tk_clean_attachments($b['attachments'] ?? []);
+    $chainKey = TICKET_CATEGORIES[$cat]['chain'];
+    $chain = TICKET_CHAINS[$chainKey];
+    $now = time();
+    $hours = tk_sla_hours()[$pri];
+    $year = gmdate('Y', $now);
+    $no = sprintf('NMIET-%s-%06d', $year, tk_take_seq('ticket:' . $year));
+    $meRow = tk_user((string) $me['id']) ?? $me;
+    $creatorLevel = tk_level_of($chain, (string) $me['role']);
+    $route = tk_route($chain, $creatorLevel + 1, tk_line_above($meRow), (string) $me['id']);
+    $t = [
+        'id' => tk_id('TK'), 'ticketNo' => $no, 'subject' => $subject, 'description' => $desc,
+        'category' => $cat, 'subcategory' => $sub, 'priority' => $pri,
+        'department' => substr(trim((string) ($b['department'] ?? '')), 0, 120),
+        'course' => substr(trim((string) ($b['course'] ?? '')), 0, 120),
+        'module' => substr(trim((string) ($b['module'] ?? '')), 0, 120),
+        'createdBy' => (string) $me['id'], 'createdByName' => tk_name($me), 'createdByRole' => (string) $me['role'],
+        'assignedTo' => $route ? $route['user']['id'] : '',
+        'assignedName' => $route ? tk_name($route['user']) : '',
+        'assignedRole' => $route ? $route['user']['role'] : '',
+        'assignedAt' => $route ? (string) $now : '',
+        'status' => $route ? 'Assigned' : 'Open', 'chain' => $chainKey,
+        'escalationLevel' => (string) ($route ? $route['level'] : max(0, $creatorLevel + 1)),
+        'slaHours' => (string) $hours, 'slaDueAt' => (string) ($now + (int) round($hours * 3600)),
+        'createdAt' => (string) $now, 'updatedAt' => (string) $now,
+        'resolution' => '', 'resolvedBy' => '', 'resolvedByName' => '', 'resolvedAt' => '',
+        'closedBy' => '', 'closedByName' => '', 'closedAt' => '', 'attachments' => $attachments,
+    ];
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        tk_save($t);
+        tk_log(['ticketId' => $t['id'], 'action' => 'created', 'fromUser' => $me['id'], 'fromName' => tk_name($me),
+                'fromRole' => $me['role'], 'status' => 'Open', 'at' => $now]);
+        if ($route) {
+            tk_log(['ticketId' => $t['id'], 'action' => 'assigned', 'fromUser' => $me['id'],
+                    'fromName' => tk_name($me), 'fromRole' => $me['role'], 'toUser' => $route['user']['id'],
+                    'toName' => tk_name($route['user']), 'toRole' => $route['user']['role'],
+                    'status' => 'Assigned', 'level' => $route['level'], 'at' => $now, 'assignedAt' => $now]);
+        }
+        if ($own) {
+            db()->commit();
+        }
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    audit('ticket-create', 'tickets', $t['id'], $no,
+        $subject . ' — ' . ($route ? 'assigned to ' . tk_name($route['user']) . ' (' . role_title($route['user']['role']) . ')'
+                                   : 'no handler available, left open'));
+    send_json(['ok' => true, 'id' => $t['id'], 'ticketNo' => $no, 'status' => $t['status'],
+               'assignedName' => $t['assignedName'], 'assignedRole' => $t['assignedRole']], 201);
+}
+
+/** every change to a ticket goes through here, one action per call */
+function api_tk_action(): void
+{
+    $me = current_user();
+    $b = body();
+    $t = tk_load((string) ($b['id'] ?? ''));
+    if (!$t) {
+        send_json(['error' => 'not found', 'message' => 'Ticket not found.'], 404);
+    }
+    if (!tk_can_see($t, $me)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — this ticket is outside your scope.'], 403);
+    }
+    $act = (string) ($b['action'] ?? '');
+    $allowed = tk_allowed($t, $me);
+    if (empty($allowed[$act]) || in_array($act, ['holder', 'supervisor', 'myLevel'], true)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — you cannot do that on this ticket now.'], 403);
+    }
+    $now = time();
+    $uid = (string) $me['id'];
+    $meName = tk_name($me);
+    $reason = trim((string) ($b['reason'] ?? ''));
+    $comment = trim((string) ($b['comment'] ?? ''));
+    $chain = TICKET_CHAINS[(string) $t['chain']] ?? [];
+    $cur = (int) $t['escalationLevel'];
+    $prevStatus = (string) $t['status'];
+    $holderId = (string) $t['assignedTo'];
+    $holder = tk_user($holderId);
+    $summary = '';
+
+    // the account a hand-off goes to must be one this action may reach
+    $pickTarget = function (int $lo, int $hi) use ($b, $chain, $holderId): array {
+        $to = tk_user((string) ($b['toUser'] ?? ''));
+        if (!tk_active($to) || (string) $to['id'] === $holderId) {
+            tk_bad('Choose who the ticket goes to.');
+        }
+        $lvl = tk_level_of($chain, (string) $to['role']);
+        if ($lvl < $lo || $lvl > $hi) {
+            send_json(['error' => 'forbidden',
+                       'message' => 'ACCESS DENIED — that account is not an authority this ticket can go to.'], 403);
+        }
+        return ['user' => $to, 'level' => $lvl];
+    };
+    $handOff = function (string $action, array $target, string $status) use (&$t, $now, $holder, $me, $meName, $reason, $comment) {
+        tk_close_stage((string) $t['id'], $now);
+        $from = $holder ?: $me;
+        tk_log(['ticketId' => $t['id'], 'action' => $action, 'fromUser' => $from['id'], 'fromName' => tk_name($from),
+                'fromRole' => $from['role'], 'toUser' => $target['user']['id'], 'toName' => tk_name($target['user']),
+                'toRole' => $target['user']['role'], 'status' => $status, 'level' => $target['level'],
+                'reason' => $reason, 'comment' => $comment, 'at' => $now, 'assignedAt' => $now]);
+        $t['assignedTo'] = $target['user']['id'];
+        $t['assignedName'] = tk_name($target['user']);
+        $t['assignedRole'] = $target['user']['role'];
+        $t['assignedAt'] = (string) $now;
+        $t['escalationLevel'] = (string) $target['level'];
+        $t['status'] = $status;
+    };
+    $event = function (string $action, string $status, string $text = '') use (&$t, $now, $me, $meName) {
+        tk_log(['ticketId' => $t['id'], 'action' => $action, 'fromUser' => $me['id'], 'fromName' => $meName,
+                'fromRole' => $me['role'], 'status' => $status, 'comment' => $text, 'at' => $now]);
+        $t['status'] = $status;
+    };
+    $addComment = function (string $kind, string $message, array $attachment) use ($t, $now, $me, $meName) {
+        run_sql('INSERT INTO ' . qi('ticketcomments') . ' (' . implode(', ', array_map('qi', COLLECTIONS['ticketcomments']))
+            . ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                tk_id('TC'), $t['id'], $me['id'], $meName, $me['role'], $kind, $message,
+                $attachment ? json_encode($attachment) : null, (string) $now,
+            ]);
+    };
+
+    $own = !db()->inTransaction();
+    if ($own) {
+        db()->beginTransaction();
+    }
+    try {
+        switch ($act) {
+            case 'start':
+                $event($prevStatus === 'Waiting for Information' ? 'resumed' : 'started', 'In Progress');
+                $summary = 'work started';
+                break;
+            case 'request_info':
+                if ($comment === '') {
+                    tk_bad('Say what information is needed.');
+                }
+                $event('waiting', 'Waiting for Information', $comment);
+                $addComment('request_info', $comment, []);
+                $summary = 'information requested';
+                break;
+            case 'comment':
+                $att = tk_clean_attachments(isset($b['attachment']) ? [$b['attachment']] : [], 1);
+                $message = trim((string) ($b['message'] ?? ''));
+                if ($message === '' && !$att) {
+                    tk_bad('Write a message or attach a file.');
+                }
+                $addComment('comment', $message, $att[0] ?? []);
+                // the requester answering a request for information puts it back to work
+                if ($prevStatus === 'Waiting for Information' && (string) $t['createdBy'] === $uid) {
+                    $event('info_provided', 'In Progress', $message);
+                }
+                $summary = 'comment added';
+                break;
+            case 'escalate':
+                if ($reason === '') {
+                    tk_bad('Give a reason for escalating.');
+                }
+                $target = $pickTarget($cur + 1, count($chain) - 1);
+                $handOff('escalated', $target, 'Escalated');
+                $summary = 'escalated to ' . tk_name($target['user']) . ' (' . role_title($target['user']['role']) . '): ' . $reason;
+                break;
+            case 'reassign':
+                $hi = (string) $me['role'] === 'admin' ? count($chain) - 1 : max($cur, (int) $allowed['myLevel']);
+                $target = $pickTarget(0, $hi);
+                $handOff('reassigned', $target, 'Assigned');
+                $summary = 'reassigned to ' . tk_name($target['user']) . ' (' . role_title($target['user']['role']) . ')';
+                break;
+            case 'assign':
+                $target = $pickTarget(0, count($chain) - 1);
+                $handOff('assigned', $target, 'Assigned');
+                $summary = 'assigned to ' . tk_name($target['user']);
+                break;
+            case 'resolve':
+                $resolution = trim((string) ($b['resolution'] ?? ''));
+                if (mb_strlen($resolution) < 5) {
+                    tk_bad('Describe how the issue was resolved.');
+                }
+                tk_close_stage((string) $t['id'], $now);
+                $event('resolved', 'Resolved', $resolution);
+                $t['resolution'] = $resolution;
+                $t['resolvedBy'] = $uid;
+                $t['resolvedByName'] = $meName;
+                $t['resolvedAt'] = (string) $now;
+                $summary = 'resolved';
+                break;
+            case 'close':
+                $event('closed', 'Closed', $comment);
+                $t['closedBy'] = $uid;
+                $t['closedByName'] = $meName;
+                $t['closedAt'] = (string) $now;
+                $summary = 'closed';
+                break;
+            case 'reopen':
+                if ($reason === '') {
+                    tk_bad('Give a reason for reopening.');
+                }
+                // back to whoever resolved it, if they still can; otherwise routed afresh
+                $resolver = tk_user((string) $t['resolvedBy']);
+                $rl = $resolver ? tk_level_of($chain, (string) $resolver['role']) : -1;
+                $target = (tk_active($resolver) && $rl >= 0)
+                    ? ['user' => $resolver, 'level' => $rl]
+                    : tk_route($chain, 0, [], '');
+                if (!$target) {
+                    tk_bad('Nobody is available to take the reopened ticket.');
+                }
+                $t['resolution'] = '';
+                $t['resolvedBy'] = $t['resolvedByName'] = $t['resolvedAt'] = '';
+                $t['closedBy'] = $t['closedByName'] = $t['closedAt'] = '';
+                $holder = null;   // a reopened ticket arrives from the person reopening it
+                tk_log(['ticketId' => $t['id'], 'action' => 'reopened', 'fromUser' => $uid, 'fromName' => $meName,
+                        'fromRole' => $me['role'], 'toUser' => $target['user']['id'], 'toName' => tk_name($target['user']),
+                        'toRole' => $target['user']['role'], 'status' => 'Reopened', 'level' => $target['level'],
+                        'reason' => $reason, 'comment' => $comment, 'at' => $now, 'assignedAt' => $now]);
+                $t['assignedTo'] = $target['user']['id'];
+                $t['assignedName'] = tk_name($target['user']);
+                $t['assignedRole'] = $target['user']['role'];
+                $t['assignedAt'] = (string) $now;
+                $t['escalationLevel'] = (string) $target['level'];
+                $t['status'] = 'Reopened';
+                $summary = 'reopened: ' . $reason;
+                break;
+            default:
+                tk_bad('Unknown action.');
+        }
+        $t['updatedAt'] = (string) $now;
+        tk_save($t);
+        if ($own) {
+            db()->commit();
+        }
+    } catch (Throwable $e) {
+        if ($own && db()->inTransaction()) {
+            db()->rollBack();
+        }
+        throw $e;
+    }
+    if ($act !== 'comment') {
+        audit('ticket-' . $act, 'tickets', (string) $t['id'], (string) $t['ticketNo'], $summary,
+            ['from' => $prevStatus, 'to' => (string) $t['status']]);
+    }
+    send_json(['ok' => true, 'status' => $t['status']]);
+}
+
+/** the Super Admin sets the SLA hours per priority */
+function api_tk_settings(): void
+{
+    if (current_role() !== 'admin') {
+        send_json(['error' => 'forbidden', 'message' => 'Only the Super Admin configures the SLA.'], 403);
+    }
+    $in = body()['sla'] ?? null;
+    if (!is_array($in)) {
+        tk_bad('Send the SLA hours per priority.');
+    }
+    $out = [];
+    foreach (TICKET_PRIORITIES as $p) {
+        $h = $in[$p] ?? null;
+        if (!is_numeric($h) || (float) $h <= 0 || (float) $h > 8760) {
+            tk_bad('SLA for ' . $p . ' must be between 0 and 8760 hours.');
+        }
+        $out[$p] = (float) $h;
+    }
+    $before = tk_sla_hours();
+    $row = fetch_one('SELECT ' . qi('id') . ' AS id FROM ' . qi('settings') . ' WHERE ' . qi('name') . " = 'ticketSla'");
+    upsert('settings', ['id' => $row ? $row['id'] : next_id('settings'), 'name' => 'ticketSla', 'value' => json_encode($out)]);
+    audit('ticket-sla', 'settings', 'ticketSla', 'Ticket SLA', 'SLA hours changed',
+        ['before' => $before, 'after' => $out]);
+    send_json(['ok' => true, 'sla' => $out]);
+}
+
+/** the organisation as it is actually wired: every staff login and who it reports to */
+function api_tk_org(): void
+{
+    if (!in_array(current_role(), ORG_TREE_ROLES, true)) {
+        send_json(['error' => 'forbidden', 'message' => 'ACCESS DENIED — the organisation tree is for the leadership roles.'], 403);
+    }
+    $rows = fetch_all('SELECT ' . tk_user_cols() . ', ' . qi('empId') . ' AS empId FROM ' . qi('users')
+        . ' WHERE ' . qi('role') . " <> 'student'");
+    $out = array_map(fn($u) => ['id' => $u['id'], 'name' => tk_name($u), 'username' => $u['username'],
+        'role' => $u['role'], 'roleTitle' => role_title((string) $u['role']),
+        'active' => tk_active($u), 'reportingTo' => (string) ($u['reportingTo'] ?? ''),
+        'empId' => (string) ($u['empId'] ?? '')], $rows);
+    send_json(['users' => $out, 'reportsTo' => REPORTS_TO]);
+}
+
 function dispatch(string $method, string $resource, ?string $id, bool $isCollection): void
 {
     ensure_schema();
@@ -3425,6 +4363,28 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'POST' && $resource === 'renumber-students') {
         api_renumber_students();
+    }
+    // helpdesk + organisation — each authorises the caller itself
+    if ($method === 'GET' && $resource === 'tk-meta') {
+        api_tk_meta();
+    }
+    if ($method === 'GET' && $resource === 'tk-list') {
+        api_tk_list();
+    }
+    if ($method === 'GET' && $resource === 'tk-get') {
+        api_tk_get($id);
+    }
+    if ($method === 'POST' && $resource === 'tk-create') {
+        api_tk_create();
+    }
+    if ($method === 'POST' && $resource === 'tk-action') {
+        api_tk_action();
+    }
+    if ($method === 'POST' && $resource === 'tk-settings') {
+        api_tk_settings();
+    }
+    if ($method === 'GET' && $resource === 'tk-org') {
+        api_tk_org();
     }
     /* What the next id would be, without taking it. Signed in only — it says
        how many students the college has admitted this year. */

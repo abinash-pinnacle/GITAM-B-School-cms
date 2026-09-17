@@ -119,6 +119,11 @@ const COLLECTIONS = [
        existed before this was added keeps working. */
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name',
                      'access', 'permissions', 'status', 'email', 'phone', 'empId',
+                     /* The id of the login this account reports to — the one
+                        relationship the org tree, ticket routing and escalation
+                        all walk. Validated against REPORTS_TO in index.php and
+                        set by the Super Admin alone. */
+                     'reportingTo',
                      /* 32 random bytes, minted at login and sent back on every
                         request. Cleared by logout, a password change or being
                         deactivated — which is what makes a session revocable. */
@@ -274,6 +279,29 @@ const COLLECTIONS = [
 
     // admin-controlled feature switches, e.g. studentFeesVisible = '1' | '0'
     'settings'   => ['id', 'name', 'value'],
+
+    /* ---- helpdesk ----
+       Never read or written through the generic collection API: guard_request
+       refuses these three by name and the tk-* endpoints in index.php are the
+       only way in, each authorising the caller against the ticket itself.
+       Timestamps are epoch seconds so every duration is a subtraction. */
+    'tickets'    => ['id', 'ticketNo', 'subject', 'description', 'category', 'subcategory',
+                     'priority', 'department', 'course', 'module',
+                     'createdBy', 'createdByName', 'createdByRole',
+                     'assignedTo', 'assignedName', 'assignedRole', 'assignedAt',
+                     'status', 'chain', 'escalationLevel', 'slaHours', 'slaDueAt',
+                     'createdAt', 'updatedAt', 'resolution', 'resolvedBy', 'resolvedByName',
+                     'resolvedAt', 'closedBy', 'closedByName', 'closedAt', 'attachments'],
+    /* One row per thing that happened to a ticket — append-only. A row whose
+       action hands the ticket to somebody (assigned / escalated / reassigned /
+       reopened) is also a STAGE: assignedAt when it arrived, completedAt and
+       seconds filled when it left. Status events (started, waiting, …) carry
+       only `at`. */
+    'tickethistory' => ['id', 'ticketId', 'action', 'fromUser', 'fromName', 'fromRole',
+                        'toUser', 'toName', 'toRole', 'status', 'reason', 'comment', 'level',
+                        'at', 'assignedAt', 'completedAt', 'seconds'],
+    'ticketcomments' => ['id', 'ticketId', 'userId', 'userName', 'userRole', 'kind',
+                         'message', 'attachment', 'at'],
 ];
 
 /** columns stored as a JSON string but exposed to the UI as an object */
@@ -293,11 +321,16 @@ const JSON_FIELDS = [
     'placementofficers' => STAFF_JSON,
     'coordinators' => STAFF_JSON,
     'admissions' => STAFF_JSON,
+    'tickets'    => ['attachments'],
+    'ticketcomments' => ['attachment'],
 ];
 
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
 const LONGTEXT_FIELDS = [
     'students' => ['photo'],
+    'tickets' => ['description', 'resolution'],
+    'tickethistory' => ['reason', 'comment'],
+    'ticketcomments' => ['message'],
     'faculty' => STAFF_LONGTEXT,
     'accountants' => STAFF_LONGTEXT,
     'centerheads' => STAFF_LONGTEXT,
@@ -382,7 +415,9 @@ const ID_PREFIX = [
  * well, but the server is the gate: a hand-made POST/PUT/DELETE is refused.
  */
 const ROLES = ['admin', 'subadmin', 'accountant', 'center_head', 'placement_officer',
-               'course_coordinator', 'admission', 'faculty', 'librarian', 'student'];
+               'course_coordinator', 'admission', 'faculty', 'librarian', 'student',
+               // a visiting teacher: the faculty workflow on assigned classes, narrower
+               'guest_faculty'];
 
 /* The administrator family, the Admin's forbidden tables and its read map live
    in api/index.php beside the gate that reads them — never here — because a
@@ -523,7 +558,7 @@ const FINANCE_VIEW_ROLES = ['admin', 'accountant', 'center_head'];
    only while the admin leaves the `facultyAttendance` switch on — some
    institutes want the coordinator to be the single point of entry. */
 const ATTENDANCE_ALWAYS_ROLES = ['admin', 'course_coordinator'];
-const ATTENDANCE_OPTIONAL_ROLES = ['faculty'];
+const ATTENDANCE_OPTIONAL_ROLES = ['faculty', 'guest_faculty'];
 /** master data a coordinator reads but never writes */
 const COORDINATOR_READONLY = ['students', 'faculty', 'courses', 'syllabus', 'timetable',
                               'settings', 'users', 'coordinators', 'events', 'marks'];
@@ -569,7 +604,7 @@ const UNIQUE_EMAIL = [
     'students' => ['email', 'domainEmail'],
 ];
 const STAFF_ROLES = ['admin', 'accountant', 'center_head', 'faculty', 'librarian',
-                     'course_coordinator'];
+                     'course_coordinator', 'guest_faculty'];
 
 /* ---------------- requisition approval chain ----------------
    A request now clears the center head before the accounts office can touch

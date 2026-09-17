@@ -170,7 +170,7 @@
     if (!user) return false;
     if (hasCustomAccess(user)) return can('attendance', 'add');   // decided by the grant
     if (['admin', 'course_coordinator'].includes(user.role)) return true;
-    return user.role === 'faculty' && facultyAttendanceOn();
+    return isFacultyRole(user.role) && facultyAttendanceOn();
   }
 
   function settingOn(name, dflt) {
@@ -243,15 +243,19 @@
      it stays out of the Employees designations and reads its label from that
      row (roleLabel) — it is offered wherever custom roles are. */
   const ROLE_LABEL = {
-    admin: 'Super Admin', accountant: 'Accountant', center_head: 'Center Head',
+    admin: 'Super Admin', accountant: 'Finance', center_head: 'Center Head',
     // the built-in placement-cell role, relabelled so it never reads as a second
     // "Placement Officer" beside the custom access role of that name
     placement_officer: 'Placement Officer (Cell)', course_coordinator: 'Course Coordinator',
     admission: 'Admission Officer',
-    faculty: 'Faculty', librarian: 'Librarian', student: 'Student',
+    faculty: 'Faculty', librarian: 'Library', student: 'Student',
+    // a visiting teacher on the faculty workflow, limited to assigned classes
+    guest_faculty: 'Guest Faculty',
   };
   /** the restricted-Admin role key; its label lives on the seeded roles row */
   const SUBADMIN_ROLE = 'subadmin';
+  /** faculty and guest faculty share the teaching workflow on assigned classes */
+  function isFacultyRole(role) { return role === 'faculty' || role === 'guest_faculty'; }
   /** the placement cell — the admin runs everything, the officer runs placement */
   const PLACEMENT_MANAGE_ROLES = ['admin', 'placement_officer'];
   function canManagePlacement() {
@@ -284,6 +288,8 @@
      to learn the rule. `canHere(action)` is the finer question, for the pages
      that separate Add from Import from Export. */
   function readOnly() {
+    // the helpdesk and the org tree are everyone's own work, never a read-only lens
+    if (['tickets', 'orgtree'].includes(splitViewKey(currentView).view)) return false;
     const m = moduleOfView(splitViewKey(currentView).view);
     if (!m) return roleReadOnly();
     return !can(m, 'add') && !can(m, 'edit') && !can(m, 'delete');
@@ -676,6 +682,8 @@
       ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Placement Reports'],
       [NAV_SECTION,'','Events & Notices'],
       ['events',ic('calendar'),'Events'],
+      [NAV_SECTION,'','Helpdesk'],
+      ['tickets',ic('receipt'),'Tickets'], ['orgtree',ic('users'),'Organization Tree'],
       [NAV_SECTION,'','System'],
       ['accounts',ic('key'),'Login Accounts'], ['usersettings',ic('settings'),'User Management'],
       ['roles',ic('shield'),'Roles & Permissions'], ['adminmgmt',ic('users'),'Admin Management'],
@@ -691,7 +699,7 @@
       ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
       ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
       ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Reports'],
-      ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['tickets',ic('receipt'),'Tickets'], ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     // read-only monitoring role — the same modules the admin sees, no actions.
     // Every page below renders without a single Add/Edit/Delete/Approve control.
@@ -708,6 +716,7 @@
       ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'], ['chreports',ic('trending-up'),'Reports'],
       // the one thing this role decides rather than just watches
       ['requisitions',ic('package'),'Approvals'],
+      ['tickets',ic('receipt'),'Tickets'], ['orgtree',ic('users'),'Organization Tree'],
       ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     accountant: [
@@ -715,19 +724,26 @@
       ['finstudents',ic('cap'),'Student List'], ['assets',ic('building'),'Asset List'],
       ['fixedfee',ic('clipboard'),'Fixed Fee'], ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
       ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('package'),'Requisitions'],
-      ['finreports',ic('trending-up'),'Reports'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     faculty: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['goodsreq',ic('package'),'Goods Requisition'],
-      EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+    ],
+    // assigned classes only: attendance, marks and the timetable, no purchasing
+    guest_faculty: [
+      ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'Students'], ['attendance',ic('check'),'Attendance'],
+      ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
+      ['syllabus',ic('receipt'),'Subjects by Semester'], ['events',ic('calendar'),'Events'],
+      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
     ],
     student: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['myattendance',ic('check'),'My Attendance'], ['myresults',ic('notes'),'My Results'],
       ['timetable',ic('calendar'),'Timetable'], ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['mybooks',ic('book'),'My Library'], ['myfees',ic('credit-card'),'My Fees'],
-      ['myplacement',ic('trophy'),'My Placement'], ['profile',ic('user'),'My Profile'],
+      ['myplacement',ic('trophy'),'My Placement'], ['tickets',ic('receipt'),'Tickets'], ['profile',ic('user'),'My Profile'],
     ],
     /* The admissions desk enrols students and corrects them. Courses and the
        scheme are there because an admission has to be put on one. */
@@ -735,7 +751,7 @@
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
       ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
-      ['events',ic('calendar'),'Events'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     /* The coordinator runs attendance and reads what it is built from. Nothing
        here writes master data — the server refuses it either way. */
@@ -745,14 +761,14 @@
       ['students',ic('cap'),'Students'], ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['timetable',ic('calendar'),'Timetable'],
-      ['events',ic('calendar'),'Events'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      ['events',ic('calendar'),'Events'], ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     librarian: [
       ['dashboard',ic('chart'),'Dashboard'], ['library',ic('book'),'Library'], ['issueBook',ic('download'),'Issue a Book'],
       ['returnBook',ic('upload'),'Return a Book'], ['bookreq',ic('books'),'Book Requisition'],
       ['students',ic('cap'),'Students'], ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['events',ic('calendar'),'Events'], ['reports',ic('chart'),'Reports'],
-      EMP_ATTENDANCE,
+      ['tickets',ic('receipt'),'Tickets'], EMP_ATTENDANCE,
     ],
   };
 
@@ -762,7 +778,7 @@
   function rawMenu(role) {
     let items = MENU[role] || [];
     if (role === 'student' && !studentFeesVisible()) items = items.filter(([key]) => key !== 'myfees');
-    if (role === 'faculty' && !facultyAttendanceOn()) items = items.filter(([key]) => key !== 'attendance');
+    if (isFacultyRole(role) && !facultyAttendanceOn()) items = items.filter(([key]) => key !== 'attendance');
     return items;
   }
   /* What this account actually sees. A custom role has no menu of its own — it
@@ -794,6 +810,7 @@
       if (personal.length) items = items.concat([[NAV_SECTION, '', 'Account']], personal);
     }
     const allowed = (key) => {
+      if (key === 'orgtree') return !!uObj && ORG_TREE_ROLES.includes(uObj.role);
       if (ALWAYS_ALLOWED.includes(key)) return true;
       const m = moduleOfView(key);
       return m ? can(m, 'view') : true;
@@ -842,7 +859,7 @@
        signed in knows what they were made, not what it was built from. */
     const label = BUILTIN_ROLES.includes(user.role)
       ? ({ admin: 'Administration', faculty: 'Faculty Menu', student: 'Student Menu',
-           librarian: 'Library Menu', accountant: 'Accounts Menu',
+           librarian: 'Library Menu', accountant: 'Accounts Menu', guest_faculty: 'Guest Faculty Menu',
            center_head: 'Center Head · View Only',
            placement_officer: 'Placement Cell' }[user.role] || 'Menu')
       : roleLabel(user.role);
@@ -926,6 +943,7 @@
      writes either way — this only keeps a page from being opened by hand. */
   function canView(key) {
     const { view } = splitViewKey(key);
+    if (view === 'orgtree') return !!user && ORG_TREE_ROLES.includes(user.role);
     if (ALWAYS_ALLOWED.includes(view)) return true;
     /* A student's file is reached from the roll rather than from the sidebar,
        so it is open to whoever may open the roll itself. */
@@ -1008,7 +1026,9 @@
   /* Pages nobody is ever narrowed out of: the dashboard they land on and the
      pages that are about themselves. */
   const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
-                          'mybooks', 'myplacement'];
+                          'mybooks', 'myplacement', 'tickets'];
+  /** the organisation tree is for the leadership roles (mirrors ORG_TREE_ROLES on the server) */
+  const ORG_TREE_ROLES = ['admin', 'subadmin', 'center_head', 'academic_head'];
 
   /* ---------- the ceiling ----------
      What the code supports for a role, as module => actions. A permission can
@@ -1240,6 +1260,7 @@
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
     offers:'Offers', plcalendar:'Placement Calendar', plreports:'Placement Reports',
     placementofficers:'Placement Officers',
+    tickets:'Tickets', orgtree:'Organization Tree',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -1331,7 +1352,7 @@
       placementofficers: viewPlacementOfficers,
       stuprofile: viewStudentProfile, facprofile: viewFacultyProfile,
       usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
-      adminmgmt: viewAdminManagement,
+      adminmgmt: viewAdminManagement, tickets: viewTickets, orgtree: viewOrgTree,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     /* The app-install offer and the Android APK sit at the top of everyone's
@@ -1789,7 +1810,7 @@
     if (user && user.role === 'academic_head') return academicHeadDashboard();
     if (hasCustomAccess(user)) return subAdminDashboard();
     if (user.role === 'student') return studentDashboard();
-    if (user.role === 'faculty') return facultyDashboard();
+    if (isFacultyRole(user.role)) return facultyDashboard();
     if (user.role === 'librarian') return librarianDashboard();
     if (user.role === 'accountant') return accountantDashboard();
     if (user.role === 'center_head') return centerHeadDashboard();
@@ -2588,7 +2609,7 @@
     const canSeeBooks = ['admin', 'librarian', 'center_head'].includes(user.role);
     // printing an ID card / marksheet reads data, so a monitoring role may do it
     const canPrintDocs = canEdit || readOnly();
-    const deptBranch = user.role === 'faculty' ? facultyDeptBranch() : null;
+    const deptBranch = isFacultyRole(user.role) ? facultyDeptBranch() : null;
     // only for the dropdowns in the filter row — the list itself reads the
     // roll again on every redraw, or a deleted student would sit there until
     // the page was reloaded
@@ -5676,7 +5697,7 @@
           <td style="white-space:nowrap">${esc(f.phone || '—')}</td>
           <td><div class="row-actions" style="flex-wrap:nowrap">
             <button class="btn-sm btn-outline" data-profile="${f.id}" title="View profile">${ic('eye')}</button>
-            ${canEdit && own && f.role === 'faculty' ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">${ic('books')}</button>` : ''}
+            ${canEdit && own && isFacultyRole(f.role) ? `<button class="btn-sm btn-edit" data-classes="${f.id}" title="Assign classes">${ic('books')}</button>` : ''}
             <button class="btn-sm btn-outline" data-id="${f.id}" title="Print ID card">${ic('id-card')}</button>
             ${canEdit ? `<button class="btn-sm btn-edit" data-edit="${key}" title="Edit">${ic('edit')}</button>
             <button class="btn-sm btn-del" data-del="${key}" title="Delete">${ic('trash')}</button>` : ''}</div></td></tr>`;
@@ -7083,7 +7104,7 @@
       const dept = attendanceScopeDept();
       return dept ? Store.all('students').filter(s => s.branch === dept) : Store.all('students');
     }
-    if (user.role === 'faculty') {
+    if (isFacultyRole(user.role)) {
       const branch = facultyDeptBranch();
       if (branch) return Store.all('students').filter(s => s.branch === branch);
     }
@@ -7675,7 +7696,7 @@
   }
   function viewTimetable() {
     const isAdmin = user.role === 'admin' || (hasCustomAccess(user) && can('academics', 'edit'));
-    const isFaculty = user.role === 'faculty';
+    const isFaculty = isFacultyRole(user.role);
     // the center head and the coordinator pick any class the admin can, and
     // edit none of it
     const canPickClass = isAdmin || viewsMasterOnly();
@@ -8014,7 +8035,7 @@
       viewProfile.after = viewStudentProfile.after;
       return html;
     }
-    if (user.role === 'faculty') {
+    if (isFacultyRole(user.role)) {
       const f = Store.find('faculty', user.refId)||{};
       const mine = Store.all('courses').filter(c => c.facultyId === f.id);
       viewProfile.after = () => {
@@ -8861,7 +8882,7 @@
                       faculty: 'blue', student: 'green', librarian: 'amber', accountant: 'blue',
                       course_coordinator: 'green', admission: 'amber' };
   const ROLE_ORDER = { admin: 0, center_head: 1, accountant: 2, placement_officer: 3,
-                       course_coordinator: 4, admission: 5, faculty: 6, librarian: 7, student: 8 };
+                       course_coordinator: 4, admission: 5, faculty: 6, guest_faculty: 6, librarian: 7, student: 8 };
   const DEFAULT_PASSWORD = 'pass123';
 
   // who the account belongs to, in human terms
@@ -8870,7 +8891,7 @@
       const s = Store.find('students', u.refId);
       return s ? `Roll ${s.roll} · ${s.branch} · Sem ${s.semester}` : 'Student record missing';
     }
-    if (u.role === 'faculty') {
+    if (isFacultyRole(u.role)) {
       const f = Store.find('faculty', u.refId);
       return f ? `${f.empId} · ${f.department}` : 'Faculty record missing';
     }
@@ -11266,7 +11287,7 @@
   }
   // the department shown on a new request, taken from the staff member's own record
   function myDepartment() {
-    if (user.role === 'faculty') return (Store.find('faculty', user.refId) || {}).department || '';
+    if (isFacultyRole(user.role)) return (Store.find('faculty', user.refId) || {}).department || '';
     if (user.role === 'librarian') return 'Library';
     if (user.role === 'accountant') return 'Accounts Office';
     return 'Administration';
@@ -14920,7 +14941,10 @@
               ? ' <small style="color:var(--muted)">(you)</small>' : ''}
               ${u.email ? `<br><small style="color:var(--muted)">${esc(u.email)}</small>` : ''}</td>
             <td class="mono">${esc(u.username || '—')}</td>
-            <td>${esc(roleLabel(u.role))}</td>
+            <td>${esc(roleLabel(u.role))}${(() => {
+              const boss = u.reportingTo ? Store.find('users', u.reportingTo) : null;
+              return boss ? `<br><small style="color:var(--muted)">reports to ${esc(boss.name || boss.username)}</small>` : '';
+            })()}</td>
             <td><span class="pill ${active ? 'green' : 'red'}">${active ? 'Active' : 'Inactive'}</span></td>
             <td><span class="pill ${own ? 'amber' : 'blue'}">${own ? 'Custom' : 'Role Default'}</span></td>
             <td style="max-width:300px;white-space:normal;font-size:12.5px;color:var(--muted)">${
@@ -15024,6 +15048,9 @@
         <div class="field"><label>Password</label>
           <input name="password" type="text" value=""
                  placeholder="${uid ? 'leave blank to keep current' : DEFAULT_PASSWORD}"></div>
+        ${user.role === 'admin' ? `<div class="field full"><label>Reporting To</label>
+          <select name="reportingTo" id="uxReports"></select>
+          <small class="field-hint" id="uxReportsHint"></small></div>` : ''}
       </div>
       ${isSelf ? `<p style="font-size:12.5px;color:var(--muted);margin:10px 0 0">
         This is the account you are signed in with, so its role and status are locked — nobody can
@@ -15034,6 +15061,31 @@
         <button type="submit" class="btn-primary">Save</button></div></form>`, true);
     $('#cx').onclick = closeModal;
     bindPhoneInput(document.querySelector('#modalBody [name="phone"]'));
+    /* Reporting To offers only the managers this role may report to (REPORTS_TO,
+       enforced again by the server) and redraws when the role changes. */
+    const repSel = $('#uxReports');
+    if (repSel) {
+      const roleSel = document.querySelector('#modalBody [name="role"]');
+      const fillReports = () => {
+        const role = roleSel ? roleSel.value : (u ? u.role : '');
+        const allowed = REPORTS_TO[role];
+        const current = repSel.value || (u && u.reportingTo) || '';
+        const pool = Store.all('users').filter(x => x.id !== uid && x.role !== 'student' && userActive(x)
+          && (allowed ? allowed.includes(x.role) : true))
+          .sort((a, b) => (ORG_RANK[a.role] ?? 50) - (ORG_RANK[b.role] ?? 50) || String(a.name).localeCompare(String(b.name)));
+        const stale = current && !pool.some(x => x.id === current) ? Store.find('users', current) : null;
+        repSel.innerHTML = '<option value="">— None —</option>'
+          + (stale ? `<option value="${esc(stale.id)}" selected>${esc(stale.name || stale.username)} · ${esc(roleLabel(stale.role))} (not valid for this role)</option>` : '')
+          + pool.map(x => `<option value="${esc(x.id)}" ${x.id === current ? 'selected' : ''}>${esc(x.name || x.username)} · ${esc(roleLabel(x.role))}</option>`).join('');
+        repSel.disabled = role === 'admin' || (allowed && !allowed.length);
+        $('#uxReportsHint').textContent = role === 'admin' ? 'The Super Admin sits at the top of the hierarchy.'
+          : allowed && !allowed.length ? 'This role does not report to a staff account.'
+          : allowed ? `A ${roleLabel(role)} reports to ${allowed.map(roleLabel).join(' or ')}.`
+          : 'Any staff account.';
+      };
+      if (roleSel) roleSel.addEventListener('change', fillReports);
+      fillReports();
+    }
     const reset = $('#uxReset');
     if (reset) reset.onclick = () => {
       confirmAction('Reset Password',
@@ -15060,6 +15112,7 @@
       // the signed-in account cannot change its own role or switch itself off
       if (!isSelf) { patch.role = d.role; patch.status = d.status || 'Active'; }
       if (d.password) patch.password = d.password;
+      if (repSel) patch.reportingTo = repSel.disabled ? '' : (d.reportingTo || '');
       if (uid) {
         Store.update('users', uid, patch);
         if (isSelf) { user.name = patch.name; paintUser(); }
@@ -15401,6 +15454,812 @@
       toast(`${roleLabel(roleKey)}: ${plural(Object.keys(perms).length, 'module')} — applies to all its users.`);
       if (after) after(); else render();
     };
+  }
+
+  /* =========================================================================
+     HELPDESK — tickets that follow the reporting hierarchy
+     -------------------------------------------------------------------------
+     Nothing here is estimated: every duration is a subtraction of two server
+     timestamps (epoch seconds), corrected for this browser's clock skew. The
+     server decides who may see a ticket and what they may do with it; these
+     screens only draw what it answered.
+     ========================================================================= */
+  const TK_STATUS_CLASS = {
+    'Open': 'st-open', 'Assigned': 'st-assigned', 'In Progress': 'st-progress',
+    'Waiting for Information': 'st-waiting', 'Escalated': 'st-escalated', 'Resolved': 'st-resolved',
+    'Reopened': 'st-reopened', 'Closed': 'st-closed',
+  };
+  const TK_STATUSES = Object.keys(TK_STATUS_CLASS);
+  const TK_PRIORITY_CLASS = { Low: 'pr-low', Medium: 'pr-medium', High: 'pr-high', Critical: 'pr-critical' };
+  const TK_ACTION_LABEL = {
+    created: 'Ticket Created', assigned: 'Assigned', started: 'Work Started', resumed: 'Work Resumed',
+    waiting: 'Information Requested', info_provided: 'Information Provided', escalated: 'Escalated',
+    reassigned: 'Reassigned', resolved: 'Resolved', closed: 'Closed', reopened: 'Reopened',
+  };
+  const TK_STAGE = ['assigned', 'escalated', 'reassigned', 'reopened'];
+  const TK_AGING = [['0–4 Hours', 0, 4], ['4–24 Hours', 4, 24], ['1–3 Days', 24, 72],
+                    ['3–7 Days', 72, 168], ['7+ Days', 168, Infinity]];
+  const TK_ESCALATION_REASONS = ['Requires higher approval', 'Outside my authority', 'SLA at risk',
+                                 'Needs another department', 'Policy decision required', 'Other'];
+  const TK_FILE_TYPES = ['application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'image/jpeg', 'image/png'];
+  const TK_FILE_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png';
+  const TK_SLA_CLASS = { 'ON TRACK': 'sla-ok', 'AT RISK': 'sla-risk', 'SLA BREACHED': 'sla-breach', 'SLA MET': 'sla-met' };
+  /** who reports to whom — mirrors REPORTS_TO in api/index.php, which is the real check */
+  const REPORTS_TO = {
+    subadmin: ['admin'], center_head: ['subadmin', 'admin'], academic_head: ['center_head'],
+    admission: ['academic_head', 'center_head'], accountant: ['academic_head', 'center_head'],
+    librarian: ['academic_head', 'center_head'], course_coordinator: ['academic_head'],
+    dean_placement: ['academic_head'], plmt_officer: ['dean_placement'], placement_officer: ['dean_placement'],
+    plmt_coordinator: ['plmt_officer', 'placement_officer'],
+    faculty: ['course_coordinator', 'academic_head'], guest_faculty: ['course_coordinator', 'academic_head'],
+    student: [],
+  };
+  /** the order people sit in the organisation, top first */
+  const ORG_RANK = {
+    admin: 0, subadmin: 1, center_head: 2, academic_head: 3, admission: 4, accountant: 5,
+    dean_placement: 6, plmt_officer: 7, placement_officer: 7, plmt_coordinator: 8, librarian: 9,
+    course_coordinator: 10, faculty: 11, guest_faculty: 12,
+  };
+  const ORG_ICON = {
+    admin: 'shield', subadmin: 'key', center_head: 'building', academic_head: 'cap', admission: 'notes',
+    accountant: 'money', dean_placement: 'briefcase', plmt_officer: 'briefcase', placement_officer: 'briefcase',
+    plmt_coordinator: 'users', librarian: 'book', course_coordinator: 'books', faculty: 'user', guest_faculty: 'user',
+  };
+
+  let tkMetaCache = null;
+  let tkSkew = 0;                 // server clock minus this browser's clock, ms
+  let tkTimer = null;
+  const tkListState = { scope: '', status: '', priority: '', category: '', sla: '', aging: '', q: '', page: 1 };
+
+  const tkNow = () => Math.floor((Date.now() + tkSkew) / 1000);
+  function tkSync(serverNow) { if (serverNow) tkSkew = serverNow * 1000 - Date.now(); }
+  function tkDur(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    if (d) return `${d}d ${h}h ${m}m`;
+    if (h) return `${h}h ${m}m`;
+    if (m) return `${m}m`;
+    return `${sec}s`;
+  }
+  function tkDurLong(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    const part = (n, w) => (n ? `${n} ${w}${n === 1 ? '' : 's'}` : '');
+    return [part(d, 'Day'), part(h, 'Hour'), part(m, 'Minute')].filter(Boolean).join(' ') || `${sec} Seconds`;
+  }
+  function tkWhen(ts) {
+    if (!ts) return '—';
+    return new Date(ts * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit' });
+  }
+  const tkDone = (t) => t.status === 'Resolved' || t.status === 'Closed';
+  /** SLA against actual timestamps: budget, used, remaining, percentage and state */
+  function tkSla(t, now = tkNow()) {
+    const budget = Math.round((Number(t.slaHours) || 0) * 3600);
+    const end = t.resolvedAt || (t.status === 'Closed' && t.closedAt) || now;
+    const used = Math.max(0, end - t.createdAt);
+    const pct = budget ? Math.round(used / budget * 100) : 0;
+    const done = tkDone(t);
+    const state = used > budget ? 'SLA BREACHED' : done ? 'SLA MET' : pct >= 75 ? 'AT RISK' : 'ON TRACK';
+    return { budget, used, remaining: budget - used, pct, state, due: t.slaDueAt, done };
+  }
+  const tkAge = (t, now = tkNow()) => Math.max(0, ((t.status === 'Closed' && t.closedAt) || now) - t.createdAt);
+  const tkBadge = (text, cls) => `<span class="tk-badge ${cls || ''}">${esc(text)}</span>`;
+  const tkStatusBadge = (s) => tkBadge(s, TK_STATUS_CLASS[s]);
+  const tkPriorityBadge = (p) => tkBadge(p, TK_PRIORITY_CLASS[p]);
+  const tkSlaBadge = (sla) => tkBadge(sla.state, TK_SLA_CLASS[sla.state]);
+  const tkAvg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+
+  async function tkMeta() {
+    if (tkMetaCache) return tkMetaCache;
+    const m = await Store.tkMeta();
+    if (!m.error) { tkMetaCache = m; tkSync(m.now); }
+    return m;
+  }
+  /** keep the live counters ticking while the page they belong to is on screen */
+  function tkTick() {
+    clearInterval(tkTimer);
+    tkTimer = setInterval(() => {
+      const nodes = document.querySelectorAll('#view [data-tk-since]');
+      if (!nodes.length) { clearInterval(tkTimer); return; }
+      const now = tkNow();
+      nodes.forEach(n => {
+        const since = Number(n.dataset.tkSince);
+        n.textContent = n.dataset.tkLong ? tkDurLong(now - since) : tkDur(now - since);
+      });
+    }, 15000);
+  }
+  function tkReadFiles(fileList, max = 3) {
+    const files = [...(fileList || [])].slice(0, max);
+    for (const f of files) {
+      if (!TK_FILE_TYPES.includes(f.type)) {
+        return Promise.reject(new Error(`${f.name}: only PDF, Word, Excel, JPG and PNG files can be attached.`));
+      }
+      if (f.size > 2 * 1024 * 1024) return Promise.reject(new Error(`${f.name} is larger than 2 MB.`));
+    }
+    return Promise.all(files.map(f => new Promise((ok, bad) => {
+      const r = new FileReader();
+      r.onload = () => ok({ name: f.name, data: r.result });
+      r.onerror = () => bad(new Error('Could not read ' + f.name));
+      r.readAsDataURL(f);
+    })));
+  }
+  const tkAttachLink = (a) => (a && a.data
+    ? `<a class="tk-attach" href="${esc(a.data)}" download="${esc(a.name || 'attachment')}">${ic('paperclip')}${esc(a.name || 'attachment')}${
+        a.size ? ` <small>${Math.max(1, Math.round(a.size / 1024))} KB</small>` : ''}</a>` : '');
+  /** a distribution panel whose rows can filter the list */
+  function tkDist(title, pairs, key) {
+    const max = Math.max(1, ...pairs.map(([, n]) => n));
+    return `<div class="panel"><div class="panel-head"><h3>${esc(title)}</h3></div>${pairs.length
+      ? pairs.map(([label, n, val]) => `<div class="dist-row ${key ? 'tk-dist-link' : ''}" ${key
+          ? `data-tk-filter="${key}" data-tk-value="${esc(val === undefined ? label : val)}"` : ''}>
+          <span class="dist-label">${esc(label)}</span>
+          <span class="dist-bar"><i style="width:${Math.round(n / max * 100)}%"></i></span>
+          <span class="dist-val">${n}</span></div>`).join('')
+      : '<p class="empty">No tickets yet.</p>'}</div>`;
+  }
+
+  /* ---------------- ticket list + dashboard ---------------- */
+  function viewTickets() {
+    const { preset } = splitViewKey(currentView);
+    if (preset) return viewTicketDetail(preset);
+    viewTickets.after = async () => {
+      const [meta, data] = await Promise.all([tkMeta(), Store.tkList()]);
+      const box = $('#tkPage');
+      if (!box) return;                          // navigated away meanwhile
+      if (meta.error || data.error) {
+        box.innerHTML = `<div class="panel"><p class="empty">${esc(data.error || meta.error)}</p></div>`;
+        return;
+      }
+      tkSync(data.now);
+      drawTicketList(box, meta, data);
+    };
+    return `<div id="tkPage"><div class="panel"><p class="empty">Loading tickets…</p></div></div>`;
+  }
+
+  function drawTicketList(box, meta, data) {
+    const me = data.me;
+    const st = tkListState;
+    const all = data.tickets;
+    const now = tkNow();
+    const leader = ['admin', 'subadmin', 'center_head', 'academic_head'].includes(me.role);
+    if (!st.scope) {
+      st.scope = all.some(t => t.assignedTo === me.id && !tkDone(t)) ? 'assigned'
+        : (leader || all.some(t => t.createdBy !== me.id && t.assignedTo !== me.id)) ? 'all' : 'mine';
+    }
+    const scoped = all.filter(t => (st.scope === 'mine' ? t.createdBy === me.id
+      : st.scope === 'assigned' ? t.assignedTo === me.id : true));
+    const bucketOf = (t) => {
+      const h = tkAge(t, now) / 3600;
+      return TK_AGING.findIndex(([, lo, hi]) => h >= lo && h < hi);
+    };
+    const q = st.q.trim().toLowerCase();
+    const rows = scoped.filter(t => {
+      if (st.status === 'Active' ? tkDone(t) : (st.status && t.status !== st.status)) return false;
+      if (st.priority && t.priority !== st.priority) return false;
+      if (st.category && t.category !== st.category) return false;
+      if (st.sla && tkSla(t, now).state !== st.sla) return false;
+      if (st.aging !== '' && (tkDone(t) || String(bucketOf(t)) !== st.aging)) return false;
+      if (q && ![t.ticketNo, t.subject, t.createdByName, t.assignedName, t.subcategory]
+        .some(v => String(v || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+
+    // ---- counters and analytics over the scoped set ----
+    const active = scoped.filter(t => !tkDone(t));
+    const count = (s) => scoped.filter(t => t.status === s).length;
+    const breached = scoped.filter(t => tkSla(t, now).state === 'SLA BREACHED').length;
+    const atRisk = active.filter(t => tkSla(t, now).state === 'AT RISK').length;
+    const finished = scoped.filter(t => t.resolvedAt);
+    const avgResolution = tkAvg(finished.map(t => t.resolvedAt - t.createdAt));
+    const avgResponse = tkAvg(scoped.filter(t => t.firstStartAt).map(t => t.firstStartAt - t.createdAt));
+    const avgAssign = tkAvg(scoped.filter(t => t.assignedAt).map(t => Math.max(0, t.assignedAt - t.createdAt)));
+    const compliance = finished.length
+      ? Math.round(finished.filter(t => t.resolvedAt <= t.slaDueAt).length / finished.length * 100) : null;
+    const reopenRate = scoped.length ? Math.round(scoped.filter(t => t.reopens > 0).length / scoped.length * 100) : 0;
+    const escalations = scoped.reduce((s, t) => s + (t.escalations || 0), 0);
+    const tally = (list, fn) => {
+      const m = {};
+      list.forEach(t => { const k = fn(t); if (k) m[k] = (m[k] || 0) + 1; });
+      return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    };
+    const aging = TK_AGING.map(([label], i) => [label, active.filter(t => bucketOf(t) === i).length, String(i)]);
+
+    const scopeBtn = (key, label, n) => `<button type="button" class="tk-scope ${st.scope === key ? 'on' : ''}"
+      data-tk-scope="${key}">${label} <span>${n}</span></button>`;
+    const opts = (list, sel, all_) => `<option value="">${all_}</option>`
+      + list.map(v => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`).join('');
+    const pageRows = pageSlice(rows, st.page);
+
+    box.innerHTML = `
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Helpdesk Tickets</h3>
+          <div class="panel-tools">
+            <button class="btn-outline btn-sm" id="tkReload">${ic('refresh')}Refresh</button>
+            ${meta.canConfigure ? `<button class="btn-outline btn-sm" id="tkSlaBtn">${ic('settings')}SLA Settings</button>` : ''}
+            <button class="btn-primary" id="tkNew">${ic('plus')}Create Ticket</button>
+          </div>
+        </div>
+        <div class="tk-scopes">
+          ${scopeBtn('assigned', 'Assigned to Me', all.filter(t => t.assignedTo === me.id).length)}
+          ${scopeBtn('mine', 'My Tickets', all.filter(t => t.createdBy === me.id).length)}
+          ${scopeBtn('all', leader ? 'All in My Scope' : 'All Visible', all.length)}
+        </div>
+        <div class="stat-grid tk-stats">
+          ${statCard(ic('folder'), active.length, 'Open / Pending')}
+          ${statCard(ic('activity'), count('In Progress'), 'In Progress', 'c2')}
+          ${statCard(ic('pending'), count('Waiting for Information'), 'Waiting', 'c2')}
+          ${statCard(ic('trending-up'), count('Escalated'), 'Escalated', 'c4')}
+          ${statCard(ic('alert'), breached, 'SLA Breached', breached ? 'c4' : 'c3')}
+          ${statCard(ic('clock'), atRisk, 'SLA At Risk', atRisk ? 'c2' : 'c3')}
+          ${statCard(ic('check'), count('Resolved') + count('Closed'), 'Resolved / Closed', 'c3')}
+          ${statCard(ic('clock'), avgResolution === null ? '—' : tkDur(avgResolution), 'Avg Resolution Time')}
+        </div>
+      </div>
+      <div class="dash-2col">
+        ${tkDist('Ticket Aging (open tickets)', aging, 'aging')}
+        ${tkDist('Tickets by Status', tally(scoped, t => t.status), 'status')}
+      </div>
+      <div class="dash-2col">
+        ${tkDist('Tickets by Category', tally(scoped, t => t.category), 'category')}
+        ${leader
+          ? tkDist('Open Tickets by Current Role', tally(active, t => t.assignedRole && roleLabel(t.assignedRole)))
+          : tkDist('Tickets by Priority', tally(scoped, t => t.priority), 'priority')}
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Performance</h3></div>
+        <div class="tk-perf">
+          <div><span>Avg First Response</span><b>${avgResponse === null ? '—' : tkDur(avgResponse)}</b></div>
+          <div><span>Avg Assignment Time</span><b>${avgAssign === null ? '—' : tkDur(avgAssign)}</b></div>
+          <div><span>Avg Resolution Time</span><b>${avgResolution === null ? '—' : tkDur(avgResolution)}</b></div>
+          <div><span>SLA Compliance</span><b>${compliance === null ? '—' : compliance + '%'}</b></div>
+          <div><span>SLA Breaches</span><b>${breached}</b></div>
+          <div><span>Reopen Rate</span><b>${reopenRate}%</b></div>
+          <div><span>Escalations</span><b>${escalations}</b></div>
+          <div><span>Pending / Closed</span><b>${active.length} / ${count('Closed')}</b></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Tickets <small style="color:var(--muted);font-weight:500">${rows.length} of ${scoped.length}</small></h3></div>
+        <div class="tk-filters">
+          <input class="search-box" id="tkQ" placeholder="Search ticket id / subject / person..." value="${esc(st.q)}">
+          <select class="filter-sel" data-tk-sel="status"><option value="">All Statuses</option>
+            <option value="Active" ${st.status === 'Active' ? 'selected' : ''}>All Active</option>
+            ${TK_STATUSES.map(s => `<option ${s === st.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          <select class="filter-sel" data-tk-sel="priority">${opts(meta.priorities, st.priority, 'All Priorities')}</select>
+          <select class="filter-sel" data-tk-sel="category">${opts(meta.categories.map(c => c.name), st.category, 'All Categories')}</select>
+          <select class="filter-sel" data-tk-sel="sla">${opts(['ON TRACK', 'AT RISK', 'SLA BREACHED', 'SLA MET'], st.sla, 'Any SLA')}</select>
+          <select class="filter-sel" data-tk-sel="aging"><option value="">Any Age</option>${TK_AGING.map(([l], i) =>
+            `<option value="${i}" ${String(i) === st.aging ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <button class="btn-outline btn-sm" id="tkClear">Clear</button>
+        </div>
+        <div class="tbl-wrap"><table class="tk-table"><thead><tr>
+          <th>Ticket ID</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Created By</th>
+          <th>Currently With</th><th>Current Role</th><th>Centre</th><th>Ticket Age</th><th>Current Stage</th>
+          <th>SLA</th><th>Last Updated</th>
+        </tr></thead><tbody>${pageRows.length ? pageRows.map(t => {
+          const sla = tkSla(t, now);
+          const done = tkDone(t);
+          return `<tr class="tk-row" data-tk-open="${esc(t.id)}">
+            <td class="mono">${esc(t.ticketNo)}</td>
+            <td class="tk-subj"><b>${esc(t.subject)}</b><small>${esc(t.subcategory)}</small></td>
+            <td>${esc(t.category)}</td>
+            <td>${tkPriorityBadge(t.priority)}</td>
+            <td>${tkStatusBadge(t.status)}</td>
+            <td>${esc(t.createdByName)}<small class="tk-sub">${esc(roleLabel(t.createdByRole))}</small></td>
+            <td><b>${done ? '—' : esc(t.assignedName || 'Unassigned')}</b></td>
+            <td>${done ? '—' : esc(t.assignedRole ? roleLabel(t.assignedRole) : '—')}</td>
+            <td>Bhubaneswar</td>
+            <td ${done ? '' : `data-tk-since="${t.createdAt}"`}>${tkDur(tkAge(t, now))}</td>
+            <td ${done || !t.assignedAt ? '' : `data-tk-since="${t.assignedAt}"`}>${done || !t.assignedAt ? '—' : tkDur(now - t.assignedAt)}</td>
+            <td>${tkSlaBadge(sla)}</td>
+            <td>${tkWhen(t.updatedAt)}</td></tr>`;
+        }).join('') : `<tr><td colspan="13" class="empty">No tickets match.</td></tr>`}</tbody></table></div>
+        <div id="tkPager">${pagerHtml(rows.length, st.page)}</div>
+      </div>`;
+
+    const redraw = () => drawTicketList(box, meta, data);
+    $('#tkNew').onclick = () => ticketCreateModal();
+    $('#tkReload').onclick = () => render();
+    const slaBtn = $('#tkSlaBtn');
+    if (slaBtn) slaBtn.onclick = () => tkSlaModal(meta);
+    box.querySelectorAll('[data-tk-scope]').forEach(b => b.onclick = () => {
+      st.scope = b.dataset.tkScope; st.page = 1; redraw();
+    });
+    box.querySelectorAll('[data-tk-sel]').forEach(s => s.onchange = () => {
+      st[s.dataset.tkSel] = s.value; st.page = 1; redraw();
+    });
+    box.querySelectorAll('[data-tk-filter]').forEach(r => r.onclick = () => {
+      const k = r.dataset.tkFilter;
+      Object.assign(st, { status: '', priority: '', category: '', sla: '', aging: '', page: 1 });
+      st[k] = r.dataset.tkValue;
+      redraw();
+      const table = box.querySelector('.tk-table');
+      if (table) table.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const qEl = $('#tkQ');
+    qEl.oninput = () => { st.q = qEl.value; st.page = 1; clearTimeout(qEl._t); qEl._t = setTimeout(() => {
+      redraw(); const again = $('#tkQ'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    }, 250); };
+    $('#tkClear').onclick = () => {
+      Object.assign(st, { status: '', priority: '', category: '', sla: '', aging: '', q: '', page: 1 }); redraw();
+    };
+    box.querySelectorAll('[data-tk-open]').forEach(tr => tr.onclick = () => navigate('tickets::' + tr.dataset.tkOpen));
+    bindPager($('#tkPager'), rows.length, st.page, (p) => { st.page = p; }, redraw);
+    tkTick();
+  }
+
+  /* ---------------- ticket detail ---------------- */
+  function viewTicketDetail(id) {
+    $('#pageTitle').textContent = 'Ticket';
+    viewTickets.after = async () => {
+      const [meta, d] = await Promise.all([tkMeta(), Store.tkGet(id)]);
+      const box = $('#tkDetail');
+      if (!box) return;
+      if (d.error) {
+        box.innerHTML = `<div class="panel"><p class="empty">${esc(d.error)}</p>
+          <p style="text-align:center"><button class="btn-outline btn-sm" id="tkBack">${ic('arrow-left')}All Tickets</button></p></div>`;
+        $('#tkBack').onclick = () => navigate('tickets');
+        return;
+      }
+      tkSync(d.now);
+      drawTicketDetail(box, meta, d);
+    };
+    return `<div id="tkDetail"><div class="panel"><p class="empty">Loading ticket…</p></div></div>`;
+  }
+
+  const TK_NEXT_ACTION = {
+    'Open': 'Assign a handler',
+    'Assigned': 'Pick up the ticket and start work',
+    'Reopened': 'Pick up the reopened ticket',
+    'Escalated': 'Review / approval',
+    'In Progress': 'Resolve — or escalate if it needs higher approval',
+    'Waiting for Information': 'Requester to provide the information asked for',
+    'Resolved': 'Requester to confirm the fix and close',
+    'Closed': 'No further action',
+  };
+
+  function drawTicketDetail(box, meta, d) {
+    const t = d.ticket;
+    const now = tkNow();
+    const done = tkDone(t);
+    const sla = tkSla(t, now);
+    const A = d.allowed;
+    $('#pageTitle').textContent = 'Ticket ' + t.ticketNo;
+    const stages = d.history.filter(h => TK_STAGE.includes(h.action));
+    const stageEnd = (h) => h.completedAt || now;
+    // waiting time: from each request for information to whatever ended it
+    let waiting = 0; let wStart = null;
+    d.history.forEach(h => {
+      if (h.action === 'waiting') { if (wStart === null) wStart = h.at; return; }
+      if (wStart !== null && ['resumed', 'info_provided', 'started', 'escalated', 'reassigned', 'resolved',
+        'closed', 'reopened'].includes(h.action)) { waiting += h.at - wStart; wStart = null; }
+    });
+    if (wStart !== null) waiting += now - wStart;
+    const age = tkAge(t, now);
+    const escalationTime = stages.filter(h => h.action === 'escalated').reduce((s, h) => s + (stageEnd(h) - h.assignedAt), 0);
+    const lastStage = stages[stages.length - 1];
+    const currentStage = done ? (lastStage ? stageEnd(lastStage) - lastStage.assignedAt : 0)
+      : (t.assignedAt ? now - t.assignedAt : 0);
+    const resolution = t.resolvedAt ? t.resolvedAt - t.createdAt : null;
+    const esc2 = (s) => esc(s || '—');
+
+    // ---- journey: only where the ticket actually went, then what is above ----
+    const steps = [{ state: 'done', title: 'Ticket Created', who: `${t.createdByName} · ${roleLabel(t.createdByRole)}`,
+                     foot: tkWhen(t.createdAt) }];
+    stages.forEach((h, i) => {
+      const current = !done && i === stages.length - 1;
+      steps.push({
+        state: current ? 'current' : 'done', title: roleLabel(h.toRole), who: h.toName,
+        tag: h.action === 'assigned' ? '' : TK_ACTION_LABEL[h.action],
+        foot: current ? `<span data-tk-since="${h.assignedAt}">${tkDur(now - h.assignedAt)}</span> so far`
+                      : `${tkDur(stageEnd(h) - h.assignedAt)} here`,
+      });
+    });
+    if (done) {
+      steps.push({ state: 'done', title: t.status, who: t.status === 'Closed' ? t.closedByName : t.resolvedByName,
+                   foot: tkWhen(t.status === 'Closed' ? t.closedAt : t.resolvedAt) });
+    } else {
+      (d.chain || []).slice(Number(t.escalationLevel) + 1).forEach(level => {
+        steps.push({ state: 'upcoming', title: level.map(roleLabel).join(' / '), who: '', foot: 'if escalated' });
+      });
+    }
+    const marker = (s) => (s === 'done' ? ic('check') : s === 'current' ? '<i></i>' : '');
+
+    const act = (key, label, cls, icon) => (A[key]
+      ? `<button class="${cls}" data-tk-act="${key}">${ic(icon)}${label}</button>` : '');
+    const actions = [
+      act('assign', 'Assign', 'btn-primary', 'user'),
+      act('start', t.status === 'Waiting for Information' ? 'Resume Work' : 'Start Work', 'btn-primary', 'check'),
+      act('resolve', 'Resolve', 'btn-primary', 'check'),
+      act('escalate', 'Escalate', 'btn-outline', 'trending-up'),
+      act('request_info', 'Request Information', 'btn-outline', 'mail'),
+      act('reassign', 'Reassign', 'btn-outline', 'refresh'),
+      act('close', 'Close Ticket', 'btn-outline', 'lock'),
+      act('reopen', 'Reopen', 'btn-outline', 'undo'),
+    ].join('');
+
+    const ownerCard = (() => {
+      if (done) {
+        const by = t.status === 'Closed' ? t.closedByName : t.resolvedByName;
+        return `<div class="tk-owner-name">${esc(t.status)}</div>
+          <div class="tk-owner-role">by ${esc2(by)}</div>
+          <div class="tk-kv"><span>Resolved</span><b>${tkWhen(t.resolvedAt)}</b></div>
+          ${t.closedAt ? `<div class="tk-kv"><span>Closed</span><b>${tkWhen(t.closedAt)}</b></div>` : ''}
+          <div class="tk-kv"><span>Final stage</span><b>${tkDurLong(currentStage)}</b></div>`;
+      }
+      if (!t.assignedTo) {
+        return `<div class="tk-owner-name">Unassigned</div>
+          <div class="tk-owner-role">No handler was available — an authority must assign it.</div>`;
+      }
+      return `<div class="tk-owner-name">${esc(t.assignedName)}</div>
+        <div class="tk-owner-role">${esc(roleLabel(t.assignedRole))} · NMIET B-SCHOOL, Bhubaneswar</div>
+        <div class="tk-kv"><span>Status</span><b>${esc(t.status)}</b></div>
+        <div class="tk-kv"><span>Assigned</span><b>${tkWhen(t.assignedAt)}</b></div>
+        <div class="tk-kv"><span>Time here</span><b data-tk-since="${t.assignedAt}" data-tk-long="1">${tkDurLong(now - t.assignedAt)}</b></div>`;
+    })();
+
+    const slaTxt = sla.remaining >= 0
+      ? `<b>${tkDur(sla.used)}</b> used · <b>${tkDur(sla.remaining)}</b> ${sla.done ? 'to spare' : 'remaining'}`
+      : `<b class="tk-red">Breached by ${tkDur(-sla.remaining)}</b> · ${tkDur(sla.used)} used`;
+
+    box.innerHTML = `
+      <div class="panel tk-head">
+        <div class="tk-head-top">
+          <button class="btn-outline btn-sm" id="tkBack">${ic('arrow-left')}All Tickets</button>
+          <span class="tk-no mono">${esc(t.ticketNo)}</span>
+          ${tkStatusBadge(t.status)} ${tkPriorityBadge(t.priority)} ${tkSlaBadge(sla)}
+          <button class="btn-outline btn-sm tk-push" id="tkRefresh">${ic('refresh')}Refresh</button>
+        </div>
+        <h2 class="tk-subject">${esc(t.subject)}</h2>
+        <div class="tk-meta">
+          <span>${ic('folder')}${esc(t.category)} › ${esc(t.subcategory)}</span>
+          <span>${ic('user')}${esc(t.createdByName)} · ${esc(roleLabel(t.createdByRole))}</span>
+          <span>${ic('calendar')}${tkWhen(t.createdAt)}</span>
+          <span>${ic('building')}Bhubaneswar Centre</span>
+          ${t.department ? `<span>${ic('bank')}${esc(t.department)}</span>` : ''}
+          ${t.course ? `<span>${ic('books')}${esc(t.course)}</span>` : ''}
+          ${t.module ? `<span>${ic('grid')}${esc(t.module)}</span>` : ''}
+        </div>
+        ${actions ? `<div class="tk-actions">${actions}</div>` : ''}
+      </div>
+
+      <div class="tk-cards">
+        <div class="tk-card tk-owner ${done ? 'is-done' : ''}">
+          <div class="tk-card-label">${done ? 'Outcome' : 'Currently With'}</div>${ownerCard}
+        </div>
+        <div class="tk-card tk-next">
+          <div class="tk-card-label">Next Action</div>
+          <div class="tk-kv"><span>Current</span><b>${done ? '—' : esc(t.assignedRole ? roleLabel(t.assignedRole) : 'Unassigned')}</b></div>
+          <div class="tk-kv"><span>Next authority</span><b>${done ? '—' : d.next
+            ? `${esc(roleLabel(d.next.role))}<small>${esc(d.next.name)}</small>` : 'Highest level'}</b></div>
+          <div class="tk-next-do">${esc(TK_NEXT_ACTION[t.status] || '')}</div>
+        </div>
+        <div class="tk-card tk-sla">
+          <div class="tk-card-label">SLA Progress</div>
+          <div class="tk-sla-pct ${TK_SLA_CLASS[sla.state]}">${Math.min(sla.pct, 999)}%<small>${sla.state}</small></div>
+          <div class="tk-bar ${TK_SLA_CLASS[sla.state]}"><i style="width:${Math.min(sla.pct, 100)}%"></i></div>
+          <div class="tk-sla-txt">${slaTxt}</div>
+          <div class="tk-kv"><span>Deadline</span><b>${tkWhen(t.slaDueAt)}</b></div>
+          <div class="tk-kv"><span>SLA (${esc(t.priority)})</span><b>${tkDur(sla.budget)}</b></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Time Summary</h3>
+          <small style="color:var(--muted)">From actual timestamps · created ${tkWhen(t.createdAt)}</small></div>
+        <div class="tk-perf">
+          <div><span>Total Ticket Age</span><b ${done ? '' : `data-tk-since="${t.createdAt}"`}>${tkDur(age)}</b></div>
+          <div><span>${done ? 'Final Stage Duration' : 'Current Stage Duration'}</span><b ${done || !t.assignedAt ? '' : `data-tk-since="${t.assignedAt}"`}>${tkDur(currentStage)}</b></div>
+          <div><span>Active Handling Time</span><b>${tkDur(Math.max(0, age - waiting))}</b></div>
+          <div><span>Waiting Time</span><b>${tkDur(waiting)}</b></div>
+          <div><span>Escalation Time</span><b>${tkDur(escalationTime)}</b></div>
+          <div><span>SLA Duration</span><b>${tkDur(sla.budget)}</b></div>
+          <div><span>SLA Used</span><b>${tkDur(sla.used)}</b></div>
+          <div><span>SLA Remaining</span><b class="${sla.remaining < 0 ? 'tk-red' : ''}">${sla.remaining < 0 ? '−' + tkDur(-sla.remaining) : tkDur(sla.remaining)}</b></div>
+          <div><span>Final Resolution Time</span><b>${resolution === null ? '—' : tkDurLong(resolution)}</b></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Ticket Journey</h3>
+          <small style="color:var(--muted)">${stages.filter(h => h.action === 'escalated').length} escalation(s)</small></div>
+        <ol class="tk-journey">${steps.map(s => `<li class="tk-step ${s.state}">
+          <span class="tk-mark">${marker(s.state)}</span>
+          <div class="tk-step-txt"><b>${esc(s.title)}${s.state === 'current' ? ' <em>CURRENT</em>' : ''}</b>
+            ${s.who ? `<small>${esc(s.who)}</small>` : ''}${s.tag ? `<span class="tk-tag">${esc(s.tag)}</span>` : ''}
+            <span class="tk-foot">${s.foot}</span></div></li>`).join('')}</ol>
+      </div>
+
+      <div class="dash-2col tk-lower">
+        <div class="panel">
+          <div class="panel-head"><h3>Movement History</h3></div>
+          <ul class="tk-timeline">${d.history.map(h => {
+            const from = h.fromName ? `${esc(h.fromName)} <small>(${esc(roleLabel(h.fromRole))})</small>` : '';
+            const to = h.toName ? ` ${ic('arrow-right')} ${esc(h.toName)} <small>(${esc(roleLabel(h.toRole))})</small>` : '';
+            const secs = TK_STAGE.includes(h.action)
+              ? (h.completedAt ? `Time at stage: ${tkDur(h.seconds)}` : (done ? '' : 'Still here'))
+              : '';
+            return `<li class="tl-${esc(h.action)}"><div class="tl-time">${tkWhen(h.at)}</div>
+              <div class="tl-body"><b>${esc(TK_ACTION_LABEL[h.action] || h.action)}</b>
+                <div>${from}${to}</div>
+                ${h.reason ? `<div class="tl-note"><span>Reason:</span> ${esc(h.reason)}</div>` : ''}
+                ${h.comment ? `<div class="tl-note">${esc(h.comment)}</div>` : ''}
+                ${secs ? `<div class="tl-dur">${secs}</div>` : ''}</div></li>`;
+          }).join('')}</ul>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Description</h3></div>
+          <div class="tk-desc">${esc(t.description).replace(/\n/g, '<br>')}</div>
+          ${(t.attachments || []).length ? `<div class="tk-attachments">${t.attachments.map(tkAttachLink).join('')}</div>` : ''}
+          ${t.resolution ? `<div class="tk-resolution"><b>Resolution</b><div>${esc(t.resolution).replace(/\n/g, '<br>')}</div>
+            <small>${esc2(t.resolvedByName)} · ${tkWhen(t.resolvedAt)}</small></div>` : ''}
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Conversation</h3><small style="color:var(--muted)">${d.comments.length} message(s)</small></div>
+        <div class="tk-comments">${d.comments.length ? d.comments.map(c => `
+          <div class="tk-comment ${c.userId === d.me.id ? 'mine' : ''} ${c.kind === 'request_info' ? 'req' : ''}">
+            <div class="tk-c-head"><b>${esc(c.userName)}</b><span>${esc(roleLabel(c.userRole))}</span>
+              ${c.kind === 'request_info' ? tkBadge('Information requested', 'st-waiting') : ''}
+              <span class="tk-c-time">${tkWhen(c.at)}</span></div>
+            ${c.message ? `<div class="tk-c-msg">${esc(c.message).replace(/\n/g, '<br>')}</div>` : ''}
+            ${c.attachment && c.attachment.data ? tkAttachLink(c.attachment) : ''}
+          </div>`).join('') : '<p class="empty">No messages yet.</p>'}</div>
+        ${A.comment ? `<form id="tkCommentForm" class="tk-comment-form">
+          <textarea name="message" rows="3" placeholder="Write a message, reply, or provide requested information…"></textarea>
+          <div class="tk-cf-row"><input type="file" id="tkCFile" accept="${TK_FILE_ACCEPT}">
+            <button class="btn-primary btn-sm" type="submit">${ic('mail')}Send</button></div>
+        </form>` : ''}
+      </div>`;
+
+    const reload = () => render();
+    $('#tkBack').onclick = () => navigate('tickets');
+    $('#tkRefresh').onclick = reload;
+    const run = async (payload, okMsg) => {
+      const res = await Store.tkAction(Object.assign({ id: t.id }, payload));
+      if (res.error) { toast(res.error, 'err'); return false; }
+      closeModal(); toast(okMsg); reload(); return true;
+    };
+    box.querySelectorAll('[data-tk-act]').forEach(b => b.onclick = () => tkActionModal(b.dataset.tkAct, t, d, run));
+    const cf = $('#tkCommentForm');
+    if (cf) {
+      cf.onsubmit = async (e) => {
+        e.preventDefault();
+        const message = cf.message.value.trim();
+        let attachment;
+        try {
+          const files = await tkReadFiles($('#tkCFile').files, 1);
+          attachment = files[0];
+        } catch (err) { toast(err.message, 'err'); return; }
+        if (!message && !attachment) { toast('Write a message or attach a file.', 'err'); return; }
+        const btn = cf.querySelector('button[type=submit]'); btn.disabled = true;
+        const res = await Store.tkAction({ id: t.id, action: 'comment', message, attachment });
+        btn.disabled = false;
+        if (res.error) { toast(res.error, 'err'); return; }
+        toast(res.status !== t.status ? 'Sent — the ticket is back in progress.' : 'Message sent.');
+        reload();
+      };
+    }
+    tkTick();
+  }
+
+  /** the dialog behind each action button; start and close need no form */
+  function tkActionModal(action, t, d, run) {
+    if (action === 'start') { run({ action }, 'Work started.'); return; }
+    if (action === 'close') {
+      confirmAction('Close Ticket', `Close <b>${esc(t.ticketNo)}</b>? It can still be reopened later.`,
+        'Close Ticket', () => run({ action }, 'Ticket closed.'));
+      return;
+    }
+    const targetSelect = (list, name) => {
+      if (!list.length) return '<p class="empty">Nobody is available for this.</p>';
+      const byLevel = {};
+      list.forEach(u => { (byLevel[u.level] = byLevel[u.level] || []).push(u); });
+      return `<select name="${name}" required>${Object.keys(byLevel).sort((a, b) => a - b).map(lvl =>
+        `<optgroup label="Level ${Number(lvl) + 1} — ${esc((d.chain[lvl] || []).map(roleLabel).join(' / '))}">${
+          byLevel[lvl].map(u => `<option value="${esc(u.id)}" ${u.suggested ? 'selected' : ''}>${esc(u.name)} · ${
+            esc(roleLabel(u.role))}${u.suggested ? ' (suggested)' : ''}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    };
+    const forms = {
+      escalate: ['Escalate Ticket', `
+        <div class="field full"><label>Escalate to</label>${targetSelect(d.escalateTargets, 'toUser')}
+          <small class="field-hint">Suggested from the reporting hierarchy — the next authority above ${esc(roleLabel(t.assignedRole))}.</small></div>
+        <div class="field full"><label>Reason</label><select name="reasonPick">${TK_ESCALATION_REASONS.map(r => `<option>${r}</option>`).join('')}</select></div>
+        <div class="field full"><label>Details</label><textarea name="comment" rows="3" placeholder="What does the next authority need to decide?"></textarea></div>`, 'Escalate'],
+      reassign: ['Reassign Ticket', `
+        <div class="field full"><label>Reassign to</label>${targetSelect(d.reassignTargets, 'toUser')}</div>
+        <div class="field full"><label>Reason</label><input name="reason" placeholder="Why it moves (optional)"></div>`, 'Reassign'],
+      assign: ['Assign Ticket', `
+        <div class="field full"><label>Assign to</label>${targetSelect(d.reassignTargets, 'toUser')}</div>`, 'Assign'],
+      request_info: ['Request Information', `
+        <div class="field full"><label>What information is needed?</label>
+          <textarea name="comment" rows="4" required placeholder="The requester is notified and the SLA keeps running."></textarea></div>`, 'Send Request'],
+      resolve: ['Resolve Ticket', `
+        <div class="field full"><label>Resolution</label>
+          <textarea name="resolution" rows="5" required placeholder="What was done to fix it"></textarea></div>
+        <p class="field-hint">Resolved by ${esc(user.name || user.username)} · ${tkWhen(tkNow())}</p>`, 'Resolve'],
+      reopen: ['Reopen Ticket', `
+        <div class="field full"><label>Reason for reopening</label>
+          <textarea name="reason" rows="3" required placeholder="What is still wrong?"></textarea></div>
+        <p class="field-hint">The previous resolution stays in the history.</p>`, 'Reopen'],
+    };
+    const f = forms[action];
+    if (!f) return;
+    openModal(`${f[0]} — ${t.ticketNo}`, `<form id="f"><div class="form-grid">${f[1]}</div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">${f[2]}</button></div></form>`);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const payload = { action };
+      if (v.toUser) payload.toUser = v.toUser;
+      if (action === 'escalate') { payload.reason = v.reasonPick; payload.comment = v.comment || ''; }
+      if (action === 'reassign' || action === 'reopen') payload.reason = v.reason || '';
+      if (action === 'request_info') payload.comment = v.comment || '';
+      if (action === 'resolve') payload.resolution = v.resolution || '';
+      const msgs = { escalate: 'Ticket escalated.', reassign: 'Ticket reassigned.', assign: 'Ticket assigned.',
+        request_info: 'Information requested.', resolve: 'Ticket resolved.', reopen: 'Ticket reopened.' };
+      const ok = await run(payload, msgs[action]);
+      if (!ok) btn.disabled = false;
+    };
+  }
+
+  async function ticketCreateModal() {
+    const meta = await tkMeta();
+    if (meta.error) { toast(meta.error, 'err'); return; }
+    const courses = Store.all('courses');
+    const depts = departmentList();
+    openModal('Create Ticket', `<form id="f">
+      <div class="form-grid">
+        <div class="field full"><label>Subject</label>
+          <input name="subject" maxlength="200" required placeholder="Short summary of the issue"></div>
+        <div class="field"><label>Category</label><select name="category" id="tkCat">${
+          meta.categories.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Subcategory</label><select name="subcategory" id="tkSub"></select></div>
+        <div class="field"><label>Priority</label><select name="priority" id="tkPri">${
+          meta.priorities.map(p => `<option ${p === 'Medium' ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+        <div class="field"><label>Related Module</label><select name="module"><option value="">—</option>${
+          MODULES.map(([, label]) => `<option>${esc(label)}</option>`).join('')}</select></div>
+        <div class="field"><label>Department</label><input name="department" list="tkDeptList" placeholder="optional">
+          <datalist id="tkDeptList">${depts.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
+        <div class="field"><label>Course</label><input name="course" list="tkCourseList" placeholder="optional">
+          <datalist id="tkCourseList">${courses.map(c => `<option value="${esc([c.code, c.name].filter(Boolean).join(' — '))}">`).join('')}</datalist></div>
+        <div class="field full"><label>Description</label>
+          <textarea name="description" rows="5" required placeholder="What happened, where, and since when"></textarea></div>
+        <div class="field full"><label>Attachments <small style="font-weight:400;color:var(--muted)">PDF, Word, Excel, JPG, PNG · up to 3 files · 2 MB each</small></label>
+          <input type="file" id="tkFiles" multiple accept="${TK_FILE_ACCEPT}"></div>
+      </div>
+      <div class="tk-route-hint" id="tkRoute"></div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Create Ticket</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    const cat = $('#tkCat'); const sub = $('#tkSub'); const pri = $('#tkPri');
+    const hint = () => {
+      const c = meta.categories.find(x => x.name === cat.value);
+      const chain = meta.chains[c.chain] || [];
+      const mine = chain.findIndex(level => level.includes(user.role));
+      const ahead = chain.slice(mine + 1);
+      $('#tkRoute').innerHTML = ahead.length
+        ? `${ic('arrow-right')}Goes to <b>${esc(ahead[0].map(roleLabel).join(' / '))}</b>${ahead.length > 1
+            ? `, and can be escalated to ${esc(ahead.slice(1).map(l => l.map(roleLabel).join(' / ')).join(' → '))}` : ''}
+            · SLA <b>${meta.sla[pri.value]} hours</b>`
+        : `${ic('alert')}You are the highest authority for this category.`;
+    };
+    // the subcategories follow the category only — changing the priority keeps the choice
+    const fillSub = () => {
+      const c = meta.categories.find(x => x.name === cat.value);
+      sub.innerHTML = c.subs.map(s => `<option>${esc(s)}</option>`).join('');
+      hint();
+    };
+    cat.onchange = fillSub; pri.onchange = hint;
+    fillSub();
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      let attachments;
+      try { attachments = await tkReadFiles($('#tkFiles').files, 3); } catch (err) { toast(err.message, 'err'); return; }
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const res = await Store.tkCreate(Object.assign(v, { attachments }));
+      btn.disabled = false;
+      if (res.error) { toast(res.error, 'err'); return; }
+      closeModal();
+      toast(res.assignedName
+        ? `${res.ticketNo} created — now with ${res.assignedName} (${roleLabel(res.assignedRole)}).`
+        : `${res.ticketNo} created — waiting for an authority to assign it.`);
+      navigate('tickets::' + res.id);
+    };
+  }
+
+  function tkSlaModal(meta) {
+    openModal('SLA Settings', `<form id="f">
+      <p class="ac-sub">Hours allowed from creation to resolution, by priority. Tickets keep the SLA they were created with.</p>
+      <div class="form-grid">${meta.priorities.map(p => `<div class="field"><label>${p}</label>
+        <input type="number" name="${p}" min="0.5" max="8760" step="0.5" value="${meta.sla[p]}" required></div>`).join('')}</div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Save SLA</button></div></form>`);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      const sla = {};
+      meta.priorities.forEach(p => { sla[p] = Number(v[p]); });
+      const res = await Store.tkSettings(sla);
+      if (res.error) { toast(res.error, 'err'); return; }
+      tkMetaCache = null;
+      closeModal(); toast('SLA updated.'); render();
+    };
+  }
+
+  /* ---------------- organisation tree ---------------- */
+  function viewOrgTree() {
+    viewOrgTree.after = async () => {
+      const d = await Store.tkOrg();
+      const box = $('#orgPage');
+      if (!box) return;
+      if (d.error) { box.innerHTML = `<div class="panel"><p class="empty">${esc(d.error)}</p></div>`; return; }
+      drawOrgTree(box, d);
+    };
+    return `<div id="orgPage"><div class="panel"><p class="empty">Loading the organisation…</p></div></div>`;
+  }
+
+  function drawOrgTree(box, d) {
+    const users = d.users;
+    const byId = Object.fromEntries(users.map(u => [u.id, u]));
+    const kids = {};
+    users.forEach(u => {
+      const p = u.reportingTo && byId[u.reportingTo] ? u.reportingTo : '';
+      (kids[p] = kids[p] || []).push(u);
+    });
+    const rank = (u) => (ORG_RANK[u.role] === undefined ? 50 : ORG_RANK[u.role]);
+    Object.values(kids).forEach(list => list.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)));
+    const roots = kids[''] || [];
+    const top = roots.filter(u => u.role === 'admin');
+    const unlinked = roots.filter(u => u.role !== 'admin');
+    const isSuper = user.role === 'admin';
+    const linked = users.filter(u => u.reportingTo && byId[u.reportingTo]).length;
+    const node = (u) => {
+      const ch = kids[u.id] || [];
+      return `<li><div class="org-node ${u.active ? '' : 'off'}">
+          <span class="org-ico">${ic(ORG_ICON[u.role] || 'user')}</span>
+          <div class="org-txt"><b>${esc(u.name)}</b><small>${esc(u.roleTitle)}${u.empId ? ' · ' + esc(u.empId) : ''}</small></div>
+          ${u.active ? '' : tkBadge('Inactive', 'st-closed')}
+          ${ch.length ? `<span class="org-count" title="direct reports">${ch.length}</span>` : ''}
+          ${isSuper ? `<button class="btn-sm btn-outline org-set" data-org-set="${esc(u.id)}">Reporting To</button>` : ''}
+        </div>${ch.length ? `<ul>${ch.map(node).join('')}</ul>` : ''}</li>`;
+    };
+    const rules = Object.entries(d.reportsTo).filter(([, to]) => to.length)
+      .sort((a, b) => (ORG_RANK[a[0]] ?? 50) - (ORG_RANK[b[0]] ?? 50))
+      .map(([role, to]) => `<div class="org-rule"><b>${esc(roleLabel(role))}</b>${ic('arrow-right')}${esc(to.map(roleLabel).join(' or '))}</div>`).join('');
+    box.innerHTML = `
+      <div class="panel">
+        <div class="panel-head"><h3>Organization Tree</h3>
+          <button class="btn-outline btn-sm" id="orgReload">${ic('refresh')}Refresh</button></div>
+        <div class="stat-grid">
+          ${statCard(ic('users'), users.length, 'Staff Logins')}
+          ${statCard(ic('link'), linked, 'In the Hierarchy', 'c3')}
+          ${statCard(ic('alert'), unlinked.length, 'Not Yet Placed', unlinked.length ? 'c4' : 'c3')}
+          ${statCard(ic('shield'), new Set(users.map(u => u.role)).size, 'Roles in Use', 'c2')}
+        </div>
+        <div class="org-tree"><ul><li><div class="org-node org-root"><span class="org-ico">${ic('school')}</span>
+          <div class="org-txt"><b>NMIET B-SCHOOL</b><small>Bhubaneswar Centre</small></div></div>
+          ${top.length ? `<ul>${top.map(node).join('')}</ul>` : ''}</li></ul></div>
+      </div>
+      ${unlinked.length ? `<div class="panel">
+        <div class="panel-head"><h3>Not yet placed in the hierarchy</h3></div>
+        <p class="ac-sub">${isSuper ? 'Set <b>Reporting To</b> on these accounts to place them in the tree — tickets from their team then route through their own manager.'
+          : 'The Super Admin places these accounts by setting who they report to.'}</p>
+        <div class="org-tree org-flat"><ul>${unlinked.map(node).join('')}</ul></div>
+      </div>` : ''}
+      <div class="panel"><div class="panel-head"><h3>Reporting Rules</h3></div><div class="org-rules">${rules}</div></div>`;
+    $('#orgReload').onclick = () => render();
+    box.querySelectorAll('[data-org-set]').forEach(b => b.onclick = () => userForm(b.dataset.orgSet, () => render()));
   }
 
   /** the last time this account actually signed in, from the audit log */

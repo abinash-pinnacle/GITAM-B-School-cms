@@ -264,6 +264,7 @@ function init_db(): void
     seed_academic_head_role();
     undo_placement_roles_full();
     rename_drive_type_nta();
+    hierarchy_labels_and_ticket_indexes();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -392,11 +393,11 @@ function seed_admin_role(): void
 function seed_placement_roles(): void
 {
     $roles = [
-        ['dean_placement', 'Dean Placement',
+        ['dean_placement', 'Dean T&P',
          'Placement department head. No access until the Super Admin assigns modules.'],
         ['plmt_officer', 'Placement Officer',
          'Placement officer access role. No access until the Super Admin assigns modules.'],
-        ['plmt_coordinator', 'Placement Coordinator',
+        ['plmt_coordinator', 'Assistant TPO',
          'Placement coordinator access role. No access until the Super Admin assigns modules.'],
     ];
     foreach ($roles as [$key, $label, $desc]) {
@@ -441,7 +442,7 @@ function seed_academic_head_role(): void
     upsert('roles', [
         'id'          => next_id('roles'),
         'key'         => 'academic_head',
-        'label'       => 'Academics Head',
+        'label'       => 'Academic Head',
         'base'        => 'admin',
         'builtin'     => '1',
         'status'      => 'Active',
@@ -503,6 +504,38 @@ function rename_drive_type_nta(): void
     run_sql('UPDATE ' . qi('drives') . ' SET ' . qi('driveType') . " = 'NATS' WHERE " . qi('driveType') . " = 'NTA'");
 }
 
+/**
+ * The organisational hierarchy names the placement access roles Dean T&P and
+ * Assistant TPO and calls the academic role Academic Head. Seeded rows still
+ * carrying the old default labels are renamed; a label the Super Admin typed
+ * is left alone. Keys never change, so no account moves.
+ *
+ * Also indexes the helpdesk tables on the columns every ticket screen filters
+ * by. CREATE INDEX has no portable IF NOT EXISTS (MySQL lacks it), so an index
+ * that is already there simply fails quietly on the next pass.
+ */
+function hierarchy_labels_and_ticket_indexes(): void
+{
+    foreach ([['dean_placement', 'Dean Placement', 'Dean T&P'],
+              ['plmt_coordinator', 'Placement Coordinator', 'Assistant TPO'],
+              ['academic_head', 'Academics Head', 'Academic Head']] as [$key, $old, $new]) {
+        run_sql('UPDATE ' . qi('roles') . ' SET ' . qi('label') . ' = ? WHERE ' . qi('key') . ' = ? AND '
+            . qi('label') . ' = ?', [$new, $key, $old]);
+    }
+    foreach ([['ix_tkh_ticket', 'tickethistory', 'ticketId'],
+              ['ix_tkc_ticket', 'ticketcomments', 'ticketId'],
+              ['ix_tk_assigned', 'tickets', 'assignedTo'],
+              ['ix_tk_created', 'tickets', 'createdBy'],
+              ['ix_tkh_to', 'tickethistory', 'toUser'],
+              ['ix_users_reporting', 'users', 'reportingTo']] as [$name, $table, $col]) {
+        try {
+            db()->exec('CREATE INDEX ' . qi($name) . ' ON ' . qi($table) . ' (' . qi($col) . ')');
+        } catch (PDOException $e) {
+            // already there
+        }
+    }
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -511,7 +544,7 @@ function rename_drive_type_nta(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-17-drive-type-nats';
+const DB_MIGRATION_REV = '2026-09-17-hierarchy-helpdesk';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
