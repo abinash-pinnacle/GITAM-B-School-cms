@@ -3447,7 +3447,7 @@ const ROLE_TITLES = [
    Placement Officer access role are the same rung. A ticket climbs only as far
    as somebody escalates it; nothing forces it through every level. */
 const TICKET_CHAINS = [
-    'academic'  => [['course_coordinator'], ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
+    'academic'  => [['academic_head'], ['center_head'], ['subadmin'], ['admin']],
     'admission' => [['admission'], ['academic_head'], ['center_head'], ['subadmin'], ['admin']],
     'finance'   => [['accountant'], ['center_head'], ['subadmin'], ['admin']],
     'tnp'       => [['plmt_coordinator'], ['plmt_officer', 'placement_officer'], ['dean_placement'],
