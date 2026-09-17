@@ -461,6 +461,16 @@
       /* Say which of the three it was. A message that fits every cause fits
          none of them, and this screen is the only place the person can see. */
       const status = err && err.status;
+      /* The sign-in request itself never got an answer — nothing was signed
+         in, so "Signed in, but…" would be untrue. It is the connection (a
+         blip, or the server restarting during a deploy), and trying again is
+         the fix. */
+      if (stage === 'signing in' && !status && err && err.name === 'TypeError') {
+        $('#loginError').textContent =
+          'Could not reach the server. Check your internet connection and press Sign In again.';
+        console.error('sign-in request did not reach the server', err);
+        return;
+      }
       if (err && err.badBody) {
         $('#loginError').textContent =
           'Signed in, but ' + err.message + ' — please show this to the administrator.';

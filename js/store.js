@@ -260,11 +260,21 @@ const Store = {
   // server-side login — the account decides the role, the caller does not pick
   // one. Resolves to the user row, or to { error } with a message to show.
   async login(username, password) {
-    const res = await fetch(`${API}/login`, {
+    const send = () => fetch(`${API}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
+    /* A request that never reaches the server (a connection blip, a worker
+       restarting mid-deploy) throws instead of answering. One quiet retry a
+       moment later clears the usual case; a second failure is reported. */
+    let res;
+    try {
+      res = await send();
+    } catch (e) {
+      await new Promise(r => setTimeout(r, 1200));
+      res = await send();
+    }
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       // Only 401 means the credentials were wrong. A 5xx is the server or its
