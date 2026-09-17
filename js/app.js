@@ -16197,17 +16197,24 @@
     if (meta.error) { toast(meta.error, 'err'); return; }
     const courses = Store.all('courses');
     const depts = departmentList();
+    /* A student only raises tickets about the things they actually use, so the
+       category and related-module pickers are trimmed to their own modules. */
+    const isStudent = user.role === 'student';
+    const STU_TICKET_CATS = ['Academic', 'Finance', 'Library', 'T&P'];
+    const STU_TICKET_MODS = ['academics', 'attendance', 'marks', 'fees', 'library', 'placement', 'events'];
+    const catList = isStudent ? meta.categories.filter(c => STU_TICKET_CATS.includes(c.name)) : meta.categories;
+    const modList = isStudent ? MODULES.filter(m => STU_TICKET_MODS.includes(m[0])) : MODULES;
     openModal('Create Ticket', `<form id="f">
       <div class="form-grid">
         <div class="field full"><label>Subject</label>
           <input name="subject" maxlength="200" required placeholder="Short summary of the issue"></div>
         <div class="field"><label>Category</label><select name="category" id="tkCat">${
-          meta.categories.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
+          catList.map(c => `<option>${esc(c.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Subcategory</label><select name="subcategory" id="tkSub"></select></div>
         <div class="field"><label>Priority</label><select name="priority" id="tkPri">${
           meta.priorities.map(p => `<option ${p === 'Medium' ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
         <div class="field"><label>Related Module</label><select name="module"><option value="">—</option>${
-          MODULES.map(([, label]) => `<option>${esc(label)}</option>`).join('')}</select></div>
+          modList.map(([, label]) => `<option>${esc(label)}</option>`).join('')}</select></div>
         <div class="field"><label>Department</label><input name="department" list="tkDeptList" placeholder="optional">
           <datalist id="tkDeptList">${depts.map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>
         <div class="field"><label>Course</label><input name="course" list="tkCourseList" placeholder="optional">
