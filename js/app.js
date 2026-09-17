@@ -825,9 +825,18 @@
      keyed by the group's page ("drives"). Unset means: open while a page of
      the group is showing, closed otherwise. */
   const navOpen = {};
+  let navLastView = null;
 
   function buildNav() {
     refreshPerms();
+    /* Moving to another page forgets a hand-opened group that page is not part
+       of — clicking Applications closes Placement Drives — while toggling a
+       group on the same page keeps the choice. */
+    if (currentView !== navLastView) {
+      const here = splitViewKey(currentView).view;
+      Object.keys(navOpen).forEach(g => { if (g !== here) delete navOpen[g]; });
+      navLastView = currentView;
+    }
     const nav = $('#navMenu');
     /* A custom role reads its own name over the menu it borrowed — the person
        signed in knows what they were made, not what it was built from. */
