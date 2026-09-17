@@ -15700,7 +15700,11 @@
     const all = data.tickets;
     const now = tkNow();
     const leader = ['admin', 'subadmin', 'center_head', 'academic_head'].includes(me.role);
-    if (!st.scope) {
+    // a student only ever sees their own tickets — no scope switch, no org-wide stats
+    const isStudent = me.role === 'student';
+    if (isStudent) {
+      st.scope = 'mine';
+    } else if (!st.scope) {
       st.scope = all.some(t => t.assignedTo === me.id && !tkDone(t)) ? 'assigned'
         : (leader || all.some(t => t.createdBy !== me.id && t.assignedTo !== me.id)) ? 'all' : 'mine';
     }
@@ -15758,7 +15762,7 @@
             <button class="btn-primary" id="tkNew">${ic('plus')}Create Ticket</button>
           </div>
         </div>
-        <div class="tk-scopes">
+        ${isStudent ? '' : `<div class="tk-scopes">
           ${scopeBtn('assigned', 'Assigned to Me', all.filter(t => t.assignedTo === me.id).length)}
           ${scopeBtn('mine', 'My Tickets', all.filter(t => t.createdBy === me.id).length)}
           ${scopeBtn('all', leader ? 'All in My Scope' : 'All Visible', all.length)}
@@ -15772,9 +15776,9 @@
           ${statCard(ic('clock'), atRisk, 'SLA At Risk', atRisk ? 'c2' : 'c3')}
           ${statCard(ic('check'), count('Resolved') + count('Closed'), 'Resolved / Closed', 'c3')}
           ${statCard(ic('clock'), avgResolution === null ? '—' : tkDur(avgResolution), 'Avg Resolution Time')}
-        </div>
+        </div>`}
       </div>
-      <div class="dash-2col">
+      ${isStudent ? '' : `<div class="dash-2col">
         ${tkDist('Ticket Aging (open tickets)', aging, 'aging')}
         ${tkDist('Tickets by Status', tally(scoped, t => t.status), 'status')}
       </div>
@@ -15796,25 +15800,27 @@
           <div><span>Escalations</span><b>${escalations}</b></div>
           <div><span>Pending / Closed</span><b>${active.length} / ${count('Closed')}</b></div>
         </div>
-      </div>
+      </div>`}
       <div class="panel">
         <div class="panel-head"><h3>Tickets <small style="color:var(--muted);font-weight:500">${rows.length} of ${scoped.length}</small></h3></div>
         <div class="tk-filters">
-          <input class="search-box" id="tkQ" placeholder="Search ticket id / subject / person..." value="${esc(st.q)}">
+          <input class="search-box" id="tkQ" placeholder="Search ticket id / subject..." value="${esc(st.q)}">
           <select class="filter-sel" data-tk-sel="status"><option value="">All Statuses</option>
             <option value="Active" ${st.status === 'Active' ? 'selected' : ''}>All Active</option>
             ${TK_STATUSES.map(s => `<option ${s === st.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-          <select class="filter-sel" data-tk-sel="priority">${opts(meta.priorities, st.priority, 'All Priorities')}</select>
+          ${isStudent ? '' : `<select class="filter-sel" data-tk-sel="priority">${opts(meta.priorities, st.priority, 'All Priorities')}</select>
           <select class="filter-sel" data-tk-sel="category">${opts(meta.categories.map(c => c.name), st.category, 'All Categories')}</select>
           <select class="filter-sel" data-tk-sel="sla">${opts(['ON TRACK', 'AT RISK', 'SLA BREACHED', 'SLA MET'], st.sla, 'Any SLA')}</select>
           <select class="filter-sel" data-tk-sel="aging"><option value="">Any Age</option>${TK_AGING.map(([l], i) =>
-            `<option value="${i}" ${String(i) === st.aging ? 'selected' : ''}>${l}</option>`).join('')}</select>
+            `<option value="${i}" ${String(i) === st.aging ? 'selected' : ''}>${l}</option>`).join('')}</select>`}
           <button class="btn-outline btn-sm" id="tkClear">Clear</button>
         </div>
         <div class="tbl-wrap"><table class="tk-table"><thead><tr>
-          <th>Ticket ID</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Created By</th>
+          ${isStudent
+            ? `<th>Ticket ID</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Last Updated</th>`
+            : `<th>Ticket ID</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Created By</th>
           <th>Currently With</th><th>Current Role</th><th>Centre</th><th>Ticket Age</th><th>Current Stage</th>
-          <th>SLA</th><th>Last Updated</th>
+          <th>SLA</th><th>Last Updated</th>`}
         </tr></thead><tbody>${pageRows.length ? pageRows.map(t => {
           const sla = tkSla(t, now);
           const done = tkDone(t);
@@ -15824,15 +15830,15 @@
             <td>${esc(t.category)}</td>
             <td>${tkPriorityBadge(t.priority)}</td>
             <td>${tkStatusBadge(t.status)}</td>
-            <td>${esc(t.createdByName)}<small class="tk-sub">${esc(roleLabel(t.createdByRole))}</small></td>
+            ${isStudent ? '' : `<td>${esc(t.createdByName)}<small class="tk-sub">${esc(roleLabel(t.createdByRole))}</small></td>
             <td><b>${done ? '—' : esc(t.assignedName || 'Unassigned')}</b></td>
             <td>${done ? '—' : esc(t.assignedRole ? roleLabel(t.assignedRole) : '—')}</td>
             <td>Bhubaneswar</td>
             <td ${done ? '' : `data-tk-since="${t.createdAt}"`}>${tkDur(tkAge(t, now))}</td>
             <td ${done || !t.assignedAt ? '' : `data-tk-since="${t.assignedAt}"`}>${done || !t.assignedAt ? '—' : tkDur(now - t.assignedAt)}</td>
-            <td>${tkSlaBadge(sla)}</td>
+            <td>${tkSlaBadge(sla)}</td>`}
             <td>${tkWhen(t.updatedAt)}</td></tr>`;
-        }).join('') : `<tr><td colspan="13" class="empty">No tickets match.</td></tr>`}</tbody></table></div>
+        }).join('') : `<tr><td colspan="${isStudent ? 6 : 13}" class="empty">No tickets match.</td></tr>`}</tbody></table></div>
         <div id="tkPager">${pagerHtml(rows.length, st.page)}</div>
       </div>`;
 
