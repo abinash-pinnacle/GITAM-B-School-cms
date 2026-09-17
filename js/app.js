@@ -2639,7 +2639,8 @@
           ? `<button class="btn-outline btn-sm" id="stuSeq" title="ID numbering">Numbering</button>` : ''}
         <button class="btn-outline btn-sm" id="stuPrint">Download PDF</button>
         <button class="btn-outline btn-sm" id="stuXls">Download Excel</button>
-        ${canEdit ? `<button class="btn-outline" id="impStu">Bulk Upload</button>
+        ${canEdit ? `<button class="btn-outline btn-sm" id="stuCreds" title="Create logins for all students and download the username/password sheet">Login Sheet</button>
+        <button class="btn-outline" id="impStu">Bulk Upload</button>
         <button class="btn-primary" id="addStu">+ Add Student</button>` : ''}
       </div></div>
       <div class="filter-bar hidden" id="stuFilterBar">
@@ -2794,6 +2795,7 @@
       if (canEdit) {
         $('#addStu').onclick = () => studentForm();
         $('#impStu').onclick = () => bulkImportModal('students');
+        $('#stuCreds').onclick = () => makeStudentLogins();
       }
       const report = () => studentReport(matching());
       $('#stuPrint').onclick = () => {
@@ -4791,6 +4793,49 @@
   function ensureStudentLogin(s) {
     // the student signs in with their Student ID as both username and password
     Store.add('users', { username: s.roll, password: s.roll || DEFAULT_IMPORT_PASSWORD, role: 'student', refId: s.id, name: s.name });
+  }
+
+  /* One click for the office: make sure every student has a login (Student ID as
+     both username and password) and hand back a spreadsheet to distribute —
+     name, Student ID, phone, user id and password. The password column is the
+     Student ID, which is what a new/backfilled login is set to; a student who
+     has since changed theirs is the exception, and the sheet says so. */
+  function makeStudentLogins() {
+    const students = Store.all('students');
+    if (!students.length) { toast('No students on file yet.', 'err'); return; }
+    const loginOf = {};
+    Store.all('users').forEach(u => { if (u.role === 'student' && u.refId) loginOf[u.refId] = u; });
+    let created = 0;
+    students.forEach(s => {
+      const roll = String(s.roll || '').trim();
+      if (!loginOf[s.id] && roll) {
+        Store.add('users', { username: roll, password: roll, role: 'student', refId: s.id, name: s.name });
+        created++;
+      }
+    });
+    const fullName = (s) => s.name || [s.firstName, s.middleName, s.lastName].filter(Boolean).join(' ').trim();
+    const rows = students
+      .filter(s => String(s.roll || '').trim())
+      .sort((a, b) => String(a.roll).localeCompare(String(b.roll), undefined, { numeric: true }))
+      .map(s => {
+        const u = loginOf[s.id];
+        return { name: fullName(s), roll: s.roll, phone: s.phone || '',
+                 username: (u && u.username) || s.roll, password: s.roll };
+      });
+    downloadXlsx({
+      title: 'Student Logins',
+      sheetName: 'Student Logins',
+      subtitle: 'User ID and password are the Student ID · ' + reportStamp(),
+      columns: [
+        { header: 'Name', key: 'name', width: 28 },
+        { header: 'Student ID', key: 'roll', width: 16 },
+        { header: 'Phone', key: 'phone', width: 14 },
+        { header: 'User ID', key: 'username', width: 16 },
+        { header: 'Password', key: 'password', width: 16 },
+      ],
+      rows,
+    });
+    toast(created ? `${created} new login(s) created — sheet downloaded.` : 'Sheet downloaded — all students already had logins.');
   }
 
   /* ==================== BULK UPLOAD (Excel / CSV) ====================
