@@ -7243,6 +7243,88 @@
     return me && me.department ? me.department : null;
   }
 
+  /* The register a class-teaching faculty sees: only the subjects assigned to
+     them (courses.facultyId === their id). They pick their class, date and
+     time — no course/department/faculty pickers, so nobody marks a class that
+     is not theirs. The session is keyed to the course, so re-opening the same
+     class and date edits the same register. */
+  function facultyAttendanceForm() {
+    const courses = Store.all('courses').filter(c => c.facultyId === user.refId)
+      .sort((a, b) => String(a.code || a.name || '').localeCompare(String(b.code || b.name || '')));
+    if (!courses.length) {
+      return `<div class="panel"><div class="panel-head"><h3>Register Attendance</h3></div>
+        <p class="empty">No classes are assigned to you yet. Your subjects are set by the
+        course coordinator or the Super Admin — once a class is assigned to you, it appears here.</p></div>`;
+    }
+    const html = `<div class="panel"><div class="panel-head"><h3>Register Attendance</h3>
+        <span class="pill blue">Your assigned classes</span></div>
+      <div class="att-form">
+        <label class="att-field"><span>Class / Subject</span>
+          <select id="atClass"><option value="">Select your class...</option>
+            ${courses.map(c => `<option value="${esc(c.id)}">${esc(courseLabel(c))} · ${esc(c.branch || '')} · Sem ${esc(c.semester)}</option>`).join('')}</select></label>
+        <label class="att-field"><span>Date of Class</span>
+          <input type="date" id="atDate" value="${today()}"></label>
+        <label class="att-field"><span>Start Time</span>
+          <input type="time" id="atTime" value="09:30"></label>
+        <label class="att-field"><span>End Time</span>
+          <input type="time" id="atEnd" value="10:30"></label>
+      </div>
+      <div id="attArea"><p class="empty">Choose your class above — the students on it load by themselves.</p></div>
+    </div>`;
+
+    viewAttendance.after = () => {
+      const val = (id) => ($('#' + id).value || '');
+      const renderArea = () => {
+        const area = $('#attArea');
+        const c = courses.find(x => x.id === val('atClass'));
+        if (!c) { area.innerHTML = `<p class="empty">Choose your class to load the students.</p>`; return; }
+        if (!val('atDate')) { area.innerHTML = `<p class="empty">Choose the date of class.</p>`; return; }
+        const studs = studentsOfCourse(c).filter(s => (s.status || 'Active') === 'Active')
+          .sort((a, b) => String(a.roll || '').localeCompare(String(b.roll || ''), undefined, { numeric: true }));
+        if (!studs.length) { area.innerHTML = `<p class="empty">No active student is enrolled in this class.</p>`; return; }
+        const s0 = studs[0] || {};
+        const f = { type: 'Academic', course: s0.course || c.branch || '', batch: '',
+          semester: c.semester, department: c.branch || '', specialisation: '', paperCode: c.code || '',
+          facultyId: user.refId, date: val('atDate'), classTime: val('atTime'), endTime: val('atEnd') };
+        // re-open the register for this exact class + date + time, if one exists
+        const session = Store.all('attendance').find(a => String(a.courseId) === String(c.id)
+          && a.date === f.date && String(a.classTime || '') === String(f.classTime || ''));
+        const rec = session ? (session.records || {}) : {};
+        area.innerHTML = `<div class="att-head-row">
+            <strong>${studs.length} student(s)</strong>
+            <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
+            ${session ? `<span class="pill amber">Editing the register saved for this class</span>` : ''}
+          </div>
+          <div class="tbl-wrap"><table><thead><tr>
+            <th>#</th><th>Student Name</th><th>Roll No.</th><th>Attendance</th>
+          </tr></thead><tbody>${studs.map((st, i) => {
+            const v = rec[st.id] || 'P';
+            return `<tr><td>${i + 1}</td><td>${esc(st.name)}</td><td>${esc(st.roll)}</td>
+              <td><div class="att-toggle" data-sid="${st.id}">
+                <button type="button" class="toggle-btn p ${v === 'P' ? 'on' : ''}" data-v="P">Present</button>
+                <button type="button" class="toggle-btn a ${v === 'A' ? 'on' : ''}" data-v="A">Absent</button>
+              </div></td></tr>`;
+          }).join('')}</tbody></table></div>
+          <div class="form-actions"><button class="btn-primary" id="saveAtt">Save Attendance</button></div>`;
+        area.querySelectorAll('.att-toggle').forEach(grp => {
+          grp.querySelectorAll('.toggle-btn').forEach(btn => btn.onclick = () => {
+            grp.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('on'));
+            btn.classList.add('on');
+          });
+        });
+        $('#markAll').onclick = () => {
+          area.querySelectorAll('.att-toggle').forEach(grp => {
+            grp.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('on', b.dataset.v === 'P'));
+          });
+        };
+        $('#saveAtt').onclick = () => saveSession(f, session, area);
+      };
+      ['atClass', 'atDate', 'atTime', 'atEnd'].forEach(id => { $('#' + id).onchange = renderArea; });
+      renderArea();
+    };
+    return html;
+  }
+
   function viewAttendance() {
     // a monitoring role never gets the marking panel — it gets the overview
     if (readOnly()) return viewAttendanceOverview();
@@ -7250,6 +7332,9 @@
       return `<div class="panel"><p class="empty">Attendance entry is currently handled by
         the course coordinator. Ask the System Admin if you need it back.</p></div>`;
     }
+    // a class-teaching faculty marks only the classes assigned to them; the full
+    // class picker below is for the course coordinator and the Super Admin.
+    if (isFacultyRole(user.role)) return facultyAttendanceForm();
     const scopeDept = attendanceScopeDept();
     const roster = Store.all('students').filter(s => !scopeDept || s.branch === scopeDept);
 
