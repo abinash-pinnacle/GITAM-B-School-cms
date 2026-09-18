@@ -581,6 +581,7 @@
   function startLivePolling() {
     stopLivePolling();
     ntStart();            // the notification bell rides the same session
+    classReminderStart(); // and the pre-class reminder for faculty
     liveSig = dataSignature();
     liveServerSig = undefined;
     livePollTimer = setInterval(async () => {
@@ -625,7 +626,63 @@
   }
   function stopLivePolling() {
     ntStop();
+    classReminderStop();
     if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+  }
+
+  /* ---------- pre-class reminder ----------
+     A faculty gets a pop-up about five minutes before each timetable period —
+     the subject, the room and the class — so they are never caught out. It runs
+     off the timetable already on the client, checked once a minute; each period
+     alerts once a day. */
+  let classReminderTimer = null;
+  const CLASS_ALERTED = new Set();
+  function classReminderStart() {
+    classReminderStop();
+    if (!user || !isFacultyRole(user.role)) return;
+    try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (e) { /* ignore */ }
+    classReminderTick();
+    classReminderTimer = setInterval(classReminderTick, 60000);
+  }
+  function classReminderStop() {
+    if (classReminderTimer) { clearInterval(classReminderTimer); classReminderTimer = null; }
+  }
+  function classReminderTick() {
+    if (!user || !isFacultyRole(user.role)) return;
+    const todayName = dayNameOffset(0);
+    const dateKey = today();
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    facultyTimetableSlots().filter(t => t.day === todayName).forEach(t => {
+      const lead = slotTimes(t)[0] - nowMin;      // minutes until the class starts
+      if (lead < 0 || lead > 5) return;           // only inside the five-minute window
+      const key = dateKey + '|' + t.courseId + '|' + slotTimes(t)[0];
+      if (CLASS_ALERTED.has(key)) return;
+      CLASS_ALERTED.add(key);
+      classReminderPopup(slotClassInfo(t), lead);
+    });
+  }
+  function classReminderPopup(info, lead) {
+    let host = document.getElementById('classReminder');
+    if (!host) { host = document.createElement('div'); host.id = 'classReminder'; document.body.appendChild(host); }
+    const when = lead <= 0 ? 'now' : 'in ' + lead + ' min';
+    const el = document.createElement('div');
+    el.className = 'class-reminder';
+    el.innerHTML = `<div class="cr-head">${ic('clock')}<b>Your class ${esc(when)}</b>
+        <button type="button" class="cr-x" aria-label="Dismiss">&times;</button></div>
+      <div class="cr-subj">${esc(info.name)}${info.code ? ` <small>(${esc(info.code)})</small>` : ''}</div>
+      <div class="cr-meta">${esc(info.time)}${info.room ? ` · Room ${esc(info.room)}` : ''}
+        ${info.where ? `<br>${esc(info.where)}` : ''}</div>
+      <button type="button" class="btn-sm btn-primary cr-go">Take Attendance</button>`;
+    host.appendChild(el);
+    el.querySelector('.cr-x').onclick = () => el.remove();
+    el.querySelector('.cr-go').onclick = () => { el.remove(); navigate('attendance'); };
+    setTimeout(() => el.remove(), 90000);
+    try {
+      if (window.Notification && Notification.permission === 'granted') {
+        new Notification('Your class ' + when, { body: info.name + (info.room ? ' · Room ' + info.room : '') + (info.time ? '\n' + info.time : '') });
+      }
+    } catch (e) { /* ignore */ }
   }
 
   /* ========================================================= */
@@ -2088,6 +2145,22 @@
     }, { present: 0, total: 0 });
     const avgAtt = tally.total ? Math.round(tally.present / tally.total * 100) : null;
 
+    /* How much of the term this faculty has taught: a class is one attendance
+       session, so "taken" is real; "planned" is the weekly timetable periods
+       across the term (Super Admin setting `termWeeks`, default 16). */
+    const termWeeks = parseInt((settingRow('termWeeks') || {}).value, 10) || 16;
+    const teachingDays = new Set(sessions.map(a => a.date).filter(Boolean)).size;
+    const perCourse = classes.map(c => {
+      const perWeek = Store.all('timetable').filter(t => t.courseId === c.id).length;
+      const taken = sessions.filter(a => a.courseId === c.id).length;
+      const planned = perWeek * termWeeks;
+      return { c, perWeek, taken, planned, remaining: planned ? Math.max(0, planned - taken) : null };
+    });
+    const weeklyPeriods = perCourse.reduce((s, x) => s + x.perWeek, 0);
+    const plannedTotal = weeklyPeriods * termWeeks;
+    const remainingTotal = plannedTotal ? Math.max(0, plannedTotal - sessions.length) : null;
+    const donePct = plannedTotal ? Math.min(100, Math.round(sessions.length / plannedTotal * 100)) : null;
+
     let html = `<div class="welcome-banner">
       <div class="wb-text">
         <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
@@ -2100,9 +2173,46 @@
     html += `<div class="stat-grid">
       ${statCard(ic('books'), classes.length, 'Assigned Classes')}
       ${statCard(ic('cap'), studentSet.length, 'My Students', 'c3')}
-      ${statCard(ic('check'), avgAtt === null ? '—' : avgAtt + '%', 'Avg. Class Attendance', avgAtt !== null && avgAtt < 75 ? 'c4' : 'c2')}
       ${statCard(ic('folder'), sessions.length, 'Classes Conducted')}
+      ${statCard(ic('calendar'), teachingDays, 'Teaching Days', 'c2')}
+      ${statCard(ic('clock'), remainingTotal === null ? '—' : remainingTotal, 'Classes Remaining', remainingTotal ? 'c4' : 'c3')}
+      ${statCard(ic('check'), avgAtt === null ? '—' : avgAtt + '%', 'Avg. Class Attendance', avgAtt !== null && avgAtt < 75 ? 'c4' : 'c2')}
     </div>`;
+
+    // ---- Next class + this week ----
+    const up = facultyUpcomingSlots(5);
+    const nextInfo = up.length ? slotClassInfo(up[0].slot) : null;
+    const perDay = DAYS.map(day => ({ day, full: DAY_FULL[day] || day, n: facultyTimetableSlots().filter(t => t.day === day).length }));
+    const maxDay = Math.max(1, ...perDay.map(d => d.n));
+    html += `<div class="dash-2col">
+      <div class="panel"><div class="panel-head"><h3>Next Class</h3></div>
+        ${nextInfo ? `<div class="next-class">
+          <div class="nc-when">${esc(up[0].label)} · ${esc(nextInfo.time)}</div>
+          <div class="nc-subj">${esc(nextInfo.name)}${nextInfo.code ? ` <small>(${esc(nextInfo.code)})</small>` : ''}</div>
+          <div class="nc-meta">${nextInfo.room ? `${ic('building')}Room ${esc(nextInfo.room)}` : ''}${nextInfo.where ? ` · ${esc(nextInfo.where)}` : ''}</div>
+          <div class="nc-next">${up.slice(1, 4).map(u => { const in2 = slotClassInfo(u.slot); return `<span>${esc(u.label)} ${esc(in2.time.split(' - ')[0])} — ${esc(in2.name)}${in2.room ? ` · Rm ${esc(in2.room)}` : ''}</span>`; }).join('')}</div>
+        </div>` : `<p class="empty">No upcoming periods on your timetable. Ask the admin to set your timetable.</p>`}
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Classes per Day</h3></div>
+        <div class="per-day">${perDay.map(d => `<div class="pd-row">
+          <span class="pd-day">${esc(d.day)}</span>
+          <span class="pd-bar"><b style="width:${Math.round(d.n / maxDay * 100)}%"></b></span>
+          <span class="pd-n">${d.n}</span></div>`).join('')}</div>
+      </div></div>`;
+
+    // ---- teaching progress this term ----
+    html += `<div class="panel"><div class="panel-head"><h3>Teaching Progress — this term</h3>
+        <span style="font-size:12.5px;color:var(--muted)">${sessions.length} conducted · ${teachingDays} day(s)${plannedTotal ? ` · ${remainingTotal} of ~${plannedTotal} remaining` : ''}</span></div>
+      ${plannedTotal ? `<div class="prog-line"><div class="prog-track"><b style="width:${donePct}%"></b></div>
+        <span class="prog-pct">${donePct}% done <small>(${weeklyPeriods} periods/week × ${termWeeks} weeks planned)</small></span></div>` : ''}
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>Code</th><th>Subject</th><th style="text-align:right">Per Week</th><th style="text-align:right">Taken</th><th style="text-align:right">Planned</th><th style="text-align:right">Remaining</th></tr></thead>
+        <tbody>${perCourse.length ? perCourse.map(x => `<tr>
+          <td class="mono">${esc(x.c.code)}</td><td>${esc(x.c.name)}</td>
+          <td style="text-align:right">${x.perWeek}</td><td style="text-align:right">${x.taken}</td>
+          <td style="text-align:right">${x.planned || '—'}</td>
+          <td style="text-align:right">${x.remaining === null ? '—' : x.remaining}</td></tr>`).join('')
+          : `<tr><td colspan="6" class="empty">No classes assigned yet.</td></tr>`}</tbody></table></div></div>`;
 
     html += `<div class="panel"><div class="panel-head"><h3>My Assigned Classes</h3>
       <span style="font-size:12.5px;color:var(--muted)">Assigned by the System Admin</span></div>`;
@@ -2374,6 +2484,39 @@
         .forEach(t => { if (out.length < limit) out.push({ slot: t, label }); });
     }
     return out;
+  }
+
+  /** every timetable period across a faculty's assigned classes */
+  function facultyTimetableSlots(fid) {
+    const ids = Store.all('courses').filter(c => c.facultyId === (fid || user.refId)).map(c => c.id);
+    return Store.all('timetable').filter(t => ids.includes(t.courseId));
+  }
+  /** this faculty's next periods, walking forward from now (today's finished periods skipped) */
+  function facultyUpcomingSlots(limit) {
+    const slots = facultyTimetableSlots();
+    if (!slots.length) return [];
+    const todayName = dayNameOffset(0), tomorrowName = dayNameOffset(1);
+    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+    let start = DAYS.indexOf(todayName); if (start < 0) start = 0;
+    const out = [];
+    for (let i = 0; i < DAYS.length && out.length < limit; i++) {
+      const day = DAYS[(start + i) % DAYS.length];
+      const label = day === todayName ? 'Today' : day === tomorrowName ? 'Tomorrow' : (DAY_FULL[day] || day);
+      slots.filter(t => t.day === day)
+        .filter(t => day !== todayName || slotTimes(t)[1] > nowMin)   // today: drop finished periods
+        .sort((a, b) => slotTimes(a)[0] - slotTimes(b)[0])
+        .forEach(t => { if (out.length < limit) out.push({ slot: t, label, day }); });
+    }
+    return out;
+  }
+  /** subject / room / where / faculty for a timetable slot, for cards and reminders */
+  function slotClassInfo(slot) {
+    const c = Store.find('courses', slot.courseId) || {};
+    return {
+      code: c.code || '', name: c.name || 'Class',
+      where: [c.branch, c.semester ? 'Sem ' + c.semester : '', 'Sec ' + (c.section || 'A')].filter(Boolean).join(' · '),
+      room: slot.room || '', time: slotTimeLabel(slot), faculty: facultyName(c.facultyId),
+    };
   }
 
   function studentDashboard() {
