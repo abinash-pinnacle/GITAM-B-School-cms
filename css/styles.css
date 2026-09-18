@@ -433,6 +433,27 @@ tbody tr:hover{background:#fafcff}
   border-top:1px dashed var(--border)}
 .ac-act{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer}
 .ac-act input{margin:0}
+/* Access Control — summary chips, granular bulk toolbar, unsaved badge */
+.ac-head{margin:0 0 10px;font-size:13px;color:var(--text)}
+.ac-summary{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
+.ac-chip{background:var(--surface-2,#f2f6fc);border:1px solid var(--border);border-radius:9px;
+  padding:6px 11px;min-width:64px;display:flex;flex-direction:column;line-height:1.15}
+.ac-chip b{font-size:16px;color:var(--primary,#123f8c)}
+.ac-chip span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+.ac-chip.hot b{color:var(--green,#1f9d57)}
+.ac-chip.muted{min-width:auto}
+.ac-chip.muted b{font-size:13px}
+.ac-chip.muted span{text-transform:none;letter-spacing:0;font-size:11.5px;margin-top:2px}
+.ac-tools-2{margin-top:-2px}
+.ac-tools-label{font-size:12px;color:var(--muted)}
+.ac-dirty{display:inline-flex;align-items:center;gap:5px;color:#b8860b;font-size:12.5px;
+  font-weight:600;margin-right:auto}
+.ac-dirty svg{width:14px;height:14px}
+.ac-note{font-size:12px;color:var(--muted);margin:10px 0 0}
+/* the two access-mode radios carry long descriptions — give them half the row
+   each so the text flows instead of wrapping a word at a time */
+.chk-grid.ac-src{grid-template-columns:1fr 1fr}
+.chk-grid.ac-src .chk{align-items:flex-start;line-height:1.35}
 
 /* The employee list has ten columns; below a wide desktop it cannot show them
    all without running off the edge. The three that are also on the employee's

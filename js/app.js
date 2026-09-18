@@ -15518,7 +15518,8 @@
       const ceilActs = ceiling[key];
       const acts = current[key] || [];
       const lvl = own ? accessLevelOf(acts, ceilActs) : 'none';
-      return `<div class="ac-mod" data-mod="${key}" data-name="${esc(label.toLowerCase())}">
+      const actNames = ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([, al]) => al.toLowerCase()).join(' ');
+      return `<div class="ac-mod" data-mod="${key}" data-name="${esc(label.toLowerCase() + ' ' + actNames)}">
         <div class="ac-mod-head">
           <span class="ac-mod-name">${esc(label)}</span>
           <select class="ac-level" data-mod="${key}">
@@ -15542,20 +15543,36 @@
         <label class="chk"><input type="radio" name="access" value="restricted" ${own ? 'checked' : ''}>
           <b>Custom Access</b> — you decide, module by module (wins over the role)</label>
       </div>`}
+      <div class="ac-summary" id="acSummary"></div>
       <div class="ac-tools">
-        <input class="search-box" id="acSearch" placeholder="Search modules...">
-        <button type="button" class="btn-outline btn-sm" id="acFull">All Full</button>
-        <button type="button" class="btn-outline btn-sm" id="acView">All View</button>
-        <button type="button" class="btn-outline btn-sm" id="acNone">All None</button>
+        <input class="search-box" id="acSearch" placeholder="Search modules or actions...">
+        <button type="button" class="btn-outline btn-sm" data-bulk="full">All Full</button>
+        <button type="button" class="btn-outline btn-sm" data-bulk="view">All View</button>
+        <button type="button" class="btn-outline btn-sm" data-bulk="none">Clear All</button>
+        ${alwaysCustom ? '' : `<button type="button" class="btn-outline btn-sm" data-bulk="role">Reset to Role Default</button>`}
+      </div>
+      <div class="ac-tools ac-tools-2">
+        <span class="ac-tools-label">Add to accessible modules:</span>
+        <button type="button" class="btn-outline btn-sm" data-bulkact="add">+ Create</button>
+        <button type="button" class="btn-outline btn-sm" data-bulkact="edit">+ Edit</button>
+        <button type="button" class="btn-outline btn-sm" data-bulkact="delete">+ Delete</button>
+        <button type="button" class="btn-outline btn-sm" data-bulkact="approve">+ Approve</button>
+        <button type="button" class="btn-outline btn-sm" data-bulkact="export">+ Export</button>
       </div>
       <div id="acList" class="ac-list">${rows.map(modRow).join('')}</div>
-      <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Full Access includes every action the
-        module supports, Delete included. No Access hides the module — menu, pages and API.</p>
+      <p class="ac-note">Full Access includes every action the module supports, Delete included. No Access hides the
+        module — menu, pages and API. The server re-checks every choice.</p>
       <div class="form-actions">
+        <span id="acDirty" class="ac-dirty hidden">${ic('alert')}Unsaved changes</span>
         <button type="button" class="btn-outline" id="cx">Cancel</button>
-        <button type="submit" class="btn-primary">Save Changes</button></div></form>`, true);
+        <button type="submit" class="btn-primary" id="acSave">Save Changes</button></div></form>`, true);
 
-    $('#cx').onclick = closeModal;
+    let dirty = false;
+    const markDirty = () => { dirty = true; const d = $('#acDirty'); if (d) d.classList.remove('hidden'); };
+    const guardedClose = () => { if (!dirty || confirm('Discard unsaved changes?')) closeModal(); };
+    $('#cx').onclick = guardedClose;
+    const mc = $('#modalClose'); if (mc) mc.onclick = guardedClose;
+    const currentLevel = (mod) => (document.querySelector(`.ac-level[data-mod="${mod}"]`) || {}).value || 'none';
     const setLevel = (mod, lvl) => {
       const sel = document.querySelector(`.ac-level[data-mod="${mod}"]`); if (sel) sel.value = lvl;
       const box = document.querySelector(`.ac-actions[data-mod="${mod}"]`);
@@ -15565,28 +15582,68 @@
         box.querySelectorAll('[data-p]').forEach(cb => { cb.checked = acts.includes(cb.dataset.p.split(':')[1]); });
       }
     };
-    document.querySelectorAll('.ac-level').forEach(sel => sel.onchange = () => setLevel(sel.dataset.mod, sel.value));
+    const updateSummary = () => {
+      const box = $('#acSummary'); if (!box) return;
+      const active = alwaysCustom || document.querySelector('[name="access"][value="restricted"]').checked;
+      if (!active) {
+        box.innerHTML = `<div class="ac-chip muted"><b>Role Default</b><span>following the ${esc(roleLbl)} role — switch to Custom Access to edit</span></div>`;
+        return;
+      }
+      const granted = {};
+      rows.forEach(([k]) => { granted[k] = actsForLevel(currentLevel(k), ceiling[k], k); });
+      const cnt = (a) => rows.filter(([k]) => granted[k].includes(a)).length;
+      const accessible = rows.filter(([k]) => granted[k].length).length;
+      const custom = rows.filter(([k]) => currentLevel(k) === 'custom').length;
+      const chip = (label, val, hot) => `<div class="ac-chip ${hot ? 'hot' : ''}"><b>${val}</b><span>${label}</span></div>`;
+      box.innerHTML = chip('Modules', rows.length) + chip('Accessible', accessible, true)
+        + chip('View', cnt('view')) + chip('Create', cnt('add')) + chip('Edit', cnt('edit'))
+        + chip('Delete', cnt('delete')) + chip('Approve', cnt('approve')) + chip('Export', cnt('export'))
+        + chip('Custom', custom);
+    };
+    document.querySelectorAll('.ac-level').forEach(sel => sel.onchange = () => {
+      setLevel(sel.dataset.mod, sel.value); markDirty(); updateSummary();
+    });
     document.querySelectorAll('.ac-actions [data-p]').forEach(cb => cb.onchange = () => {
       const [mod, a] = cb.dataset.p.split(':');
       if (a !== 'view' && cb.checked) { const v = document.querySelector(`[data-p="${mod}:view"]`); if (v) v.checked = true; }
       if (a === 'view' && !cb.checked) document.querySelectorAll(`.ac-actions[data-mod="${mod}"] [data-p]`).forEach(x => { x.checked = false; });
+      markDirty(); updateSummary();
     });
-    $('#acFull').onclick = () => rows.forEach(([k]) => setLevel(k, 'full'));
-    $('#acView').onclick = () => rows.forEach(([k]) => setLevel(k, 'view'));
-    $('#acNone').onclick = () => rows.forEach(([k]) => setLevel(k, 'none'));
+    // add one action across every module that supports it and is already accessible
+    const bulkAct = (act) => {
+      rows.forEach(([k]) => {
+        if (!ceiling[k].includes(act)) return;
+        if (!actsForLevel(currentLevel(k), ceiling[k], k).length) return;
+        setLevel(k, 'custom');
+        const cb = document.querySelector(`[data-p="${k}:${act}"]`); if (cb) cb.checked = true;
+        const v = document.querySelector(`[data-p="${k}:view"]`); if (v) v.checked = true;
+      });
+      markDirty(); updateSummary();
+    };
+    function syncSrc() {
+      if (alwaysCustom) { updateSummary(); return; }
+      const custom = document.querySelector('[name="access"][value="restricted"]').checked;
+      $('#acList').style.opacity = custom ? '1' : '.5';
+      document.querySelectorAll('#acList select, #acList input, .ac-tools [data-bulk], .ac-tools [data-bulkact]')
+        .forEach(el => { el.disabled = !custom; });
+      updateSummary();
+    }
+    document.querySelectorAll('[data-bulk]').forEach(b => b.onclick = () => {
+      if (b.dataset.bulk === 'role') {
+        const rd = document.querySelector('[name="access"][value="full"]');
+        if (rd) { rd.checked = true; syncSrc(); } markDirty(); return;
+      }
+      rows.forEach(([k]) => setLevel(k, b.dataset.bulk)); markDirty(); updateSummary();
+    });
+    document.querySelectorAll('[data-bulkact]').forEach(b => b.onclick = () => bulkAct(b.dataset.bulkact));
     $('#acSearch').oninput = () => {
       const q = ($('#acSearch').value || '').trim().toLowerCase();
       document.querySelectorAll('#acList .ac-mod').forEach(el =>
         el.classList.toggle('hidden', !!q && !el.dataset.name.includes(q)));
     };
-    const syncSrc = () => {
-      if (alwaysCustom) return;
-      const custom = document.querySelector('[name="access"][value="restricted"]').checked;
-      $('#acList').style.opacity = custom ? '1' : '.5';
-      document.querySelectorAll('#acList select, #acList input, #acFull, #acView, #acNone').forEach(el => { el.disabled = !custom; });
-    };
-    if (!alwaysCustom) document.querySelectorAll('[name="access"]').forEach(r => r.onchange = syncSrc);
+    if (!alwaysCustom) document.querySelectorAll('[name="access"]').forEach(r => r.onchange = () => { syncSrc(); markDirty(); });
     syncSrc();
+    updateSummary();
 
     $('#f').onsubmit = (e) => {
       e.preventDefault();
