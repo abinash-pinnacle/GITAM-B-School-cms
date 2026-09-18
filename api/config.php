@@ -118,7 +118,7 @@ const COLLECTIONS = [
        modules listed in permissions). Absent means full — every account that
        existed before this was added keeps working. */
     'users'      => ['id', 'username', 'password', 'role', 'refId', 'name',
-                     'access', 'permissions', 'status', 'email', 'phone', 'empId',
+                     'access', 'permissions', 'pageDeny', 'status', 'email', 'phone', 'empId',
                      /* The id of the login this account reports to — the one
                         relationship the org tree, ticket routing and escalation
                         all walk. Validated against REPORTS_TO in index.php and
@@ -322,7 +322,7 @@ const JSON_FIELDS = [
     'attendance' => ['records'],
     /* Decoded on the way out and encoded on the way in, so the app works with
        objects and the database keeps one column per tab. */
-    'users'      => ['permissions'],
+    'users'      => ['permissions', 'pageDeny'],
     'roles'      => ['permissions'],
     'submissions' => ['data'],
     'auditlog'   => ['changes'],

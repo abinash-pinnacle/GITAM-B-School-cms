@@ -828,6 +828,7 @@
       const m = moduleOfView(key);
       if (!m) return true;
       if (!can(m, 'view')) return false;
+      if (pageDenied(key)) return false;
       const req = VIEW_MIN_ACTION[key];
       return !req || can(req[0], req[1]);
     };
@@ -968,6 +969,7 @@
     if (view === 'facprofile') return canView('faculty');
     const m = moduleOfView(view);
     if (m && !can(m, 'view')) return false;
+    if (pageDenied(view)) return false;
     const req = VIEW_MIN_ACTION[view];
     if (req && !can(req[0], req[1])) return false;
     /* A custom-access account is checked against the admin menu — the one that
@@ -1217,11 +1219,34 @@
     }
     return VIEW_LABEL_EXTRA[v] || (typeof TITLES !== 'undefined' && TITLES[v]) || v;
   }
-  /** the pages (menu items) a permission module governs, as labels */
-  function modulePages(moduleKey) {
+  /** is this view a direct navigable menu item (so it can be toggled on its own) */
+  function viewIsMenuPage(v) {
+    for (const role of Object.keys(MENU)) {
+      for (const r of (MENU[role] || [])) {
+        if (r[0] === v) return true;
+        if (r[0] === NAV_GROUP && r[3] === v) return true;
+      }
+    }
+    return false;
+  }
+  /** the toggleable pages (real menu items) a permission module governs */
+  function moduleMenuPages(moduleKey) {
     const mod = MODULES.find(m => m[0] === moduleKey);
     if (!mod) return [];
-    return [...new Set((mod[2] || []).map(viewLabel).filter(Boolean))];
+    const seen = new Set(); const out = [];
+    (mod[2] || []).forEach(v => {
+      if (!viewIsMenuPage(v) || seen.has(v)) return;
+      seen.add(v); out.push({ view: v, label: viewLabel(v) });
+    });
+    return out;
+  }
+  /* A page the Super Admin has switched off for this one account, inside a
+     module it otherwise has. Only custom-access accounts carry a page list; the
+     Super Admin is never narrowed. Mirrors the menu and the route guard. */
+  function pageDenied(view) {
+    if (!user || user.role === 'admin' || !hasCustomAccess(user)) return false;
+    const d = user.pageDeny;
+    return Array.isArray(d) && d.includes(view);
   }
   /** may the signed-in account do this on the page it is looking at? */
   function canHere(action) {
@@ -15552,23 +15577,26 @@
     const roleLbl = roleLabel(u.role);
     const alwaysCustom = u.role === SUBADMIN_ROLE;  // the Admin has no role default
     const current = own || {};
+    const denied = Array.isArray(u.pageDeny) ? u.pageDeny : [];  // pages switched off for this account
 
     const modRow = ([key, label]) => {
       const ceilActs = ceiling[key];
       const acts = current[key] || [];
       const lvl = own ? accessLevelOf(acts, ceilActs) : 'none';
       const actNames = ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([, al]) => al.toLowerCase()).join(' ');
-      const pages = modulePages(key);
-      return `<div class="ac-mod" data-mod="${key}" data-name="${esc((label + ' ' + actNames + ' ' + pages.join(' ')).toLowerCase())}">
+      const pages = moduleMenuPages(key);
+      const off = lvl === 'none';
+      return `<div class="ac-mod" data-mod="${key}" data-name="${esc((label + ' ' + actNames + ' ' + pages.map(p => p.label).join(' ')).toLowerCase())}">
         <div class="ac-mod-head">
-          <div class="ac-mod-title">
-            <span class="ac-mod-name">${esc(label)}</span>
-            ${pages.length ? `<span class="ac-mod-inc"><b>Pages:</b> ${pages.map(esc).join(' · ')}</span>` : ''}
-          </div>
+          <span class="ac-mod-name">${esc(label)}</span>
           <select class="ac-level" data-mod="${key}">
             ${ACCESS_LEVELS.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
         </div>
+        ${pages.length ? `<div class="ac-mod-pages ${off ? 'ac-disabled' : ''}" data-mod="${key}">
+          <span class="ac-pages-label">Pages:</span>
+          ${pages.map(p => `<label class="ac-page"><input type="checkbox" data-page="${esc(p.view)}" data-pmod="${key}" ${off ? 'disabled' : ''} ${denied.includes(p.view) ? '' : 'checked'}> ${esc(p.label)}</label>`).join('')}
+        </div>` : ''}
         <div class="ac-actions ${lvl === 'custom' ? '' : 'hidden'}" data-mod="${key}">
           ${ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([a, al]) =>
             `<label class="ac-act"><input type="checkbox" data-p="${key}:${a}" ${acts.includes(a) ? 'checked' : ''}> ${al}</label>`).join('')}
@@ -15624,6 +15652,12 @@
         const acts = actsForLevel(lvl, ceiling[mod], mod);
         box.querySelectorAll('[data-p]').forEach(cb => { cb.checked = acts.includes(cb.dataset.p.split(':')[1]); });
       }
+      // pages only matter when the module is reachable; grey them out at No Access
+      const pbox = document.querySelector(`.ac-mod-pages[data-mod="${mod}"]`);
+      if (pbox) {
+        pbox.classList.toggle('ac-disabled', lvl === 'none');
+        pbox.querySelectorAll('input').forEach(cb => { cb.disabled = lvl === 'none'; });
+      }
     };
     const updateSummary = () => {
       const box = $('#acSummary'); if (!box) return;
@@ -15652,6 +15686,7 @@
       if (a === 'view' && !cb.checked) document.querySelectorAll(`.ac-actions[data-mod="${mod}"] [data-p]`).forEach(x => { x.checked = false; });
       markDirty(); updateSummary();
     });
+    document.querySelectorAll('.ac-mod-pages [data-page]').forEach(cb => cb.onchange = () => { markDirty(); });
     // add one action across every module that supports it and is already accessible
     const bulkAct = (act) => {
       rows.forEach(([k]) => {
@@ -15693,19 +15728,26 @@
       const custom = alwaysCustom || document.querySelector('[name="access"][value="restricted"]').checked;
       const before = userPerms(u);
       if (!custom) {
-        Store.update('users', uid, { access: 'full', permissions: {} });
+        Store.update('users', uid, { access: 'full', permissions: {}, pageDeny: [] });
         auditPerms('user', u.username, u.name || u.username, before, {});
         closeModal(); toast(`${u.name || u.username} follows ${roleLbl}.`);
         if (after) after(); else render();
         return;
       }
       const perms = {};
+      const pageDeny = [];
       rows.forEach(([k]) => {
         const lvl = document.querySelector(`.ac-level[data-mod="${k}"]`).value;
         const acts = actsForLevel(lvl, ceiling[k], k);
-        if (acts.length) perms[k] = acts;
+        if (acts.length) {
+          perms[k] = acts;
+          // record any page the admin switched off inside a module that is granted
+          document.querySelectorAll(`.ac-mod-pages[data-mod="${k}"] [data-page]`).forEach(cb => {
+            if (!cb.checked) pageDeny.push(cb.dataset.page);
+          });
+        }
       });
-      Store.update('users', uid, { access: 'restricted', permissions: perms });
+      Store.update('users', uid, { access: 'restricted', permissions: perms, pageDeny });
       auditPerms('user', u.username, u.name || u.username, before || {}, perms);
       closeModal(); toast(`${u.name || u.username}: ${plural(Object.keys(perms).length, 'module')} granted.`);
       if (after) after(); else render();
