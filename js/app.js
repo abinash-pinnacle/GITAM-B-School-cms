@@ -697,7 +697,7 @@
       [NAV_SECTION,'','Helpdesk'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
       [NAV_SECTION,'','System'],
-      ['accounts',ic('key'),'Login Accounts'], ['usersettings',ic('settings'),'User Management'],
+      ['usersettings',ic('key'),'User Management'],
       ['roles',ic('shield'),'Roles & Permissions'], ['adminmgmt',ic('users'),'Admin Management'],
       EMP_ATTENDANCE,
     ],
@@ -1262,7 +1262,7 @@
     myattendance:'My Attendance', myresults:'My Results', myfees:'My Fees',
     myplacement:'My Placement', profile:'My Profile',
     events:'Events', issueBook:'Issue a Book', returnBook:'Return a Book', reports:'Library Reports',
-    accounts:'Login Accounts',
+    accounts:'User Management',
     finstudents:'Student Fees — Overview', assets:'Asset List', fixedfee:'Fixed Fee Structure',
     semfee:'Semester-wise Fee', feecollect:'Fee Collection', payments:'Payment History',
     pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Accountants',
@@ -1353,7 +1353,7 @@
       myplacement: viewMyPlacement, profile: viewProfile,
       attrecords: viewAttendanceRecords,
       events: viewEvents, issueBook: viewIssueBook, returnBook: viewReturnBook, reports: viewLibraryReports,
-      accounts: viewAccounts,
+      accounts: viewUserSettings,
       finstudents: viewFinStudents, assets: viewAssets, fixedfee: viewFixedFee, semfee: viewSemFee,
       feecollect: viewFeeCollection, payments: viewPayments, pendingfees: viewPendingFees,
       finreports: viewFinReports, accountants: viewAccountants,
@@ -15086,6 +15086,7 @@
           <button class="btn-outline btn-sm" id="usRoles">Roles</button>
           <button class="btn-outline btn-sm" id="usAudit">Audit Log</button>
           <button class="btn-outline btn-sm" id="usTrash">Trash</button>
+          <button class="btn-outline btn-sm" id="usPrint">Print List</button>
           <button class="btn-outline btn-sm" id="usBackup">Download Backup</button>
           <button class="btn-primary" id="usAdd">+ Create User</button>
         </div></div>
@@ -15096,7 +15097,8 @@
       <div id="usStats" class="stat-grid" style="margin:0 0 16px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Name</th><th>User ID</th><th>Role</th><th>Status</th><th>Access</th><th>Modules</th><th>Actions</th>
-      </tr></thead><tbody id="usBody"></tbody></table></div><div id="usPager"></div></div>`;
+      </tr></thead><tbody id="usBody"></tbody></table></div><div id="usPager"></div></div>
+      <div id="usMissing"></div>`;
 
     viewUserSettings.after = () => {
       let page = 1;
@@ -15145,6 +15147,7 @@
               <button class="btn-sm btn-outline" data-view="${u.id}">Access</button>
               ${noAccessCtl ? '' : `<button class="btn-sm btn-edit" data-perm="${u.id}">Access Control</button>`}
               <button class="btn-sm btn-outline" data-edit="${u.id}">Edit</button>
+              <button class="btn-sm btn-outline" data-reset="${u.id}" title="Set password back to ${DEFAULT_PASSWORD}">Reset</button>
               ${u.id === user.id ? '' : `<button class="btn-sm btn-outline" data-toggle="${u.id}">${
                 active ? 'Deactivate' : 'Activate'}</button>
               <button class="btn-sm btn-del" data-del="${u.id}">Delete</button>`}
@@ -15161,8 +15164,53 @@
           b.onclick = () => toggleUser(b.dataset.toggle, draw));
         $('#usBody').querySelectorAll('[data-del]').forEach(b =>
           b.onclick = () => delConfirm('users', b.dataset.del, 'login account', draw));
+        $('#usBody').querySelectorAll('[data-reset]').forEach(b =>
+          b.onclick = () => resetPassword(b.dataset.reset, draw));
         $('#usPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#usPager'), rows.length, page, (p) => page = p, draw);
+        drawMissing();
+      };
+
+      /* People on record (student / faculty / staff) who still have no way to
+         sign in — create their login right here, so the old Login Accounts page
+         is no longer needed. */
+      const drawMissing = () => {
+        const users = Store.all('users');
+        const has = (role, refId) => users.some(u => u.role === role && u.refId === refId);
+        const list = [
+          ...Store.all('students').filter(s => !has('student', s.id))
+            .map(s => ({ role: 'student', refId: s.id, name: s.name, uid: s.roll })),
+          ...Store.all('faculty').filter(f => !has('faculty', f.id))
+            .map(f => ({ role: 'faculty', refId: f.id, name: f.name, uid: f.empId })),
+          ...Store.all('accountants').filter(a => !has('accountant', a.id))
+            .map(a => ({ role: 'accountant', refId: a.id, name: a.name, uid: a.empId })),
+          ...Store.all('centerheads').filter(c => !has('center_head', c.id))
+            .map(c => ({ role: 'center_head', refId: c.id, name: c.name, uid: c.empId })),
+          ...Store.all('placementofficers').filter(p => !has('placement_officer', p.id))
+            .map(p => ({ role: 'placement_officer', refId: p.id, name: p.name, uid: p.empId })),
+        ];
+        const box = $('#usMissing');
+        if (!box) return;
+        box.innerHTML = !list.length ? '' :
+          `<div class="panel"><div class="panel-head"><h3>Without a Login (${list.length})</h3>
+            <button class="btn-primary" id="usMakeAll">Create All Logins</button></div>
+          <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px">These people are on record but cannot
+            sign in yet. Creating a login sets the password to their ID (or ${DEFAULT_PASSWORD} if they have none).</p>
+          <div class="tbl-wrap"><table><thead><tr><th>Role</th><th>Name</th><th>Suggested User ID</th><th>Actions</th></tr></thead>
+          <tbody>${list.map((r, i) => `<tr>
+            <td><span class="pill ${ROLE_PILL[r.role] || 'blue'}">${esc(roleLabel(r.role))}</span></td>
+            <td>${esc(r.name)}</td><td class="mono">${esc(r.uid || '—')}</td>
+            <td><button class="btn-sm btn-edit" data-mk="${i}">+ Create Login</button></td></tr>`).join('')}
+          </tbody></table></div></div>`;
+        const make = (r) => {
+          const uid = freeUsername(r.uid || String(r.name || 'user').replace(/\s+/g, ''));
+          Store.add('users', { username: uid, password: r.uid || DEFAULT_PASSWORD, role: r.role, refId: r.refId, name: r.name });
+        };
+        box.querySelectorAll('[data-mk]').forEach(b => b.onclick = () => {
+          make(list[+b.dataset.mk]); toast('Login created.'); draw();
+        });
+        const all = $('#usMakeAll');
+        if (all) all.onclick = () => { list.forEach(make); toast(list.length + ' logins created.'); draw(); };
       };
       ['usQ', 'usRole', 'usStatus'].forEach(id => {
         const el = $('#' + id);
@@ -15172,6 +15220,7 @@
       $('#usRoles').onclick = () => navigate('roles');
       $('#usAudit').onclick = () => auditModal();
       $('#usTrash').onclick = () => trashModal();
+      $('#usPrint').onclick = () => printAccounts();
       /* A file the admin can keep off the server. Read-only on the server side;
          here it is turned into a download and nothing more. */
       $('#usBackup').onclick = async (e) => {
