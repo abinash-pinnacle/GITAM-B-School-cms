@@ -7300,6 +7300,35 @@
       seen.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
   }
 
+  /* What was taught in the class, logged with the register. The same fields and
+     readers serve both the faculty register and the full coordinator/admin one. */
+  const TEACHING_METHODS = ['Lecture', 'Practical', 'Tutorial', 'Revision', 'Seminar', 'Other'];
+  function teachingLogFields(sess) {
+    sess = sess || {};
+    const modules = [...new Set(Store.all('attendance').map(a => a.module).filter(Boolean))];
+    return `<label class="att-field"><span>Module / Unit</span>
+        <input id="atModule" list="atModuleList" value="${esc(sess.module || '')}" placeholder="e.g. Module 2 — Consumer Behaviour">
+        <datalist id="atModuleList">${modules.map(m => `<option value="${esc(m)}">`).join('')}</datalist></label>
+      <label class="att-field"><span>Topic Taught</span>
+        <input id="atTopic" value="${esc(sess.topic || '')}" placeholder="what was covered in this class"></label>
+      <label class="att-field"><span>Teaching Method</span>
+        <select id="atMethod">${TEACHING_METHODS.map(m => `<option ${m === (sess.teachingMethod || 'Lecture') ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      <label class="att-field att-full"><span>Remarks <small style="font-weight:400;color:var(--muted)">(optional)</small></span>
+        <input id="atRemarks" value="${esc(sess.remarks || '')}" placeholder="anything worth noting about this class"></label>`;
+  }
+  function readTeachingLog() {
+    const v = (id) => (($('#' + id) || {}).value || '').trim();
+    return { module: v('atModule'), topic: v('atTopic'),
+             teachingMethod: v('atMethod') || 'Lecture', remarks: v('atRemarks') };
+  }
+  /** put a saved session's teaching log back into the fields when a class is re-opened */
+  function fillTeachingLog(sess) {
+    const set = (id, val) => { const el = $('#' + id); if (el) el.value = val || ''; };
+    set('atModule', sess && sess.module); set('atTopic', sess && sess.topic);
+    set('atRemarks', sess && sess.remarks);
+    const m = $('#atMethod'); if (m) m.value = (sess && sess.teachingMethod) || 'Lecture';
+  }
+
   /** A coordinator runs their own department; everyone else who can mark, marks. */
   function attendanceScopeDept() {
     if (!user || user.role !== 'course_coordinator') return null;
@@ -7332,6 +7361,7 @@
           <input type="time" id="atTime" value="09:30"></label>
         <label class="att-field"><span>End Time</span>
           <input type="time" id="atEnd" value="10:30"></label>
+        ${teachingLogFields()}
       </div>
       <div id="attArea"><p class="empty">Choose your class above — the students on it load by themselves.</p></div>
     </div>`;
@@ -7354,6 +7384,7 @@
         const session = Store.all('attendance').find(a => String(a.courseId) === String(c.id)
           && a.date === f.date && String(a.classTime || '') === String(f.classTime || ''));
         const rec = session ? (session.records || {}) : {};
+        if (session) fillTeachingLog(session);   // reopening a saved register shows its topic log
         area.innerHTML = `<div class="att-head-row">
             <strong>${studs.length} student(s)</strong>
             <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
@@ -7437,6 +7468,7 @@
           <input type="time" id="atTime" value="09:30"></label>
         <label class="att-field"><span>End Time</span>
           <input type="time" id="atEnd" value="10:30"></label>
+        ${teachingLogFields()}
       </div>
       <div id="attArea"><p class="empty">Choose the class above — the students on it load by themselves.</p></div>
     </div>`;
@@ -7508,6 +7540,7 @@
         // an existing register for the same class and date is reopened, not duplicated
         const session = existingSession(f);
         const rec = session ? (session.records || {}) : {};
+        if (session) fillTeachingLog(session);   // reopening a saved register shows its topic log
         area.innerHTML = `<div class="att-head-row">
             <strong>${studs.length} student(s)</strong>
             <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
@@ -7593,10 +7626,11 @@
     const course = Store.all('courses').find(c =>
       c.branch === f.department && String(c.semester) === String(f.semester) &&
       (c.code === f.paperCode || c.name === (paper && paper.name)));
-    const row = Object.assign({}, f, {
+    const row = Object.assign({}, f, readTeachingLog(), {
       paperName: paper ? (paper.name || '') : '',
       courseId: course ? course.id : (session ? session.courseId : ''),
       markedBy: user.id, records,
+      savedAt: String(Math.floor(Date.now() / 1000)),
     });
     if (session) Store.update('attendance', session.id, row);
     else Store.add('attendance', row);
@@ -7628,6 +7662,8 @@
           paperName: a.paperName || (course && course.name) || '—',
           faculty: fac ? fac.name : (course && Store.find('faculty', course.facultyId)
             ? Store.find('faculty', course.facultyId).name : '—'),
+          module: a.module || '—', topic: a.topic || '—', teachingMethod: a.teachingMethod || '—',
+          remarks: a.remarks || '',
           studentName: st.name || '—', roll: st.roll || '—',
           status: status === 'A' ? 'Absent' : 'Present',
         });
@@ -7648,6 +7684,9 @@
         { header: 'Specialisation', key: 'specialisation', width: 20 },
         { header: 'Paper Code', key: 'paperCode', width: 12 },
         { header: 'Paper Name', key: 'paperName', width: 30 },
+        { header: 'Module', key: 'module', width: 20 },
+        { header: 'Topic Taught', key: 'topic', width: 28 },
+        { header: 'Method', key: 'teachingMethod', width: 12 },
         { header: 'Faculty', key: 'faculty', width: 22 },
         { header: 'Date', key: 'date', width: 12 },
         { header: 'Time', key: 'classTime', width: 16 },
@@ -7680,7 +7719,7 @@
       <div id="arStats" class="stat-grid" style="margin:6px 0 18px"></div>
       <div class="tbl-wrap"><table><thead><tr>
         <th>Course</th><th>Batch</th><th>Semester</th><th>Department</th><th>Specialisation</th>
-        <th>Paper Code</th><th>Paper Name</th><th>Faculty</th><th>Date</th><th>Time</th>
+        <th>Paper Code</th><th>Paper Name</th><th>Module</th><th>Topic Taught</th><th>Method</th><th>Faculty</th><th>Date</th><th>Time</th>
         <th>Student Name</th><th>Roll No.</th><th>Status</th>
       </tr></thead><tbody id="arBody"></tbody></table></div><div id="arPager"></div></div>`;
 
@@ -7712,10 +7751,11 @@
           <td>${esc(r.course)}</td><td>${esc(r.batch)}</td><td>${esc(String(r.semester))}</td>
           <td>${esc(r.department)}</td><td>${esc(r.specialisation)}</td>
           <td class="mono">${esc(r.paperCode)}</td><td>${esc(r.paperName)}</td>
+          <td>${esc(r.module)}</td><td>${esc(r.topic)}</td><td>${esc(r.teachingMethod)}</td>
           <td>${esc(r.faculty)}</td><td>${esc(r.date)}</td><td>${esc(r.classTime)}</td>
           <td>${esc(r.studentName)}</td><td class="mono">${esc(r.roll)}</td>
           <td><span class="pill ${r.status === 'Present' ? 'green' : 'red'}">${r.status}</span></td>
-        </tr>`).join('') : `<tr><td colspan="13" class="empty">No attendance has been registered yet.</td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="16" class="empty">No attendance has been registered yet.</td></tr>`;
         $('#arPager').innerHTML = pagerHtml(rows.length, page);
         bindPager($('#arPager'), rows.length, page, (p) => page = p, draw);
       };

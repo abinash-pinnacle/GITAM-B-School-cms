@@ -736,6 +736,7 @@ a.install-btn:hover{background:var(--primary-light)}
 .att-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 14px;
   padding:4px 0 16px;border-bottom:1px solid var(--line);margin-bottom:16px}
 .att-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.att-field.att-full{grid-column:1/-1}
 .att-field > span{font-size:12px;font-weight:600;color:var(--muted)}
 .att-field select,.att-field input{width:100%;padding:9px 11px;border:1px solid var(--line);
   border-radius:8px;background:#fbfcfe;font-size:13.5px}
