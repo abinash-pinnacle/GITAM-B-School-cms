@@ -683,7 +683,7 @@
       [NAV_SECTION,'','Assets'],
       ['assets',ic('building'),'Asset List'],
       [NAV_SECTION,'','Requisitions'],
-      ['requisitions',ic('package'),'Requisitions'],
+      ['requisitions',ic('books'),'Book Requisitions'],
       [NAV_SECTION,'','Library'],
       ['library',ic('book'),'Library'], ['reports',ic('chart'),'Library Reports'],
       [NAV_SECTION,'','Placement Cell'],
@@ -725,17 +725,17 @@
       ['semfee',ic('calendar'),'Semester-wise Fee'], ['payments',ic('receipt'),'Payment History'],
       ['pendingfees',ic('pending'),'Pending Fees'],
       [NAV_SECTION,'','Monitoring'],
-      ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'], ['chreports',ic('trending-up'),'Reports'],
+      ['assets',ic('building'),'Assets'], ['library',ic('book'),'Library'],
       // the one thing this role decides rather than just watches
-      ['requisitions',ic('package'),'Approvals'],
-      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], ['orgtree',ic('users'),'Organization Tree'],
+      ['requisitions',ic('books'),'Book Requisitions'],
+      ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['allreports',ic('chart'),'Reports'], ['orgtree',ic('users'),'Organization Tree'],
       ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     accountant: [
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
       ['finstudents',ic('cap'),'Student List'], ['assets',ic('building'),'Asset List'],
       ['fixedfee',ic('clipboard'),'Fixed Fee'], ['semfee',ic('calendar'),'Semester-wise Fee'], ['feecollect',ic('money'),'Fee Collection'],
-      ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('package'),'Requisitions'],
+      ['payments',ic('receipt'),'Payment History'], ['pendingfees',ic('pending'),'Pending Fees'], ['requisitions',ic('books'),'Book Requisitions'],
       ['finreports',ic('trending-up'),'Reports'], ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
     ],
     faculty: [
@@ -1266,9 +1266,9 @@
     finstudents:'Student List — Fee Overview', assets:'Asset List', fixedfee:'Fixed Fee Structure',
     semfee:'Semester-wise Fee', feecollect:'Fee Collection', payments:'Payment History',
     pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Accountants',
-    bookreq:'Book Requisition', requisitions:'Requisitions & Approvals',
+    bookreq:'Book Requisition', requisitions:'Book Requisitions',
     batchsem:'Batch Semester Update',
-    departments:'Departments', branches:'Specialisations', chreports:'Reports',
+    departments:'Departments', branches:'Specialisations', chreports:'Reports', allreports:'Reports',
     syllabus:'Subjects — Semester wise',
     plstudents:'Students — Placement', companies:'Companies', drives:'Placement Drives',
     applications:'Applications', interviews:'Interviews', placements:'Selections & Placements',
@@ -1279,7 +1279,7 @@
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
     dashboard: 'Center Head Dashboard', attendance: 'Attendance Overview',
-    requisitions: 'Requisition Approvals',
+    requisitions: 'Book Requisitions', allreports: 'Reports',
     events: 'Notifications & Events', library: 'Library Overview',
     finstudents: 'Student List — Fee Overview', assets: 'Asset Register',
     profile: 'My Profile',
@@ -1360,6 +1360,7 @@
       bookreq: viewBookRequisition, requisitions: viewRequisitions,
       batchsem: viewBatchSemester,
       departments: viewDepartments, branches: viewBranches, chreports: viewCenterReports,
+      allreports: viewReports,
       plstudents: viewPlacementStudents, companies: viewCompanies, drives: viewDrives,
       applications: viewApplications, interviews: viewInterviews, placements: viewPlacements,
       offers: viewOffers, plcalendar: viewPlacementCalendar, plreports: viewPlacementReports,
@@ -11551,12 +11552,12 @@
     const html = `<div class="ro-banner"><span class="ro-badge">APPROVAL CHAIN</span>
         <span>${esc(note)}</span></div>
       <div id="rvStats" class="stat-grid"></div>
-      <div class="panel"><div class="panel-head"><h3>Requisition Requests</h3>
+      <div class="panel"><div class="panel-head"><h3>Book Requisitions</h3>
         <div class="panel-tools">${exportButtons('rv')}</div></div>
       <div class="panel-tools fin-filters">
         <input class="search-box" id="rvQ" placeholder="Search item / requester / vendor...">
         <select class="filter-sel" id="rvType"><option value="">All Types</option>
-          <option value="Goods">Goods (Faculty)</option><option value="Book">Books (Librarian)</option></select>
+          <option value="Book">Books (Librarian)</option></select>
         <select class="filter-sel" id="rvStatus"><option value="">All Statuses</option>${optionsFrom(REQ_STATUS)}</select>
         <select class="filter-sel" id="rvPriority"><option value="">All Priorities</option>${optionsFrom(REQ_PRIORITIES)}</select>
         <label class="days-field">From <input class="filter-sel" id="rvFrom" type="date"></label>
@@ -12707,7 +12708,7 @@
         a date range, print, PDF and Excel export.</p></div>`;
 
     viewDashboard.after = () => {
-      $('#chGoReports').onclick = () => navigate('chreports');
+      $('#chGoReports').onclick = () => navigate('allreports');
       const reqBtn = $('#chGoReqs');
       if (reqBtn) reqBtn.onclick = () => navigate('requisitions');
     };
@@ -13137,6 +13138,36 @@
       bindFinFilters('cr', [], () => { page = 1; draw(); });
       bindExports('cr', build);
       draw();
+    };
+    return html;
+  }
+
+  /* One "Reports" menu for everything: the college reports (student, faculty,
+     fees, assets, library, …) and the hierarchy Reports Centre (tickets,
+     approvals, team, marks, …), switched with a toggle so nothing needs two
+     separate menu entries. Both existing views are reused as-is. */
+  function viewReports() {
+    const html = `<div class="fin-tabs rep-switch" style="margin-bottom:14px">
+        <button class="fin-tab active" data-rmode="college">College Reports</button>
+        <button class="fin-tab" data-rmode="hier">Hierarchy Reports</button>
+      </div><div id="repHost"></div>`;
+    viewReports.after = () => {
+      const host = $('#repHost');
+      if (!host) return;
+      const show = (mode) => {
+        document.querySelectorAll('.rep-switch [data-rmode]').forEach(t =>
+          t.classList.toggle('active', t.dataset.rmode === mode));
+        if (mode === 'hier') {
+          host.innerHTML = viewReportsCentre();
+          if (viewReportsCentre.after) viewReportsCentre.after();
+        } else {
+          host.innerHTML = viewCenterReports();
+          if (viewCenterReports.after) viewCenterReports.after();
+        }
+      };
+      document.querySelectorAll('.rep-switch [data-rmode]').forEach(b =>
+        b.onclick = () => show(b.dataset.rmode));
+      show('college');
     };
     return html;
   }
