@@ -826,7 +826,10 @@
       if (key === 'approvals' || key === 'hreports') return !!uObj && uObj.role !== 'student';
       if (ALWAYS_ALLOWED.includes(key)) return true;
       const m = moduleOfView(key);
-      return m ? can(m, 'view') : true;
+      if (!m) return true;
+      if (!can(m, 'view')) return false;
+      const req = VIEW_MIN_ACTION[key];
+      return !req || can(req[0], req[1]);
     };
     items = items.filter(([key, , , url]) =>
       key === NAV_SECTION || key === NAV_LINK
@@ -965,6 +968,8 @@
     if (view === 'facprofile') return canView('faculty');
     const m = moduleOfView(view);
     if (m && !can(m, 'view')) return false;
+    const req = VIEW_MIN_ACTION[view];
+    if (req && !can(req[0], req[1])) return false;
     /* A custom-access account is checked against the admin menu — the one that
        carries every module's pages — so a page in a module it was granted opens,
        even though its own role's menu never listed that page. */
@@ -1041,6 +1046,17 @@
      pages that are about themselves. */
   const ALWAYS_ALLOWED = ['dashboard', 'profile', 'myattendance', 'myresults', 'myfees',
                           'mybooks', 'myplacement', 'tickets', 'approvals', 'hreports'];
+  /* Administrative operations that live inside a shared module but should NOT
+     come free with a plain View grant. Batch Semester Update and the Admissions
+     desk both sit in the Students module, so without this a "Students: View"
+     grant would also hand them over. They take a stronger action instead:
+     Semester Update needs Manage, Admission Forms needs Import — the actions the
+     roles that own them (Super Admin, Academic Head, the admissions desk) already
+     hold, and a teaching grant of View+Add+Edit does not. */
+  const VIEW_MIN_ACTION = {
+    batchsem: ['students', 'manage'],
+    submissions: ['students', 'import'],
+  };
   /** the organisation tree is for the leadership roles (mirrors ORG_TREE_ROLES on the server) */
   const ORG_TREE_ROLES = ['admin', 'subadmin', 'center_head', 'academic_head'];
 
