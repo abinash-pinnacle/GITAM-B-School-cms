@@ -426,7 +426,10 @@ tbody tr:hover{background:#fafcff}
 .ac-mod{padding:10px 12px;border-bottom:1px solid var(--border)}
 .ac-mod:last-child{border-bottom:0}
 .ac-mod-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ac-mod-title{display:flex;flex-direction:column;gap:3px;min-width:0}
 .ac-mod-name{font-weight:600;font-size:13.5px}
+.ac-mod-inc{font-size:11px;color:var(--muted);line-height:1.35}
+.ac-mod-inc b{color:var(--text);font-weight:600}
 .ac-level{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);
   font:inherit;font-size:13px;font-weight:500;min-width:130px}
 .ac-actions{display:flex;flex-wrap:wrap;gap:10px 16px;margin:10px 2px 2px;padding-top:10px;

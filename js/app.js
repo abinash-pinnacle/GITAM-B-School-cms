@@ -1027,7 +1027,7 @@
                                                     ['fees', 'fixedfees', 'payments']],
     ['assets',       'Assets',                      ['assets'],
                                                     ['assets']],
-    ['requisitions', 'Requisitions',                ['requisitions', 'goodsreq', 'bookreq'],
+    ['requisitions', 'Requisitions',                ['requisitions', 'bookreq'],
                                                     ['requisitions']],
     ['library',      'Library',                     ['library', 'issueBook', 'returnBook', 'reports'],
                                                     ['books', 'issues']],
@@ -1199,6 +1199,29 @@
   function moduleOfView(viewKey) {
     const owner = MODULES.find(([, , views]) => views.includes(viewKey));
     return owner ? owner[0] : null;
+  }
+  /* A short label for a view key, for listing the pages a permission module
+     covers in Access Control. Prefers the built-in menu's own name. */
+  const VIEW_LABEL_EXTRA = {
+    stuprofile: 'Student Profile', facprofile: 'Employee Profile', attrecords: 'Attendance Records',
+    accountants: 'Accountants', placementofficers: 'Placement Officers', submissions: 'Admission Forms',
+    batchsem: 'Semester Update', finstudents: 'Student Fees', issueBook: 'Issue a Book',
+    returnBook: 'Return a Book', reports: 'Library Reports', assignments: 'Assignments',
+  };
+  function viewLabel(v) {
+    for (const role of Object.keys(MENU)) {
+      for (const r of (MENU[role] || [])) {
+        if (r[0] === v && r[2]) return r[2];
+        if (r[0] === NAV_GROUP && r[3] === v && r[2]) return r[2];
+      }
+    }
+    return VIEW_LABEL_EXTRA[v] || (typeof TITLES !== 'undefined' && TITLES[v]) || v;
+  }
+  /** the pages (menu items) a permission module governs, as labels */
+  function modulePages(moduleKey) {
+    const mod = MODULES.find(m => m[0] === moduleKey);
+    if (!mod) return [];
+    return [...new Set((mod[2] || []).map(viewLabel).filter(Boolean))];
   }
   /** may the signed-in account do this on the page it is looking at? */
   function canHere(action) {
@@ -15535,9 +15558,13 @@
       const acts = current[key] || [];
       const lvl = own ? accessLevelOf(acts, ceilActs) : 'none';
       const actNames = ACTIONS.filter(([a]) => ceilActs.includes(a)).map(([, al]) => al.toLowerCase()).join(' ');
-      return `<div class="ac-mod" data-mod="${key}" data-name="${esc(label.toLowerCase() + ' ' + actNames)}">
+      const pages = modulePages(key);
+      return `<div class="ac-mod" data-mod="${key}" data-name="${esc((label + ' ' + actNames + ' ' + pages.join(' ')).toLowerCase())}">
         <div class="ac-mod-head">
-          <span class="ac-mod-name">${esc(label)}</span>
+          <div class="ac-mod-title">
+            <span class="ac-mod-name">${esc(label)}</span>
+            ${pages.length ? `<span class="ac-mod-inc"><b>Pages:</b> ${pages.map(esc).join(' · ')}</span>` : ''}
+          </div>
           <select class="ac-level" data-mod="${key}">
             ${ACCESS_LEVELS.map(([v, l]) => `<option value="${v}" ${v === lvl ? 'selected' : ''}>${l}</option>`).join('')}
           </select>

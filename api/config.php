@@ -537,7 +537,7 @@ const MODULES = [
                       'views' => ['assets'],
                       'write' => ['assets']],
     'requisitions' => ['label' => 'Requisitions',
-                      'views' => ['requisitions', 'goodsreq', 'bookreq'],
+                      'views' => ['requisitions', 'bookreq'],
                       'write' => ['requisitions']],
     'library'     => ['label' => 'Library',
                       'views' => ['library', 'issueBook', 'returnBook', 'reports'],
