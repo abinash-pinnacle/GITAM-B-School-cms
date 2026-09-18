@@ -3286,6 +3286,21 @@ function api_create(string $col): void
 function api_update(string $col, string $id): void
 {
     $d = body();
+    /* A submitted register locks after the editing window: nobody but the Super
+       Admin edits it directly after that — a correction request is the way. The
+       approved correction is applied by the server itself, not through here. */
+    if ($col === 'attendance') {
+        $me = current_user();
+        if ((string) ($me['role'] ?? '') !== 'admin') {
+            $ex = fetch_one('SELECT ' . qi('savedAt') . ' AS savedAt FROM ' . qi('attendance')
+                . ' WHERE ' . qi('id') . ' = ?', [$id]);
+            $savedAt = $ex ? (int) ($ex['savedAt'] ?? 0) : 0;
+            if ($savedAt > 0 && time() > $savedAt + attendance_lock_hours() * 3600) {
+                send_json(['error' => 'locked',
+                    'message' => 'This attendance is locked. Raise a correction request to change it.'], 423);
+            }
+        }
+    }
     // read before writing, so the line can say what it changed from
     $before = in_array($col, AUDITED, true)
         ? (fetch_one('SELECT * FROM ' . qi($col) . ' WHERE ' . qi('id') . ' = ?', [$id]) ?: [])
@@ -4548,6 +4563,7 @@ const APPROVAL_TYPES = [
     'Training / Placement Activity' => ['rank' => 60, 'authority' => 'Dean T&P'],
     'Purchase / Expense'            => ['rank' => 80, 'authority' => 'Center Head'],
     'Policy / Exception'            => ['rank' => 90, 'authority' => 'Admin'],
+    'Attendance Correction'         => ['rank' => 100, 'authority' => 'Super Admin'],
     'Other'                         => ['rank' => 80, 'authority' => 'Center Head'],
 ];
 const APPROVAL_STAGE_ACTIONS = ['assigned', 'forwarded', 'escalated', 'resubmitted'];
@@ -4564,6 +4580,11 @@ const APPROVAL_CHAINS = [
 /** the authority a request needs to be decided, given who raised it */
 function ap_required_rank(string $requesterRole, string $type): int
 {
+    // an attendance correction always climbs the full chain to the Super Admin,
+    // regardless of the requester's usual fixed ladder
+    if ($type === 'Attendance Correction') {
+        return AUTH_RANK['admin'];
+    }
     if (isset(APPROVAL_CHAINS[$requesterRole])) {
         $chain = APPROVAL_CHAINS[$requesterRole];
         return ap_rank((string) end($chain));
@@ -4574,11 +4595,55 @@ function ap_required_rank(string $requesterRole, string $type): int
 /** the label shown for who gives the final decision, given who raised it */
 function ap_authority_label(string $requesterRole, string $type): string
 {
+    if ($type === 'Attendance Correction') {
+        return 'Super Admin';
+    }
     if (isset(APPROVAL_CHAINS[$requesterRole])) {
         $chain = APPROVAL_CHAINS[$requesterRole];
         return role_title((string) end($chain));
     }
     return (string) (APPROVAL_TYPES[$type]['authority'] ?? 'Center Head');
+}
+
+/** hours after which a submitted register locks (Super Admin setting, default 24) */
+function attendance_lock_hours(): int
+{
+    $v = (int) setting_value('attendanceLockHours', '24');
+    return $v > 0 ? $v : 24;
+}
+
+/* Apply an approved attendance-correction to the register and log it. The
+   original marks stay in the approval + audit trail, so nothing is lost. */
+function ap_apply_attendance_correction(array $a, array $me, int $now): ?string
+{
+    $data = $a['linkData'] ?? [];
+    if (is_string($data)) {
+        $data = json_decode($data, true) ?: [];
+    }
+    $attId = (string) ($data['attendanceId'] ?? '');
+    $sid   = (string) ($data['studentId'] ?? '');
+    $newSt = (string) ($data['newStatus'] ?? '');
+    if ($attId === '' || $sid === '' || !in_array($newSt, ['P', 'A'], true)) {
+        return null;
+    }
+    $row = fetch_one('SELECT * FROM ' . qi('attendance') . ' WHERE ' . qi('id') . ' = ?', [$attId]);
+    if (!$row) {
+        return null;
+    }
+    $records = json_decode((string) ($row['records'] ?? '{}'), true);
+    if (!is_array($records)) {
+        $records = [];
+    }
+    $old = (string) ($records[$sid] ?? '');
+    $records[$sid] = $newSt;
+    run_sql('UPDATE ' . qi('attendance') . ' SET ' . qi('records') . ' = ? WHERE ' . qi('id') . ' = ?',
+        [json_encode($records), $attId]);
+    audit('attendance-correction-applied', 'attendance', $attId,
+        (string) ($data['studentName'] ?? $sid),
+        'Attendance corrected via ' . (string) $a['approvalNo'] . ' — ' . ($old === 'A' ? 'Absent' : 'Present')
+            . ' → ' . ($newSt === 'A' ? 'Absent' : 'Present') . ' (approved by ' . tk_name($me) . ')',
+        ['from' => $old, 'to' => $newSt, 'student' => $sid, 'approval' => $a['approvalNo']]);
+    return $old . '→' . $newSt;
 }
 
 function ap_rank(string $role): int
@@ -4701,6 +4766,11 @@ function api_ap_meta(): void
     $role = (string) $me['role'];
     $types = [];
     foreach (APPROVAL_TYPES as $name => $d) {
+        // Attendance Correction is raised only from the attendance register (it
+        // carries the record it changes), never picked by hand here
+        if ($name === 'Attendance Correction') {
+            continue;
+        }
         // authority and rank follow who is asking, so a fixed-ladder role sees
         // its own final approver (the Center Head), not the type's default
         $types[] = ['name' => $name, 'authority' => ap_authority_label($role, $name),
@@ -4797,6 +4867,36 @@ function api_ap_create(): void
     if ($from !== '' && $to !== '' && $to < $from) {
         tk_bad('The end date is before the start date.');
     }
+    // an attendance correction carries the register + student it will change; it
+    // is validated here so nothing bogus enters the approval chain
+    $linkType = ''; $linkData = [];
+    if ($type === 'Attendance Correction') {
+        $ld = $b['linkData'] ?? null;
+        if (is_string($ld)) { $ld = json_decode($ld, true); }
+        $attId = is_array($ld) ? (string) ($ld['attendanceId'] ?? '') : '';
+        $sid   = is_array($ld) ? (string) ($ld['studentId'] ?? '') : '';
+        $newSt = is_array($ld) ? (string) ($ld['newStatus'] ?? '') : '';
+        if ($attId === '' || $sid === '' || !in_array($newSt, ['P', 'A'], true)) {
+            tk_bad('The correction is missing the class, student or new status.');
+        }
+        $att = fetch_one('SELECT * FROM ' . qi('attendance') . ' WHERE ' . qi('id') . ' = ?', [$attId]);
+        if (!$att) {
+            tk_bad('That attendance register no longer exists.');
+        }
+        $records = json_decode((string) ($att['records'] ?? '{}'), true) ?: [];
+        if (!array_key_exists($sid, $records)) {
+            tk_bad('That student is not in this register.');
+        }
+        $old = (string) $records[$sid];
+        if ($old === $newSt) {
+            tk_bad('The requested status is the same as the current one.');
+        }
+        $linkType = 'attendance-correction';
+        $linkData = ['attendanceId' => $attId, 'studentId' => $sid,
+                     'studentName' => (string) ($ld['studentName'] ?? ''),
+                     'subject' => (string) ($ld['subject'] ?? ''), 'date' => (string) ($ld['date'] ?? ''),
+                     'oldStatus' => $old, 'newStatus' => $newSt];
+    }
     $meRow = tk_user((string) $me['id']) ?? $me;
     $approver = ap_manager_of($meRow);
     if (!$approver) {
@@ -4816,6 +4916,7 @@ function api_ap_create(): void
         'status' => 'Pending', 'level' => '1', 'createdAt' => (string) $now, 'updatedAt' => (string) $now,
         'decidedAt' => '', 'decidedBy' => '', 'decidedByName' => '', 'finalRemarks' => '',
         'attachments' => tk_clean_attachments($b['attachments'] ?? []),
+        'linkType' => $linkType, 'linkData' => $linkData,
     ];
     $own = !db()->inTransaction();
     if ($own) {
@@ -4983,6 +5084,11 @@ function api_ap_action(): void
                 break;
             default:
                 tk_bad('Unknown action.');
+        }
+        // a linked record (e.g. an attendance correction) is applied the moment
+        // the request reaches its final approval — inside this same transaction
+        if ($a['status'] === 'Approved' && (string) ($a['linkType'] ?? '') === 'attendance-correction') {
+            ap_apply_attendance_correction($a, $me, $now);
         }
         $a['updatedAt'] = (string) $now;
         upsert('approvals', $a);

@@ -7329,6 +7329,90 @@
     const m = $('#atMethod'); if (m) m.value = (sess && sess.teachingMethod) || 'Lecture';
   }
 
+  /* ---------- attendance lock + correction ----------
+     A submitted register locks after the editing window (Super Admin setting,
+     default 24h). Within the window it is SUBMITTED and still editable; after it,
+     LOCKED — only a correction request (approved Academic Head → Center Head →
+     Super Admin) changes it. The Super Admin can always edit directly. The server
+     enforces all of this again on its own. */
+  function attendanceLockHours() {
+    const row = settingRow('attendanceLockHours');
+    const n = row ? parseInt(row.value, 10) : 24;
+    return n > 0 ? n : 24;
+  }
+  function sessionLock(session) {
+    const savedAt = session ? parseInt(session.savedAt || 0, 10) : 0;
+    if (!savedAt) return { submitted: false, locked: false };
+    const lockAt = savedAt + attendanceLockHours() * 3600;
+    return { submitted: true, locked: Math.floor(Date.now() / 1000) > lockAt, savedAt, lockAt };
+  }
+  const attWhen = (epoch) => new Date(epoch * 1000).toLocaleString('en-IN',
+    { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  function attLockBadge(lock) {
+    if (!lock.submitted) return '';
+    return lock.locked
+      ? `<span class="pill red">LOCKED</span> <small style="color:var(--muted)">submitted ${esc(attWhen(lock.savedAt))}</small>`
+      : `<span class="pill amber">SUBMITTED</span> <small style="color:var(--muted)">editable until ${esc(attWhen(lock.lockAt))}</small>`;
+  }
+  /* the read-only register a locked class shows, with a per-student correction ask */
+  function attCorrectionTable(session, studs, rec, subject, dateStr) {
+    return `<div class="att-locked-note">This attendance is <b>locked</b>. To change it, request a correction —
+        it is approved by the <b>Academic Head → Center Head → Super Admin</b>.</div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th>#</th><th>Student Name</th><th>Roll No.</th><th>Status</th><th></th>
+      </tr></thead><tbody>${studs.map((st, i) => {
+        const v = rec[st.id] || 'P';
+        return `<tr><td>${i + 1}</td><td>${esc(st.name)}</td><td>${esc(st.roll)}</td>
+          <td><span class="pill ${v === 'A' ? 'red' : 'green'}">${v === 'A' ? 'Absent' : 'Present'}</span></td>
+          <td><button type="button" class="btn-sm btn-outline" data-correct="${esc(st.id)}">Request Correction</button></td></tr>`;
+      }).join('')}</tbody></table></div>`;
+  }
+  function wireCorrections(area, session, studs, rec, subject, dateStr) {
+    area.querySelectorAll('[data-correct]').forEach(b => b.onclick = () => {
+      const st = studs.find(s => s.id === b.dataset.correct);
+      if (st) requestAttendanceCorrection(session, st, rec[st.id] || 'P', subject, dateStr);
+    });
+  }
+  function requestAttendanceCorrection(session, student, currentStatus, subject, dateStr) {
+    const cur = currentStatus === 'A' ? 'Absent' : 'Present';
+    const want = currentStatus === 'A' ? 'P' : 'A';
+    openModal('Request Attendance Correction', `<form id="f">
+      <p class="ac-sub"><b>${esc(student.name)}</b> · ${esc(student.roll || '')} · ${esc(subject)} · ${esc(dateStr)}</p>
+      <div class="form-grid">
+        <div class="field"><label>Current Status</label><input value="${esc(cur)}" readonly></div>
+        <div class="field"><label>Requested Status</label>
+          <select name="newStatus">
+            <option value="P" ${want === 'P' ? 'selected' : ''}>Present</option>
+            <option value="A" ${want === 'A' ? 'selected' : ''}>Absent</option></select></div>
+        <div class="field full"><label>Reason</label>
+          <textarea name="reason" rows="4" required placeholder="why this attendance should be changed"></textarea></div>
+      </div>
+      <div class="tk-route-hint">${ic('arrow-right')}Goes to the <b>Academic Head</b>, then the <b>Center Head</b>,
+        then final approval by the <b>Super Admin</b>. The register updates automatically once approved.</div>
+      <div class="form-actions"><button type="button" class="btn-outline" id="cx">Cancel</button>
+        <button type="submit" class="btn-primary">Submit Request</button></div></form>`, true);
+    $('#cx').onclick = closeModal;
+    $('#f').onsubmit = async (e) => {
+      e.preventDefault();
+      const v = formData(e.target);
+      if (v.newStatus === currentStatus) { toast('Choose a status different from the current one.', 'err'); return; }
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const res = await Store.apCreate({
+        type: 'Attendance Correction',
+        title: `Attendance correction — ${student.name} (${subject}, ${dateStr})`,
+        details: v.reason,
+        linkType: 'attendance-correction',
+        linkData: { attendanceId: session.id, studentId: student.id, studentName: student.name,
+                    subject, date: dateStr, newStatus: v.newStatus },
+      });
+      btn.disabled = false;
+      if (res.error) { toast(res.error, 'err'); return; }
+      closeModal();
+      toast(`${res.approvalNo} submitted — with ${res.approverName || 'the Academic Head'}.`);
+      navigate('approvals::' + res.id);
+    };
+  }
+
   /** A coordinator runs their own department; everyone else who can mark, marks. */
   function attendanceScopeDept() {
     if (!user || user.role !== 'course_coordinator') return null;
@@ -7385,10 +7469,19 @@
           && a.date === f.date && String(a.classTime || '') === String(f.classTime || ''));
         const rec = session ? (session.records || {}) : {};
         if (session) fillTeachingLog(session);   // reopening a saved register shows its topic log
+        const lock = sessionLock(session);
+        const subject = c.name || c.code || 'Class';
+        // a locked register is read-only for the faculty — corrections go for approval
+        if (lock.locked && user.role !== 'admin') {
+          area.innerHTML = `<div class="att-head-row"><strong>${studs.length} student(s)</strong>${attLockBadge(lock)}</div>`
+            + attCorrectionTable(session, studs, rec, subject, f.date);
+          wireCorrections(area, session, studs, rec, subject, f.date);
+          return;
+        }
         area.innerHTML = `<div class="att-head-row">
             <strong>${studs.length} student(s)</strong>
             <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
-            ${session ? `<span class="pill amber">Editing the register saved for this class</span>` : ''}
+            ${session ? attLockBadge(lock) || '<span class="pill amber">Editing the register saved for this class</span>' : ''}
           </div>
           <div class="tbl-wrap"><table><thead><tr>
             <th>#</th><th>Student Name</th><th>Roll No.</th><th>Attendance</th>
@@ -7439,6 +7532,11 @@
           <label class="switch-label" title="Turn off to leave attendance entry to the course coordinator">
             <input type="checkbox" id="facAttToggle" ${facultyAttendanceOn() ? 'checked' : ''}>
             <span>Faculty can mark attendance</span>
+          </label>
+          <label class="switch-label" title="Hours after submitting before a register locks; a correction request is then required">
+            <span>Lock after</span>
+            <input type="number" id="attLockHrs" min="1" max="720" value="${attendanceLockHours()}" style="width:62px">
+            <span>hours</span>
           </label></div>` : ''}</div>
       <div class="att-form">
         <label class="att-field"><span>Type</span>
@@ -7541,10 +7639,19 @@
         const session = existingSession(f);
         const rec = session ? (session.records || {}) : {};
         if (session) fillTeachingLog(session);   // reopening a saved register shows its topic log
+        const lock = sessionLock(session);
+        const subject = f.paperName || f.paperCode || f.course || 'Class';
+        // a locked register is read-only except for the Super Admin — others correct
+        if (lock.locked && user.role !== 'admin') {
+          area.innerHTML = `<div class="att-head-row"><strong>${studs.length} student(s)</strong>${attLockBadge(lock)}</div>`
+            + attCorrectionTable(session, studs, rec, subject, f.date);
+          wireCorrections(area, session, studs, rec, subject, f.date);
+          return;
+        }
         area.innerHTML = `<div class="att-head-row">
             <strong>${studs.length} student(s)</strong>
             <button type="button" class="btn-outline btn-sm" id="markAll"> Mark All Present</button>
-            ${session ? `<span class="pill amber">Editing the register saved for this class</span>` : ''}
+            ${session ? attLockBadge(lock) || '<span class="pill amber">Editing the register saved for this class</span>' : ''}
           </div>
           <div class="tbl-wrap"><table><thead><tr>
             <th>#</th><th>Student Name</th><th>Roll No.</th><th>Attendance</th>
@@ -7588,6 +7695,14 @@
           toast(e.target.checked
             ? 'Faculty can now mark attendance.'
             : 'Attendance entry is now with the course coordinator only.');
+        };
+        $('#attLockHrs').onchange = (e) => {
+          const hrs = Math.max(1, Math.min(720, parseInt(e.target.value, 10) || 24));
+          e.target.value = hrs;
+          const row = settingRow('attendanceLockHours');
+          if (row) Store.update('settings', row.id, { value: String(hrs) });
+          else Store.add('settings', { name: 'attendanceLockHours', value: String(hrs) });
+          toast(`Attendance locks ${hrs} hour(s) after submit.`);
         };
       }
       refill('course');

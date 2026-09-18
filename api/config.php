@@ -314,7 +314,10 @@ const COLLECTIONS = [
                      'requiredRank', 'requestedBy', 'requestedByName', 'requestedByRole', 'requestedReportsTo',
                      'currentApprover', 'currentApproverName', 'currentApproverRole', 'assignedAt',
                      'status', 'level', 'createdAt', 'updatedAt', 'decidedAt', 'decidedBy', 'decidedByName',
-                     'finalRemarks', 'attachments'],
+                     'finalRemarks', 'attachments',
+                     /* an optional link to the record this approval acts on, e.g. an
+                        attendance correction that is applied to the register on final approval */
+                     'linkType', 'linkData'],
     'approvalsteps' => ['id', 'approvalId', 'action', 'fromUser', 'fromName', 'fromRole', 'toUser', 'toName',
                         'toRole', 'status', 'remarks', 'level', 'at', 'assignedAt', 'completedAt', 'seconds'],
 ];
@@ -338,7 +341,7 @@ const JSON_FIELDS = [
     'admissions' => STAFF_JSON,
     'tickets'    => ['attachments'],
     'ticketcomments' => ['attachment'],
-    'approvals'  => ['attachments'],
+    'approvals'  => ['attachments', 'linkData'],
 ];
 
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
