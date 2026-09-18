@@ -2797,6 +2797,23 @@ function row_problem(string $col, array $d, ?string $id = null, bool $issued = f
         }
     }
 
+    /* A login username must be unique — the schema does not enforce it, so this
+       is what stops a second row from ever sharing one (the state that made a
+       real account un-signable with an "ambiguous" error). Checked here so every
+       write path — form, import, Login Sheet — is covered at once. */
+    if ($col === 'users' && array_key_exists('username', $d)) {
+        $uname = trim((string) $d['username']);
+        if ($uname !== '') {
+            $skip = trim((string) ($id ?? ($d['id'] ?? '')));
+            $clash = fetch_one('SELECT ' . qi('id') . ' AS id, ' . qi('name') . ' AS name FROM ' . qi('users')
+                . ' WHERE LOWER(' . qi('username') . ') = LOWER(?) AND ' . qi('id') . ' <> ?', [$uname, $skip]);
+            if ($clash) {
+                return 'The user id "' . $uname . '" is already in use'
+                    . (trim((string) ($clash['name'] ?? '')) !== '' ? ' by ' . $clash['name'] : '') . '.';
+            }
+        }
+    }
+
     // the emergency contact, which lives inside the health blob
     $contactBad = contact_problem($col, $d, $id);
     if ($contactBad !== null) {
@@ -3050,13 +3067,31 @@ function api_login(): void
                    'message' => 'This account has been deactivated. Contact the administrator.'], 403);
     }
     if (count($rows) > 1) {
-        // The UI rejects a duplicate username, but nothing in the schema
-        // enforces it. Refuse rather than silently granting whichever role
-        // happened to come back first.
-        send_json([
-            'error'   => 'ambiguous',
-            'message' => 'More than one account uses this username. Contact the administrator.',
-        ], 409);
+        /* The UI rejects a duplicate username, but nothing in the schema enforces
+           it, so two rows can end up sharing one. When those rows are the SAME
+           person (same role, and the same staff/student record or the same name)
+           they are just a duplicate of one account — sign in as the first rather
+           than lock the person out. Only refuse when the matched rows are
+           genuinely different people, which is the case the warning is for. */
+        $first = $rows[0];
+        $samePerson = true;
+        foreach ($rows as $r) {
+            $sameRole = strtolower((string) ($r['role'] ?? '')) === strtolower((string) ($first['role'] ?? ''));
+            $sameRef  = trim((string) ($r['refId'] ?? '')) !== '' && (string) $r['refId'] === (string) $first['refId'];
+            $sameName = strtolower(trim((string) ($r['name'] ?? ''))) === strtolower(trim((string) ($first['name'] ?? '')))
+                        && trim((string) ($first['name'] ?? '')) !== '';
+            if (!($sameRole && ($sameRef || $sameName))) {
+                $samePerson = false;
+                break;
+            }
+        }
+        if (!$samePerson) {
+            send_json([
+                'error'   => 'ambiguous',
+                'message' => 'More than one account uses this username. Contact the administrator.',
+            ], 409);
+        }
+        $rows = [$first];   // a duplicate of one account — carry on as that account
     }
     /* A fresh session every time, always.
 
