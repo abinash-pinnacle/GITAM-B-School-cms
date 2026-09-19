@@ -1047,16 +1047,35 @@
     // remembered so a refresh lands back on this page rather than the dashboard
     try { sessionStorage.setItem(VIEW_KEY, key); } catch (e) { /* private mode */ }
     buildNav();
-    $('.sidebar').classList.remove('open');
+    closeMobileNav();
     render();
     // the live poll runs on every page now, so nothing to start or stop here
   }
 
   // sidebar close/open: desktop -> collapse to icon rail (remembered); mobile -> slide in/out
   const SIDEBAR_KEY = 'nmiet_sidebar_collapsed';
+  // on a phone the drawer floats over the page, so it needs a tap-anywhere-to-close
+  // backdrop and a body lock that stops the page behind it from scrolling
+  function closeMobileNav() {
+    $('.sidebar').classList.remove('open');
+    const s = document.getElementById('navScrim');
+    if (s) s.classList.remove('show');
+    document.body.classList.remove('nav-open');
+  }
   function toggleSidebar() {
     if (window.innerWidth <= 860) {
-      $('.sidebar').classList.toggle('open');
+      const sb = $('.sidebar');
+      const open = sb.classList.toggle('open');
+      let scrim = document.getElementById('navScrim');
+      if (!scrim) {
+        scrim = document.createElement('div');
+        scrim.id = 'navScrim';
+        scrim.className = 'nav-scrim';
+        scrim.addEventListener('click', closeMobileNav);
+        document.body.appendChild(scrim);
+      }
+      scrim.classList.toggle('show', open);
+      document.body.classList.toggle('nav-open', open);
     } else {
       const collapsed = document.body.classList.toggle('sidebar-collapsed');
       localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0');
