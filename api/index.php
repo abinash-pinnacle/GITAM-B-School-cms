@@ -2452,6 +2452,10 @@ function api_bootstrap(): void
    api_bootstrap so the signature endpoint below can build the very same picture
    and fingerprint it, rather than a second copy of the read rules drifting from
    this one. */
+/* How many of the newest audit-log rows the bootstrap carries. The log's own
+   page shows at most 200; 400 leaves headroom for the "last sign-in" lookups. */
+const AUDITLOG_BOOTSTRAP_LIMIT = 400;
+
 function bootstrap_data(): array
 {
     /* A custom-access account is let through the area switches below so a module
@@ -2484,7 +2488,20 @@ function bootstrap_data(): array
             continue;
         }
         if ($col === 'roles' || $col === 'auditlog') {
-            $rows = ($col === 'roles' || $isAdmin) ? fetch_all('SELECT * FROM ' . qi($col)) : [];
+            if ($col === 'roles') {
+                $rows = fetch_all('SELECT * FROM ' . qi('roles'));
+            } else {
+                /* The audit log grows without bound, and it was fetched in full on
+                   every bootstrap AND on every signature poll — for an admin with a
+                   long history that pulled thousands of rows over the wire on each
+                   background tick and dragged the whole app down. Only the most
+                   recent slice is carried now (the log's own page never shows more
+                   than 200 rows anyway). */
+                $rows = $isAdmin
+                    ? fetch_all('SELECT * FROM ' . qi('auditlog') . ' ORDER BY ' . qi('at')
+                        . ' DESC, ' . qi('id') . ' DESC LIMIT ' . AUDITLOG_BOOTSTRAP_LIMIT)
+                    : [];
+            }
             $out[$col] = array_map(fn($r) => row_out($col, $r), $rows);
             continue;
         }
@@ -2538,6 +2555,13 @@ function api_signature(): void
     $data = bootstrap_data();
     $parts = [];
     foreach ($data as $col => $rows) {
+        /* The audit log changes on almost every action (each sign-in writes to it),
+           so letting it drive the signature made every open admin session re-pull
+           the entire bootstrap on a loop. Its rows are informational, not something
+           the page must refresh the world for, so they are left out of the hash. */
+        if ($col === 'auditlog') {
+            continue;
+        }
         $light = array_map(function ($r) {
             foreach (SIGNATURE_SKIP_FIELDS as $f) {
                 unset($r[$f]);
