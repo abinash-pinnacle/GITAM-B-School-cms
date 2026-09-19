@@ -723,7 +723,7 @@
       ['students',ic('cap'),'Students'], ['batchsem',ic('target'),'Semester Update'],
       ['submissions',ic('notes'),'Admission Forms'],
       [NAV_SECTION,'','Faculty & Staff'],
-      ['faculty',ic('user'),'Employees'], ['accountants',ic('user'),'Accountants'],
+      ['faculty',ic('user'),'Employees'], ['accountants',ic('user'),'Finance'],
       ['placementofficers',ic('user'),'Placement Officers'],
       [NAV_SECTION,'','Courses & Curriculum'],
       ['courses',ic('books'),'Courses'], ['syllabus',ic('receipt'),'Subjects by Semester'],
@@ -933,7 +933,7 @@
        signed in knows what they were made, not what it was built from. */
     const label = BUILTIN_ROLES.includes(user.role)
       ? ({ admin: 'Administration', faculty: 'Faculty Menu', student: 'Student Menu',
-           librarian: 'Library Menu', accountant: 'Accounts Menu', guest_faculty: 'Guest Faculty Menu',
+           librarian: 'Library Menu', accountant: 'Finance Menu', guest_faculty: 'Guest Faculty Menu',
            center_head: 'Center Head · View Only',
            placement_officer: 'Placement Cell' }[user.role] || 'Menu')
       : roleLabel(user.role);
@@ -1282,7 +1282,7 @@
      covers in Access Control. Prefers the built-in menu's own name. */
   const VIEW_LABEL_EXTRA = {
     stuprofile: 'Student Profile', facprofile: 'Employee Profile', attrecords: 'Attendance Records',
-    accountants: 'Accountants', placementofficers: 'Placement Officers', submissions: 'Admission Forms',
+    accountants: 'Finance', placementofficers: 'Placement Officers', submissions: 'Admission Forms',
     batchsem: 'Semester Update', finstudents: 'Student Fees', issueBook: 'Issue a Book',
     returnBook: 'Return a Book', reports: 'Library Reports', assignments: 'Assignments',
   };
@@ -1405,7 +1405,7 @@
     accounts:'User Management',
     finstudents:'Student Fees — Overview', assets:'Asset List', fixedfee:'Fixed Fee Structure',
     semfee:'Semester-wise Fee', feecollect:'Fee Collection', payments:'Payment History',
-    pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Accountants',
+    pendingfees:'Pending Fees', finreports:'Financial Reports', accountants:'Finance',
     bookreq:'Book Requisition', requisitions:'Book Requisitions',
     batchsem:'Batch Semester Update',
     departments:'Departments', branches:'Specialisations', chreports:'Reports', allreports:'Reports',
@@ -6472,8 +6472,8 @@
      existed stays selectable and nobody's record is quietly orphaned. */
   const DESIGNATIONS = ['Professor', 'Associate Professor', 'Assistant Professor',
     'Lecturer', 'Visiting Faculty', 'Head of Department', 'Dean', 'Principal',
-    'Director', 'Registrar', 'Librarian', 'Lab Assistant', 'Accountant',
-    'Senior Accountant', 'Center Head', 'Placement Officer',
+    'Director', 'Registrar', 'Librarian', 'Lab Assistant', 'Finance Officer',
+    'Senior Finance Officer', 'Center Head', 'Placement Officer',
     'Training & Placement Head', 'Course Coordinator', 'Admission Officer',
     'Office Assistant', 'System Administrator', 'Support Staff'];
   const DEPARTMENTS = ['MBA', 'Management', 'Computer Applications', 'Finance',
@@ -9439,7 +9439,7 @@
     }
     if (u.role === 'accountant') {
       const a = Store.find('accountants', u.refId);
-      return a ? `${a.empId} · ${a.designation || 'Accounts Office'}` : 'Accounts office';
+      return a ? `${a.empId} · ${a.designation || 'Finance'}` : 'Finance';
     }
     if (u.role === 'center_head') {
       const c = Store.find('centerheads', u.refId);
@@ -9478,7 +9478,7 @@
           <option value="admin">Admin</option>
           <option value="center_head">Center Head</option>
           <option value="placement_officer">Placement Officer</option>
-          <option value="accountant">Accountant</option>
+          <option value="accountant">Finance</option>
           <option value="faculty">Faculty</option>
           <option value="librarian">Librarian</option>
           <option value="student">Student</option>
@@ -11715,12 +11715,12 @@
 
   /* =========================== ACCOUNTANT STAFF (admin) =========================== */
   function viewAccountants() {
-    const html = `<div class="panel"><div class="panel-head"><h3>Accounts Office Staff</h3>
+    const html = `<div class="panel"><div class="panel-head"><h3>Finance Team</h3>
       <div class="panel-tools">
         <input class="search-box" id="acQ" placeholder="Search name / employee id...">
-        <button class="btn-primary" id="acAdd">+ Add Accountant</button></div></div>
+        <button class="btn-primary" id="acAdd">+ Add Finance Staff</button></div></div>
       <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
-        Adding an accountant also creates their login (password <b>${DEFAULT_PASSWORD}</b>).
+        Adding a finance staff member also creates their login (password <b>${DEFAULT_PASSWORD}</b>).
         Manage every login from <b>Login Accounts</b>.</p>
       <div class="tbl-wrap"><table><thead><tr>
         <th></th><th>Employee ID</th><th>Name</th><th>Designation</th><th>Email</th><th>Phone</th>
@@ -11745,18 +11745,18 @@
               <button class="btn-sm btn-edit" data-edit="${a.id}">Edit</button>
               <button class="btn-sm btn-del" data-del="${a.id}">Delete</button>
             </div></td></tr>`;
-        }).join('') : `<tr><td colspan="8" class="empty">No accountants on record.</td></tr>`;
+        }).join('') : `<tr><td colspan="8" class="empty">No finance staff on record.</td></tr>`;
         $('#acBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => accountantForm(b.dataset.edit, draw));
         $('#acBody').querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
           const a = Store.find('accountants', b.dataset.del) || {};
           const login = Store.all('users').find(u => u.role === 'accountant' && u.refId === a.id);
-          confirmDelete('Delete Accountant', `Delete <b>${esc(a.name)}</b> from the accounts office
+          confirmDelete('Delete Finance Staff', `Delete <b>${esc(a.name)}</b> from the finance team
             ${login ? `and remove their login <b>@${esc(login.username)}</b>` : ''}?
             Receipts they collected stay in the payment history.`,
             'Delete', () => {
               if (login) Store.remove('users', login.id);
               Store.remove('accountants', a.id);
-              toast('Accountant deleted.', 'err'); draw();
+              toast('Finance staff deleted.', 'err'); draw();
             });
         });
         $('#acPager').innerHTML = pagerHtml(rows.length, page);

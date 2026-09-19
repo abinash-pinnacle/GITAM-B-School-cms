@@ -267,6 +267,7 @@ function init_db(): void
     hierarchy_labels_and_ticket_indexes();
     drop_goods_requisitions();
     students_login_as_studentid();
+    rename_accountant_designation();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -599,6 +600,54 @@ function students_login_as_studentid(): void
     meta_set('studentLoginIsRoll', date('c'));
 }
 
+/* The "Accountant" role was relabelled "Finance" in the UI, so its job titles
+   follow: every stored "Accountant"/"Senior Accountant" designation becomes
+   "Finance Officer"/"Senior Finance Officer" so no record still reads the old
+   word. Runs across every staff table that carries a designation column, and is
+   a no-op once done (nothing matches the old strings any more). */
+function rename_accountant_designation(): void
+{
+    if (meta_value('accountantIsFinance') !== null) {
+        return;
+    }
+    $map = ['Accountant' => 'Finance Officer', 'Senior Accountant' => 'Senior Finance Officer'];
+    foreach (COLLECTIONS as $col => $fields) {
+        if (!in_array('designation', $fields, true)) {
+            continue;
+        }
+        foreach ($map as $old => $new) {
+            try {
+                run_sql('UPDATE ' . qi($col) . ' SET ' . qi('designation') . ' = ? WHERE '
+                    . qi('designation') . ' = ?', [$new, $old]);
+            } catch (Throwable $e) {
+                // table not ready this deploy -> the flag stays unset, retried next time
+                error_log('[nmiet-db] designation rename skipped for ' . $col . ': ' . $e->getMessage());
+                return;
+            }
+        }
+    }
+    /* The designation picker offers an editable list, kept in a setting. If a site
+       curated it to include the old titles, rewrite them there too so the dropdown
+       stops offering "Accountant" (longer string first, so "Senior Accountant" is
+       not half-matched by "Accountant"). */
+    try {
+        $row = fetch_one('SELECT ' . qi('value') . ' AS value FROM ' . qi('settings')
+            . ' WHERE ' . qi('name') . " = 'designationList'");
+        if ($row) {
+            $v = (string) $row['value'];
+            $v2 = str_replace(['Senior Accountant', 'Accountant'],
+                              ['Senior Finance Officer', 'Finance Officer'], $v);
+            if ($v2 !== $v) {
+                run_sql('UPDATE ' . qi('settings') . ' SET ' . qi('value') . ' = ? WHERE '
+                    . qi('name') . " = 'designationList'", [$v2]);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[nmiet-db] designationList setting rename skipped: ' . $e->getMessage());
+    }
+    meta_set('accountantIsFinance', date('c'));
+}
+
 /* A marker for migrations that live in THIS file rather than in COLLECTIONS or
    SEED_REVISION (which are in config.php). A Hostinger deploy syncs file by file,
    so config.php can arrive before db.php: the old db.php would run init_db,
@@ -607,7 +656,7 @@ function students_login_as_studentid(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-18-student-login-is-studentid';
+const DB_MIGRATION_REV = '2026-09-19-accountant-is-finance';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
