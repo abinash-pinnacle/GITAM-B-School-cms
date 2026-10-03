@@ -15077,23 +15077,45 @@
   /* The link, ready to hand out. Shown rather than sent, because who it goes to
      — a WhatsApp group, a notice board, an email — is the office's business. */
   function formLinkModal() {
-    const url = admissionFormUrl();
     openModal('Student Registration Form', `
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.7">
+      <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
         Share this with students. Anyone who opens it can fill it in — nothing they submit
         reaches the roll until it is approved on this page.</p>
-      <div class="field"><label>Link</label>
-        <input id="flUrl" value="${esc(url)}" readonly onclick="this.select()"></div>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">
+        <b>Set the batch and admission date here</b> and the link carries them in — the
+        student sees them already filled and <b>locked</b>, so nobody can type the wrong one.
+        Leave them blank to let the student fill them.</p>
+      <div class="form-grid">
+        <div class="field"><label>Batch <small style="color:var(--muted)">(optional)</small></label>
+          <input id="flBatch" maxlength="20" placeholder="e.g. 2025-2027"></div>
+        <div class="field"><label>Date of Admission <small style="color:var(--muted)">(optional)</small></label>
+          <input id="flDate" type="date"></div>
+      </div>
+      <div class="field" style="margin-top:4px"><label>Link to share</label>
+        <input id="flUrl" readonly onclick="this.select()"></div>
       <div class="form-actions">
         <button type="button" class="btn-outline" id="flOpen">Open it</button>
         <button type="button" class="btn-primary" id="flCopy">Copy link</button>
         <button type="button" class="btn-outline" id="cx">Close</button>
       </div>`, true);
+    const buildUrl = () => {
+      const qs = [];
+      const b = ($('#flBatch').value || '').trim();
+      const dt = ($('#flDate').value || '').trim();
+      if (b) qs.push('batch=' + encodeURIComponent(b));
+      if (dt) qs.push('admissionDate=' + encodeURIComponent(dt));
+      return admissionFormUrl() + (qs.length ? '?' + qs.join('&') : '');
+    };
+    const refresh = () => { $('#flUrl').value = buildUrl(); };
+    refresh();
+    $('#flBatch').oninput = refresh;
+    $('#flDate').oninput = refresh;
     $('#cx').onclick = closeModal;
-    $('#flOpen').onclick = () => window.open(url, '_blank', 'noopener');
+    $('#flOpen').onclick = () => window.open(buildUrl(), '_blank', 'noopener');
     $('#flCopy').onclick = () => {
+      const url = buildUrl();
       const box = $('#flUrl');
-      box.select();
+      box.value = url; box.select();
       const done = () => toast('Link copied.');
       if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => {
         document.execCommand('copy'); done();
