@@ -15082,9 +15082,9 @@
         Share this with students. Anyone who opens it can fill it in — nothing they submit
         reaches the roll until it is approved on this page.</p>
       <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.6">
-        <b>Set the batch and admission date here</b> and the link carries them in — the
-        student sees them already filled and <b>locked</b>, so nobody can type the wrong one.
-        Leave them blank to let the student fill them.</p>
+        <b>Set the batch and admission date here</b> and the link carries them in — those two
+        fields are then <b>hidden from the student</b> (already decided by the college), so nobody
+        can change them. Leave them blank to let the student fill them.</p>
       <div class="form-grid">
         <div class="field"><label>Batch <small style="color:var(--muted)">(optional)</small></label>
           <input id="flBatch" maxlength="20" placeholder="e.g. 2025-2027"></div>

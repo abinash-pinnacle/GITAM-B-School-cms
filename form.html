@@ -107,12 +107,6 @@
                background: var(--primary-light); color: var(--primary-dark);
                padding: 8px 16px; border-radius: 8px; font-weight: 600; }
   footer { text-align: center; font-size: 12px; color: var(--muted); padding: 20px 16px 40px; }
-
-  /* A field the college pre-set in the share link: shown filled, but not the
-     student's to change. */
-  .field input.locked { background: #eef1f5; color: #4a5568; cursor: not-allowed;
-                        pointer-events: none; border-color: #d6dce6; }
-  .field .locked-note { display: block; margin-top: 5px; font-size: 11.5px; color: #7a8699; }
 </style>
 
 <header>
@@ -361,12 +355,13 @@
   var $ = function (s) { return document.querySelector(s); };
   document.getElementById('yr').textContent = new Date().getFullYear();
 
-  /* Fields the college can pre-set in the share link so the student does not
-     touch them — e.g. form.html?batch=2025-2027&admissionDate=2025-07-15 .
-     When a value comes in on the URL the box is filled and locked (readonly +
-     no pointer), so the one it was set for cannot change it. Left off the link,
-     the field behaves normally and the student fills it in. */
-  (function lockPreset() {
+  /* Fields the college pre-set in the share link — e.g.
+     form.html?batch=2025-2027&admissionDate=2025-07-15 . When a value comes in
+     on the URL the box is filled and the whole field is hidden, so the student
+     never sees it (the college already decided it). The value is still sent:
+     FormData submits a readonly, display:none input as long as it is not
+     disabled. Left off the link, the field shows and the student fills it. */
+  (function presetHide() {
     var params = new URLSearchParams(location.search);
     ['batch', 'admissionDate'].forEach(function (name) {
       var v = params.get(name);
@@ -377,15 +372,8 @@
       if (!el) return;
       el.value = v;
       el.readOnly = true;
-      el.tabIndex = -1;
-      el.classList.add('locked');
-      // belt and braces: if a browser still lets the native picker through, snap back
-      el.addEventListener('keydown', function (e) { e.preventDefault(); });
-      el.addEventListener('change', function () { if (el.value !== v) el.value = v; });
-      var note = document.createElement('small');
-      note.className = 'locked-note';
-      note.textContent = 'Set by the college';
-      el.parentNode.appendChild(note);
+      var field = el.closest('.field') || el.parentNode;
+      field.style.display = 'none';
     });
   })();
 
