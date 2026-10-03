@@ -207,7 +207,7 @@
           <div class="field"><label>Entrance Examination <span class="req">*</span></label>
             <input name="entranceExam" maxlength="40" placeholder="e.g. CAT, OJEE"></div>
           <div class="field"><label>Entrance Rank</label>
-            <input name="entranceRank" inputmode="numeric" maxlength="10"></div>
+            <input name="entranceRank" inputmode="decimal" maxlength="12" placeholder="e.g. 5421, 92.5 or 88%"></div>
         </div>
       </div>
 
@@ -465,6 +465,12 @@
   document.addEventListener('input', function (e) {
     var el = e.target;
     if (!el || !el.getAttribute) return;
+    /* A rank can be a position (5421), a percentile (92.5) or a percentage
+       (88%), so this one keeps digits, the decimal point and the % sign. */
+    if (el.name === 'entranceRank') {
+      el.value = el.value.replace(/[^\d.%]/g, '');
+      return;
+    }
     // digits only, where a number is what is being asked for
     if (el.getAttribute('inputmode') === 'numeric') {
       el.value = el.value.replace(/\D/g, '');
