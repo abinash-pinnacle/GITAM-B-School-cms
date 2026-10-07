@@ -4,11 +4,11 @@
 #
 #   docker compose -p gitam up -d --build   # sab build + start
 #   open http://localhost:5510              # app
-#   open http://localhost:8081              # phpMyAdmin
+#   open http://localhost:8091              # phpMyAdmin
 #   docker compose -p gitam down            # stop (database volume is kept)
 #
 # Ports 5500/8080 par doosra project (gclone) chalta hai, isliye ye stack
-# 5510/8081 use karta hai — dono saath chal sakte hain.
+# 5510/8091 use karta hai — dono saath chal sakte hain.
 #
 # Demo project hai, isliye passwords plain rakhe hain — production me badalna.
 
@@ -68,7 +68,7 @@ services:
       - backend
     restart: unless-stopped
 
-  # 🟧 phpMyAdmin — database ka web UI (http://localhost:8081)
+  # 🟧 phpMyAdmin — database ka web UI (http://localhost:8091)
   phpmyadmin:
     image: phpmyadmin:5
     container_name: gitam-phpmyadmin
@@ -79,7 +79,7 @@ services:
       PMA_PASSWORD: root
       UPLOAD_LIMIT: 64M
     ports:
-      - "8081:80"
+      - "8091:80"
     depends_on:
       db:
         condition: service_healthy

@@ -22,8 +22,8 @@ COPY google87b4e6d286ef6908.html /usr/share/nginx/html/google87b4e6d286ef6908.ht
 COPY robots.txt /usr/share/nginx/html/robots.txt
 COPY sitemap.xml /usr/share/nginx/html/sitemap.xml
 
-# the Android app and the Digital Asset Links that verify it owns this domain
-COPY apk /usr/share/nginx/html/apk
+# the Digital Asset Links that verify the Android app owns this domain
+# (apk/ is added back here once a GITAM APK is built — see android/README.md)
 COPY .well-known /usr/share/nginx/html/.well-known
 
 EXPOSE 80

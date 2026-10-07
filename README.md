@@ -66,7 +66,7 @@ docker compose up -d --build      # sab build + start
 ```
 
 - App: **http://localhost:5500**
-- phpMyAdmin: **http://localhost:8080** (seedha khul jata hai — `gitam` database left sidebar me)
+- phpMyAdmin: **http://localhost:8091** (seedha khul jata hai — `gitam` database left sidebar me)
 
 ```
 docker compose ps                 # saare containers dekho
