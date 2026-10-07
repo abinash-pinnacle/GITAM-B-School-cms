@@ -139,6 +139,17 @@ Saara data add/edit/delete turant SQLite database me save hota hai.
 
 **Theme:** GITAM B-School logo (GITAM green + Pinnacle teal/maroon) se match karta hua theme.
 
+## Mentorship Module
+
+Faculty mentors apne assigned students ko track karte hain; Super Admin mentors assign/monitor karta hai.
+
+- **Mentor (faculty) sidebar → Mentorship:** Mentor Dashboard, My Students, Student Interactions, Parent Interactions, Follow-ups, At-Risk Students, Mentor Reports.
+- **Super Admin → Mentorship Management:** Mentor Dashboard, Mentor List, Assign Mentors (single / bulk Excel import / transfer), Student-Mentor Mapping (+ history), Mentor Activity, At-Risk Students, Follow-up Reports, Mentor Performance, Mentor Reports, Mentor Settings.
+- **Center Head:** saare mentorship pages read-only. **HOD:** faculty jiski designation me "HOD" / "Head of Department" ho — apne department ke students aur mentors dekh sakta hai, likh sirf apne mentees ke liye.
+- **Risk** apne aap: attendance, CGPA, backlogs, SGPA ki giravat, mentor contact ka gap, overdue follow-up, unresolved issue. Thresholds **Mentor Settings** me badlte hain.
+- **Data:** students, faculty, attendance, marks CMS ke apne tables se. Naye tables sirf `mentorassignments`, `mentorinteractions`, `mentorfollowups`, `mentorriskstate`. Ye generic API/bootstrap se kabhi nahi milte — sirf `api/mentor.php` ke `mt-*` endpoints se, jo har request par server-side check karte hain ki user us student/mentor ko dekh/badal sakta hai ya nahi. Har assignment, interaction, follow-up aur risk badlav audit log me jata hai.
+- **Bulk import format:** `Registration No`, `Mentor Employee ID`, `Academic Year` (template page par milta hai).
+
 ## Grading Scale
 
 | Total (/100) | Grade | Points |

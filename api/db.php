@@ -269,6 +269,7 @@ function init_db(): void
     students_login_as_studentid();
     rename_accountant_designation();
     add_mca_programme();
+    mentorship_indexes_and_grants();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -284,6 +285,45 @@ function init_db(): void
         meta_set('seeded', date('c'));
     }
     mark_schema_ready();
+}
+
+/**
+ * Mentorship: the lookups every mentor page makes (by student, by mentor, by
+ * date) get an index, and the Academic Head — who oversees academics — is
+ * given read access to the mentorship pages once. A grant the Super Admin
+ * later removes stays removed.
+ */
+function mentorship_indexes_and_grants(): void
+{
+    foreach ([['ix_mas_student', 'mentorassignments', 'studentId'], ['ix_mas_mentor', 'mentorassignments', 'mentorId'],
+              ['ix_mas_status', 'mentorassignments', 'status'],
+              ['ix_mint_student', 'mentorinteractions', 'studentId'], ['ix_mint_mentor', 'mentorinteractions', 'mentorId'],
+              ['ix_mint_date', 'mentorinteractions', 'date'],
+              ['ix_mfu_student', 'mentorfollowups', 'studentId'], ['ix_mfu_due', 'mentorfollowups', 'dueDate'],
+              ['ix_mfu_status', 'mentorfollowups', 'status']] as [$name, $table, $col]) {
+        try {
+            db()->exec('CREATE INDEX ' . qi($name) . ' ON ' . qi($table) . ' (' . qi($col) . ')');
+        } catch (PDOException $e) {
+            // already there
+        }
+    }
+    if (meta_value('mentorshipGrant') !== null) {
+        return;
+    }
+    try {
+        $r = fetch_one('SELECT * FROM ' . qi('roles') . ' WHERE ' . qi('key') . " = 'academic_head'");
+        if ($r) {
+            $perms = json_decode((string) ($r['permissions'] ?? ''), true);
+            if (is_array($perms) && !isset($perms['mentorship'])) {
+                $perms['mentorship'] = ['view', 'export', 'print', 'reports'];
+                run_sql('UPDATE ' . qi('roles') . ' SET ' . qi('permissions') . ' = ? WHERE ' . qi('id') . ' = ?',
+                        [json_encode($perms), $r['id']]);
+            }
+        }
+        meta_set('mentorshipGrant', date('c'));
+    } catch (Throwable $e) {
+        error_log('[gitam-db] mentorship grant skipped: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -709,7 +749,7 @@ function rename_accountant_designation(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-10-07-mca-programme';
+const DB_MIGRATION_REV = '2026-10-07-mentorship';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

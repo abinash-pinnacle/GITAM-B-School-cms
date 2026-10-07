@@ -749,6 +749,12 @@
       ['applications',ic('mail'),'Applications'], ['interviews',ic('mic'),'Interviews'],
       ['placements',ic('trophy'),'Selections'], ['offers',ic('scroll'),'Offers'],
       ['plcalendar',ic('calendar'),'Placement Calendar'], ['plreports',ic('chart'),'Placement Reports'],
+      [NAV_SECTION,'','Mentorship Management'],
+      ['mgdash',ic('activity'),'Mentor Dashboard'], ['mgmentors',ic('user'),'Mentor List'],
+      ['mgassign',ic('plus'),'Assign Mentors'], ['mgmapping',ic('link'),'Student-Mentor Mapping'],
+      ['mgactivity',ic('notes'),'Mentor Activity'], ['mgrisk',ic('alert'),'At-Risk Students'],
+      ['mgfollow',ic('clock'),'Follow-up Reports'], ['mgperf',ic('trending-up'),'Mentor Performance'],
+      ['mgreports',ic('chart'),'Mentor Reports'], ['mgsettings',ic('settings'),'Mentor Settings'],
       [NAV_SECTION,'','Events & Notices'],
       ['events',ic('calendar'),'Events'],
       [NAV_SECTION,'','Helpdesk'],
@@ -787,6 +793,11 @@
       ['requisitions',ic('books'),'Book Requisitions'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['allreports',ic('chart'),'Reports'], ['orgtree',ic('users'),'Organization Tree'],
       ['events',ic('bell'),'Notifications'], EMP_ATTENDANCE, ['profile',ic('user'),'Profile'],
+      [NAV_SECTION,'','Mentorship'],
+      ['mgdash',ic('activity'),'Mentor Dashboard'], ['mgmentors',ic('user'),'Mentor List'],
+      ['mgmapping',ic('link'),'Student-Mentor Mapping'], ['mgactivity',ic('notes'),'Mentor Activity'],
+      ['mgrisk',ic('alert'),'At-Risk Students'], ['mgfollow',ic('clock'),'Follow-ups'],
+      ['mgperf',ic('trending-up'),'Mentor Performance'], ['mgreports',ic('chart'),'Mentor Reports'],
     ],
     accountant: [
       ['dashboard',ic('chart'),'Dashboard'], ['students',ic('cap'),'All Students'],
@@ -800,6 +811,10 @@
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      [NAV_SECTION,'','Mentorship'],
+      ['mtdash',ic('activity'),'Mentor Dashboard'], ['mtmine',ic('users'),'My Students'],
+      ['mtinter',ic('notes'),'Student Interactions'], ['mtparent',ic('home'),'Parent Interactions'],
+      ['mtfollow',ic('clock'),'Follow-ups'], ['mtrisk',ic('alert'),'At-Risk Students'], ['mtreports',ic('chart'),'Mentor Reports'],
     ],
     // assigned classes only: attendance, marks and the timetable, no purchasing
     guest_faculty: [
@@ -807,6 +822,10 @@
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['events',ic('calendar'),'Events'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      [NAV_SECTION,'','Mentorship'],
+      ['mtdash',ic('activity'),'Mentor Dashboard'], ['mtmine',ic('users'),'My Students'],
+      ['mtinter',ic('notes'),'Student Interactions'], ['mtparent',ic('home'),'Parent Interactions'],
+      ['mtfollow',ic('clock'),'Follow-ups'], ['mtrisk',ic('alert'),'At-Risk Students'], ['mtreports',ic('chart'),'Mentor Reports'],
     ],
     student: [
       ['dashboard',ic('chart'),'Dashboard'], ['events',ic('calendar'),'Events'], ['myattendance',ic('check'),'My Attendance'], ['myresults',ic('notes'),'My Results'],
@@ -869,7 +888,7 @@
       const personal = [];
       rawMenu(baseRoleOf(uObj.role)).forEach(row => {
         const k = row[0];
-        if (ALWAYS_ALLOWED.includes(k) && k !== 'dashboard' && !have.has(k)) {
+        if ((ALWAYS_ALLOWED.includes(k) || MT_MENTOR_VIEWS.includes(k)) && k !== 'dashboard' && !have.has(k)) {
           personal.push(row);
           have.add(k);
         }
@@ -1116,6 +1135,9 @@
     ['events',       'Events & Notices',            ['events'],
                                                     ['events']],
     ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches'],
+                                                    []],
+    ['mentorship',   'Mentorship',                  ['mgdash', 'mgmentors', 'mgassign', 'mgmapping', 'mgactivity',
+                                                     'mgrisk', 'mgfollow', 'mgperf', 'mgreports', 'mgsettings'],
                                                     []],
     ['system',       'Users, Roles & Settings',     ['accounts', 'usersettings', 'roles', 'adminmgmt'],
                                                     ['users', 'settings', 'roles', 'auditlog']],
@@ -1415,6 +1437,11 @@
     offers:'Offers', plcalendar:'Placement Calendar', plreports:'Placement Reports',
     placementofficers:'Placement Officers',
     tickets:'Tickets', orgtree:'Organization Tree', approvals:'Goods Requisition', hreports:'Reports Centre',
+    mtdash:'Mentor Dashboard', mtmine:'My Students', mtinter:'Student Interactions', mtparent:'Parent Interactions',
+    mtfollow:'Follow-ups', mtrisk:'At-Risk Students', mtreports:'Mentor Reports',
+    mgdash:'Mentor Dashboard', mgmentors:'Mentor List', mgassign:'Assign Mentors', mgmapping:'Student-Mentor Mapping',
+    mgactivity:'Mentor Activity', mgrisk:'At-Risk Students', mgfollow:'Follow-up Reports', mgperf:'Mentor Performance',
+    mgreports:'Mentor Reports', mgsettings:'Mentor Settings',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -1509,6 +1536,11 @@
       usersettings: viewUserSettings, roles: viewRoles, submissions: viewSubmissions,
       adminmgmt: viewAdminManagement, tickets: viewTickets, orgtree: viewOrgTree,
       approvals: viewApprovals, hreports: viewReportsCentre,
+      mtdash: viewMentorDashboard, mtmine: viewMentorStudents, mtinter: viewMentorInteractions,
+      mtparent: viewMentorInteractions, mtfollow: viewMentorFollowups, mtrisk: viewMentorRisk, mtreports: viewMentorReports,
+      mgdash: viewMentorDashboard, mgmentors: viewMentorList, mgassign: viewAssignMentors, mgmapping: viewMentorMapping,
+      mgactivity: viewMentorInteractions, mgrisk: viewMentorRisk, mgfollow: viewMentorFollowups, mgperf: viewMentorPerformance,
+      mgreports: viewMentorReports, mgsettings: viewMentorSettings,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     /* The app-install offer and the Android APK sit at the top of everyone's
@@ -19646,6 +19678,1436 @@
      open it — but never a profile, which is reached by clicking a particular
      student or lecturer and has nothing to show once that choice is gone; the
      reader is returned to the list they opened it from instead. */
+  /* =====================================================================
+     MENTORSHIP — the mentor's pages (mt*) and the administration's (mg*).
+
+     Nothing here reads the mentorship tables from the bootstrap: every list,
+     figure and form goes through the mt-* endpoints in api/mentor.php, which
+     decide what the signed-in account may see and do. The pages only draw
+     what comes back, so a mentor can never be shown — or write against — a
+     student who is not theirs, whatever the browser asks for. Search, filters,
+     sorting and paging run on the server; the page holds one page of rows.
+     ===================================================================== */
+  /* Every page here draws after a request returns. If the person has moved on
+     to another page by then, the element is gone — writing to a detached
+     stand-in instead of null keeps a late answer from throwing. */
+  const MT_SINK = document.createElement('div');
+  const $m = (sel) => document.querySelector(sel) || MT_SINK;
+  const MT_MENTOR_VIEWS = ['mtdash', 'mtmine', 'mtinter', 'mtparent', 'mtfollow', 'mtrisk', 'mtreports'];
+  let MT_CTX = null, MT_CTX_AT = 0;
+  // a hand-off between pages: "Activity" on the mentor list opens the feed for that mentor
+  let MT_PRESET = {};
+
+  async function mtContext(force) {
+    if (!force && MT_CTX && Date.now() - MT_CTX_AT < 60000) return MT_CTX;
+    const r = await Store._tk('mt-context');
+    if (!r.error) { MT_CTX = r; MT_CTX_AT = Date.now(); }
+    return r;
+  }
+  function mtQuery(params) {
+    const q = new URLSearchParams();
+    Object.keys(params || {}).forEach(k => {
+      const v = params[k];
+      if (v !== '' && v !== null && v !== undefined) q.set(k, v);
+    });
+    const s = q.toString();
+    return s ? '?' + s : '';
+  }
+  const mtGet = (path, params) => Store._tk(path + mtQuery(params));
+  const mtPost = (path, body) => Store._tk(path, 'POST', body);
+  const mtIsAdminPage = () => splitViewKey(currentView).view.startsWith('mg');
+
+  /* ---------- small pieces of display ---------- */
+  function mtDate(d) {
+    if (!d) return '—';
+    const t = new Date(String(d).slice(0, 10) + 'T00:00:00');
+    if (isNaN(t)) return esc(d);
+    return t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  function mtAgo(d) {
+    if (!d) return 'Never';
+    const days = Math.round((new Date(today() + 'T00:00:00') - new Date(String(d).slice(0, 10) + 'T00:00:00')) / 86400000);
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return days + ' days ago';
+  }
+  const MT_RISK_LABEL = { High: 'High Risk', Medium: 'Needs Attention', Normal: 'Normal' };
+  function mtRiskPill(level, score) {
+    const cls = level === 'High' ? 'red' : level === 'Medium' ? 'amber' : 'green';
+    return `<span class="pill ${cls}" title="${score !== undefined ? 'Risk score ' + score : ''}">${MT_RISK_LABEL[level] || esc(level)}</span>`;
+  }
+  function mtStatePill(state) {
+    const cls = { Completed: 'green', Upcoming: 'sky', 'Due Today': 'amber', Overdue: 'red', Cancelled: 'grey' }[state] || 'grey';
+    return `<span class="pill ${cls}">${esc(state)}</span>`;
+  }
+  function mtStatusPill(st) {
+    const cls = { Open: 'sky', 'In Progress': 'amber', Resolved: 'green', 'Follow-up Required': 'red' }[st] || 'grey';
+    return `<span class="pill ${cls}">${esc(st)}</span>`;
+  }
+  function mtPriorityPill(p) {
+    const cls = { High: 'red', Medium: 'amber', Low: 'grey' }[p] || 'grey';
+    return `<span class="pill ${cls}">${esc(p || '—')}</span>`;
+  }
+  function mtAtt(pct) {
+    if (pct === null || pct === undefined) return '<span class="mt-muted">No classes</span>';
+    return `<span class="mt-att ${pct < 60 ? 'low' : pct <= 75 ? 'mid' : ''}">${pct}%</span>`;
+  }
+  function mtBranch(r) {
+    const extra = r.branchName || r.specialisation || '';
+    return esc(r.course || r.branch || '—') + (extra ? ` <small class="mt-muted">· ${esc(extra)}</small>` : '');
+  }
+  function mtEmpty(msg) {
+    return `<div class="mt-empty">${ic('users')}<p>${esc(msg)}</p></div>`;
+  }
+  const mtLoading = (msg) => `<div class="mt-loading">${esc(msg || 'Loading…')}</div>`;
+  function mtError(r) {
+    return `<div class="mt-empty mt-err">${ic('alert')}<p>${esc(r && r.error ? r.error : 'Something went wrong.')}</p></div>`;
+  }
+  function mtSub(text) { return `<p class="mt-sub">${esc(text)}</p>`; }
+  function mtPagerHtml(p) {
+    if (!p || p.pages <= 1) return p && p.total ? `<div class="pager"><span class="pager-info">${p.total} total</span></div>` : '';
+    return `<div class="pager">
+      <span class="pager-info">${p.total} total · Page ${p.page} of ${p.pages}</span>
+      <button type="button" class="btn-sm btn-outline" data-mtpg="${p.page - 1}" ${p.page <= 1 ? 'disabled' : ''}>‹ Prev</button>
+      <button type="button" class="btn-sm btn-outline" data-mtpg="${p.page + 1}" ${p.page >= p.pages ? 'disabled' : ''}>Next ›</button>
+    </div>`;
+  }
+  function mtBindPager(el, go) {
+    if (!el) return;
+    el.querySelectorAll('[data-mtpg]').forEach(b => b.onclick = () => go(+b.dataset.mtpg));
+  }
+  // sortable header cells: <th data-sort="key">
+  function mtTh(label, key, st) {
+    if (!key) return `<th>${label}</th>`;
+    const on = st.sort === key;
+    return `<th class="mt-sortable${on ? ' on' : ''}" data-sort="${key}">${label}${on ? (st.dir === 'desc' ? ' ▾' : ' ▴') : ''}</th>`;
+  }
+  function mtBindSort(scope, st, redraw) {
+    scope.querySelectorAll('[data-sort]').forEach(th => th.onclick = () => {
+      const k = th.dataset.sort;
+      st.dir = st.sort === k && st.dir === 'asc' ? 'desc' : 'asc';
+      st.sort = k; st.page = 1; redraw();
+    });
+  }
+  const mtOpts = (list, sel, blank) => (blank !== undefined ? `<option value="">${esc(blank)}</option>` : '')
+    + (list || []).map(v => {
+      const val = typeof v === 'object' ? v.value : v, lab = typeof v === 'object' ? v.label : v;
+      return `<option value="${esc(val)}" ${String(val) === String(sel ?? '') ? 'selected' : ''}>${esc(lab)}</option>`;
+    }).join('');
+  const mtMentorOpts = (ctx, sel, blank) => mtOpts((ctx.mentors || []).map(m => ({
+    value: m.id, label: m.name + (m.empId ? ' (' + m.empId + ')' : '') + (m.active ? '' : ' — inactive') })), sel, blank);
+
+  /* The filter bar shared by the student lists. Collapses on a phone. */
+  function mtFilterBar(p, ctx, st, opts) {
+    opts = opts || {};
+    const f = (id, html) => `<label class="mt-f"><span>${id}</span>${html}</label>`;
+    const sel = (key, list, blank) => `<select class="filter-sel" data-mtf="${key}">${mtOpts(list, st[key], blank)}</select>`;
+    const items = [
+      f('Academic Year', sel('academicYear', ctx.years, 'All years')),
+      f('Department', sel('course', ctx.courses, 'All programmes')),
+      f('Branch', sel('branch', ctx.branches, 'All branches')),
+      f('Semester', sel('semester', ['1', '2', '3', '4'].map(v => ({ value: v, label: 'Semester ' + v })), 'All')),
+      f('Section', sel('section', ctx.sections, 'All')),
+      opts.noRisk ? '' : f('Risk', sel('risk', [{ value: 'High', label: 'High Risk' }, { value: 'Medium', label: 'Needs Attention' }, { value: 'Normal', label: 'Normal' }], 'All levels')),
+      f('Attendance', sel('att', [{ value: 'lt60', label: 'Below 60%' }, { value: '60to75', label: '60–75%' }, { value: 'gt75', label: 'Above 75%' }, { value: 'none', label: 'No classes yet' }], 'Any')),
+      f('Contact Status', sel('contact', ['Contacted', 'Not Contacted', 'Due for Contact'], 'Any')),
+      opts.mentor ? f('Mentor', `<select class="filter-sel" data-mtf="mentorId">${mtMentorOpts(ctx, st.mentorId, 'All mentors')}</select>`) : '',
+      opts.assigned ? f('Mentor Assigned', sel('assigned', [{ value: 'yes', label: 'Assigned' }, { value: 'no', label: 'Not assigned' }], 'All')) : '',
+    ].join('');
+    return `<details class="mt-filters" ${window.innerWidth > 860 ? 'open' : ''}>
+      <summary>${ic('search')} Filters</summary>
+      <div class="mt-filter-grid">${items}
+        <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="${p}Clear">Clear filters</button></div>
+      </div></details>`;
+  }
+  function mtBindFilters(scope, p, st, keys, redraw) {
+    scope.querySelectorAll('[data-mtf]').forEach(el => el.onchange = () => {
+      st[el.dataset.mtf] = el.value; st.page = 1; redraw();
+    });
+    const clr = $m('#' + p + 'Clear');
+    if (clr) clr.onclick = () => {
+      keys.forEach(k => { st[k] = ''; });
+      scope.querySelectorAll('[data-mtf]').forEach(el => { el.value = ''; });
+      const q = $m('#' + p + 'Q'); if (q) q.value = '';
+      st.q = ''; st.page = 1; redraw();
+    };
+    const q = $m('#' + p + 'Q');
+    if (q) {
+      let t = null;
+      q.oninput = () => { clearTimeout(t); t = setTimeout(() => { st.q = q.value.trim(); st.page = 1; redraw(); }, 300); };
+    }
+  }
+  /* Exports fetch every matching row (export=1) — not just the page on screen. */
+  function mtBindExports(p, title, columns, fetchAll, sub) {
+    const get = async () => {
+      const r = await fetchAll();
+      if (r.error) { toast(r.error, 'err'); return null; }
+      return { title, subtitle: (sub || '') + (sub ? ' · ' : '') + `GITAM B-School · Mentorship · Generated on ${new Date().toLocaleString('en-IN')}`,
+        columns, rows: r.rows || [], signatory: 'Mentorship Coordinator' };
+    };
+    const on = (suffix, fn) => { const el = $m('#' + p + suffix); if (el) el.onclick = fn; };
+    on('Print', async () => { const r = await get(); if (r) printReport(r); });
+    on('Pdf', async () => { const r = await get(); if (r) { printReport(r); toast('Choose "Save as PDF" in the print dialog.'); } });
+    on('Xls', async () => { const r = await get(); if (r) downloadXlsx(r); });
+  }
+
+  /* Opens a form on whichever layer is free, so a form started from the
+     student profile keeps the profile open underneath it. */
+  function mtModal(title, html, wide) {
+    const first = $m('#modalOverlay').classList.contains('hidden');
+    (first ? openModal : openModal2)(title, html, wide);
+    return first ? { close: closeModal, body: $m('#modalBody') } : { close: closeModal2, body: $m('#modal2Body') };
+  }
+
+  /* Re-draw the page the person is on after a change, without leaving it. */
+  function mtRefresh() {
+    if (splitViewKey(currentView).view.startsWith('mt') || splitViewKey(currentView).view.startsWith('mg')) render();
+  }
+
+  /* =========================== DASHBOARD =========================== */
+  function viewMentorDashboard() {
+    viewMentorDashboard.after = async () => {
+      const box = $m('#mtDash');
+      const ctx = await mtContext();
+      if (ctx.error) { box.innerHTML = mtError(ctx); return; }
+      const st = { mentorId: MT_PRESET.mentorId || '', mine: '' };
+      MT_PRESET = {};
+      const tools = $m('#mtDashTools');
+      if (ctx.level !== 'mentor') {
+        tools.innerHTML = `${ctx.hod ? `<select class="filter-sel" id="mtDashScope">
+            <option value="">Whole department</option><option value="1">My mentees</option></select>` : ''}
+          <select class="filter-sel" id="mtDashMentor">${mtMentorOpts(ctx, st.mentorId, ctx.hod ? 'All department mentors' : 'All mentors')}</select>`;
+        $m('#mtDashMentor').onchange = (e) => { st.mentorId = e.target.value; draw(); };
+        if ($m('#mtDashScope')) $m('#mtDashScope').onchange = (e) => { st.mine = e.target.value; draw(); };
+      }
+      const draw = async () => {
+        box.innerHTML = mtLoading('Gathering mentorship figures…');
+        const d = await mtGet('mt-dashboard', st);
+        if (d.error) { box.innerHTML = mtError(d); return; }
+        box.innerHTML = mtDashboardHtml(d, ctx);
+        const go = (id, view) => { const el = $m('#' + id); if (el) el.onclick = () => navigate(view); };
+        const admin = mtIsAdminPage();
+        go('mtkStudents', admin ? 'mgmapping' : 'mtmine');
+        go('mtkContact', admin ? 'mgmapping' : 'mtmine');
+        go('mtkParent', admin ? 'mgactivity' : 'mtparent');
+        go('mtkRisk', admin ? 'mgrisk' : 'mtrisk');
+        go('mtkFollow', admin ? 'mgfollow' : 'mtfollow');
+        go('mtkResolved', admin ? 'mgactivity' : 'mtinter');
+        box.querySelectorAll('[data-mtprofile]').forEach(b => b.onclick = () => mtOpenProfile(b.dataset.mtprofile));
+      };
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub('Monitor student engagement, academic concerns, parent communication and follow-ups.')}
+        <div class="mt-head-tools" id="mtDashTools"></div></div>
+      <div id="mtDash">${mtLoading()}</div></div>`;
+  }
+
+  function mtDashboardHtml(d, ctx) {
+    const k = d.kpi;
+    const none = !k.assigned && ctx.level === 'mentor';
+    if (none) {
+      return mtEmpty('No students are currently assigned to you. Once the Super Admin assigns mentees, their engagement, risk and follow-ups appear here.');
+    }
+    const c = d.contact, totalC = (c.Contacted + c['Not Contacted'] + c['Due for Contact']) || 0;
+    const segC = [
+      { label: 'Contacted', value: c.Contacted, color: 'var(--primary)' },
+      { label: 'Due for Contact', value: c['Due for Contact'], color: 'var(--amber)' },
+      { label: 'Not Contacted', value: c['Not Contacted'], color: '#d5dbe3' },
+    ];
+    const legend = (segs) => `<div class="lib-legend">${segs.map(s => `<div class="lib-legend-row">
+      <span class="ldot" style="background:${s.color}"></span><span>${esc(s.label)}</span><b>${s.value}</b></div>`).join('')}</div>`;
+    const r = d.risk, totalR = (r.Normal + r.Medium + r.High) || 1;
+    const bar = (label, n, total, color) => `<div class="dist-row"><span class="dist-label">${esc(label)}</span>
+      <div class="dist-bar"><i style="width:${Math.round(n / total * 100)}%;background:${color}"></i></div><span class="dist-val">${n}</span></div>`;
+    const f = d.followups;
+    const tile = (cls, n, label, id) => `<div class="mt-tile ${cls}"${id ? ` data-go="${id}"` : ''}><b>${n}</b><span>${esc(label)}</span></div>`;
+    const weeksMax = Math.max(1, ...d.parent.weeks.map(w => w.count));
+    return `
+      <div class="stat-grid mt-kpis">
+        ${statCard(ic('users'), k.assigned, 'Students Assigned', '', 'mtkStudents')}
+        ${statCard(ic('phone'), k.studentContactRate + '%', 'Student Contact Rate', 'c3', 'mtkContact')}
+        ${statCard(ic('home'), k.parentContactRate + '%', 'Parent Contact Rate', 'c2', 'mtkParent')}
+        ${statCard(ic('alert'), k.atRisk, 'At-Risk Students', 'c4', 'mtkRisk')}
+        ${statCard(ic('clock'), k.pendingFollowups, 'Pending Follow-ups', 'c2', 'mtkFollow')}
+        ${statCard(ic('check'), k.resolved, 'Resolved Cases', 'c3', 'mtkResolved')}
+      </div>
+      <div class="dash-2col">
+        <div class="panel"><div class="panel-head"><h3>Student Contact Overview</h3>
+            <span class="mt-muted">within ${d.windowDays} days</span></div>
+          ${totalC ? `<div class="mt-donut-row"><div class="lib-donut" style="background:${donutGradient(segC)}">
+              <div class="lib-donut-center"><strong>${k.studentContactRate}%</strong><span>contacted</span></div></div>
+            ${legend(segC)}</div>` : mtEmpty('No mentees to contact yet.')}
+        </div>
+        <div class="panel"><div class="panel-head"><h3>Parent Contact Overview</h3>
+            <span class="mt-muted">last ${d.parentWindowDays} days</span></div>
+          <div class="mt-donut-row">${donutSVG(k.parentContactRate, 'parents reached')}
+            <div class="mt-weeks">${d.parent.weeks.map(w => `<div class="mt-week"><span>${esc(w.label)}</span>
+              <div class="dist-bar"><i style="width:${Math.round(w.count / weeksMax * 100)}%"></i></div><b>${w.count}</b></div>`).join('')}
+              <p class="mt-muted">${d.parent.recent ? plural(d.parent.recent, 'parent interaction') + ' recorded in the last ' + d.parentWindowDays + ' days.'
+                : 'No parent interactions recorded in the last ' + d.parentWindowDays + ' days.'}</p></div></div>
+        </div>
+        <div class="panel"><div class="panel-head"><h3>Student Risk Distribution</h3></div>
+          ${bar('Normal', r.Normal, totalR, 'var(--green)')}
+          ${bar('Needs Attention', r.Medium, totalR, 'var(--amber)')}
+          ${bar('At Risk', r.High, totalR, 'var(--red)')}
+          ${d.atRisk.length ? `<div class="mt-mini-list">${d.atRisk.map(s => `<button type="button" class="mt-mini" data-mtprofile="${esc(s.id)}">
+            <span>${esc(s.name)} <small class="mt-muted">${esc(s.roll)}</small></span>
+            <small class="mt-reason">${esc((s.riskReasons || []).slice(0, 2).join(' · '))}</small></button>`).join('')}</div>` : ''}
+        </div>
+        <div class="panel"><div class="panel-head"><h3>Follow-up Overview</h3></div>
+          <div class="mt-tiles">
+            ${tile('red', f.Overdue, 'Overdue')}${tile('amber', f['Due Today'], 'Due Today')}
+            ${tile('sky', f.Upcoming, 'Upcoming')}${tile('green', f.Completed, 'Completed')}
+          </div>
+          ${!(f.Overdue + f['Due Today'] + f.Upcoming) ? '<p class="mt-muted mt-pad">No pending follow-ups.</p>' : ''}
+        </div>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Recent Mentor Activities</h3></div>
+        ${d.recent.length ? mtTimelineHtml(d.recent, true) : mtEmpty('No mentor activity has been recorded yet.')}
+      </div>`;
+  }
+
+  /* ---------- the interaction timeline (dashboard, profile) ---------- */
+  function mtTimelineHtml(items, withStudent) {
+    return `<ul class="mt-tl">${items.map(i => {
+      const parent = i.kind === 'parent';
+      return `<li class="${parent ? 'tl-parent' : 'tl-student'} st-${(i.status || '').replace(/\W+/g, '').toLowerCase()}">
+        <div class="mt-tl-date">${mtDate(i.date)}</div>
+        <div class="mt-tl-card">
+          <div class="mt-tl-top"><b>${esc(parent ? 'Parent ' + (i.mode || 'Contact') : i.type)}</b>
+            ${parent && i.guardianName ? `<span class="mt-muted">with ${esc(i.guardianName)}${i.relationship ? ' (' + esc(i.relationship) + ')' : ''}</span>` : ''}
+            ${withStudent ? `<button type="button" class="mt-link" data-mtprofile="${esc(i.studentId)}">${esc(i.studentName)}</button>` : ''}
+            <span class="mt-tl-pills">${mtStatusPill(i.status)}</span></div>
+          ${i.discussion ? `<p>${esc(i.discussion)}</p>` : ''}
+          ${i.concern ? `<p><span class="mt-k">Concern</span> ${esc(i.concern)}</p>` : ''}
+          ${i.actionTaken ? `<p><span class="mt-k">Action</span> ${esc(i.actionTaken)}</p>` : ''}
+          ${i.parentResponse ? `<p><span class="mt-k">Parent response</span> ${esc(i.parentResponse)}</p>` : ''}
+          ${i.outcome ? `<p><span class="mt-k">Outcome</span> ${esc(i.outcome)}</p>` : ''}
+          <div class="mt-tl-foot">${i.nextFollowUp ? `<span>${ic('calendar')} Next follow-up: <b>${mtDate(i.nextFollowUp)}</b></span>` : ''}
+            <span class="mt-muted">${esc(i.category || '')}${i.mentorName ? ' · ' + esc(i.mentorName) : ''}</span></div>
+        </div></li>`;
+    }).join('')}</ul>`;
+  }
+
+  /* ======================== STUDENT LISTS ======================== */
+  /* One component, two lenses: the mentor's "My Students" and the
+     administration's "Student-Mentor Mapping" (adds the mentor column,
+     selection and the assign/transfer/remove actions). */
+  function viewMentorStudents() {
+    const admin = mtIsAdminPage();
+    const p = 'mts';
+    viewMentorStudents.after = async () => {
+      const box = $m('#mtsBox');
+      const ctx = await mtContext();
+      if (ctx.error) { box.innerHTML = mtError(ctx); return; }
+      const st = { q: '', page: 1, sort: 'roll', dir: 'asc', academicYear: '', course: '', branch: '', semester: '',
+                   section: '', risk: '', att: '', contact: '', mentorId: MT_PRESET.mentorId || '', assigned: '', mine: '' };
+      MT_PRESET = {};
+      const keys = ['academicYear', 'course', 'branch', 'semester', 'section', 'risk', 'att', 'contact', 'mentorId', 'assigned'];
+      const canManage = admin && ctx.manage;
+      const selected = new Set();
+      $m('#mtsFilters').innerHTML = mtFilterBar(p, ctx, st, { mentor: ctx.level !== 'mentor', assigned: admin });
+      if (ctx.hod && !admin) {
+        $m('#mtsScope').innerHTML = `<select class="filter-sel" id="mtsScopeSel"><option value="">Whole department</option>
+          <option value="1">My mentees</option></select>`;
+        $m('#mtsScopeSel').onchange = (e) => { st.mine = e.target.value; st.page = 1; draw(); };
+      }
+      const cols = () => [
+        admin && canManage ? `<th class="mt-chk"><input type="checkbox" id="mtsAll" title="Select this page"></th>` : '',
+        mtTh('Registration No', 'roll', st), mtTh('Student Name', 'name', st), mtTh('Branch / Specialisation', 'course', st),
+        mtTh('Sem', 'semester', st), mtTh('Sec', 'section', st), mtTh('Attendance', 'attendance', st), mtTh('CGPA', 'cgpa', st),
+        ctx.level !== 'mentor' ? mtTh('Mentor', 'mentorName', st) : '',
+        mtTh('Last Student Contact', 'lastStudentContact', st), mtTh('Last Parent Contact', 'lastParentContact', st),
+        mtTh('Risk', 'risk', st), mtTh('Next Follow-up', 'nextFollowUp', st), '<th>Actions</th>',
+      ].join('');
+      const params = () => Object.assign({}, st, { all: admin ? '1' : '' });
+      const draw = async () => {
+        $m('#mtsTable').innerHTML = mtLoading();
+        const d = await mtGet('mt-students', Object.assign(params(), { size: 25 }));
+        if (d.error) { $m('#mtsTable').innerHTML = mtError(d); return; }
+        $m('#mtsCounts').innerHTML = `<span class="pill red">${d.counts.High} high risk</span>
+          <span class="pill amber">${d.counts.Medium} need attention</span>
+          <span class="pill green">${d.counts.Normal} normal</span>`;
+        const writable = (r) => ctx.write && (ctx.level === 'all' || r.mentorId === ctx.mentorId);
+        const emptyMsg = ctx.level === 'mentor' && !st.q && !keys.some(k => st[k])
+          ? 'No students are currently assigned to you.' : 'No students match these filters.';
+        const n = (admin && canManage ? 1 : 0) + 12 + (ctx.level !== 'mentor' ? 1 : 0);
+        $m('#mtsTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>${cols()}</tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(r => `<tr>
+            ${admin && canManage ? `<td class="mt-chk"><input type="checkbox" data-sel="${esc(r.id)}" ${selected.has(r.id) ? 'checked' : ''}></td>` : ''}
+            <td class="mono">${esc(r.roll)}</td>
+            <td><button type="button" class="mt-link" data-mtprofile="${esc(r.id)}">${esc(r.name)}</button></td>
+            <td>${mtBranch(r)}</td><td>${esc(r.semester || '—')}</td><td>${esc(r.section || '—')}</td>
+            <td>${mtAtt(r.attendance)}</td><td>${esc(r.cgpa || '—')}${r.backlogs ? ` <small class="mt-muted">· ${r.backlogs} BL</small>` : ''}</td>
+            ${ctx.level !== 'mentor' ? `<td>${r.mentorName ? esc(r.mentorName) : '<span class="pill grey">Not assigned</span>'}</td>` : ''}
+            <td>${r.lastStudentContact ? mtDate(r.lastStudentContact) + `<br><small class="mt-muted">${mtAgo(r.lastStudentContact)}</small>` : '<span class="mt-muted">Never</span>'}</td>
+            <td>${r.lastParentContact ? mtDate(r.lastParentContact) + `<br><small class="mt-muted">${mtAgo(r.lastParentContact)}</small>` : '<span class="mt-muted">Never</span>'}</td>
+            <td>${mtRiskPill(r.risk, r.riskScore)}</td>
+            <td>${r.nextFollowUp ? mtDate(r.nextFollowUp) + (r.overdueFollowups ? ' <span class="pill red">Overdue</span>' : '') : '<span class="mt-muted">—</span>'}</td>
+            <td><div class="row-actions mt-actions">
+              <button class="btn-sm btn-outline" data-mtprofile="${esc(r.id)}" title="View profile">${ic('eye')} View</button>
+              ${writable(r) ? `<button class="btn-sm btn-edit" data-act="inter" data-id="${esc(r.id)}" title="Add student interaction">${ic('plus')} Interaction</button>
+              <button class="btn-sm btn-outline" data-act="parent" data-id="${esc(r.id)}" title="Record a parent contact">${ic('phone')} Parent</button>
+              <button class="btn-sm btn-outline" data-act="follow" data-id="${esc(r.id)}" title="Create a follow-up">${ic('clock')} Follow-up</button>` : ''}
+              <button class="btn-sm btn-outline" data-act="history" data-id="${esc(r.id)}" title="Interaction history">${ic('activity')} History</button>
+              ${admin && canManage ? `<button class="btn-sm btn-outline" data-act="assign" data-id="${esc(r.id)}" data-name="${esc(r.name)}">${ic('user')} ${r.mentorId ? 'Change' : 'Assign'}</button>` : ''}
+            </div></td></tr>`).join('')
+          : `<tr><td colspan="${n}" class="empty">${esc(emptyMsg)}</td></tr>`}
+          </tbody></table></div>${mtPagerHtml(d)}`;
+        const t = $m('#mtsTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-mtprofile]').forEach(b => b.onclick = () => mtOpenProfile(b.dataset.mtprofile));
+        t.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+          const id = b.dataset.id, a = b.dataset.act;
+          if (a === 'inter') mtInteractionForm('student', id);
+          if (a === 'parent') mtInteractionForm('parent', id);
+          if (a === 'follow') mtFollowupForm(id);
+          if (a === 'history') mtOpenProfile(id, true);
+          if (a === 'assign') mtAssignDialog(ctx, [id], b.dataset.name);
+        });
+        t.querySelectorAll('[data-sel]').forEach(c => c.onchange = () => {
+          if (c.checked) selected.add(c.dataset.sel); else selected.delete(c.dataset.sel);
+          paintBulk();
+        });
+        const all = $m('#mtsAll');
+        if (all) all.onchange = () => t.querySelectorAll('[data-sel]').forEach(c => {
+          c.checked = all.checked;
+          if (all.checked) selected.add(c.dataset.sel); else selected.delete(c.dataset.sel);
+          paintBulk();
+        });
+      };
+      const paintBulk = () => {
+        const b = $m('#mtsBulk');
+        if (!b) return;
+        b.innerHTML = selected.size ? `<span><b>${selected.size}</b> selected</span>
+          <button class="btn-primary btn-sm" id="mtsBulkAssign">${ic('user')} Assign / Change mentor</button>
+          <button class="btn-outline btn-sm" id="mtsBulkRemove">${ic('x')} Remove mentor</button>
+          <button class="btn-outline btn-sm" id="mtsBulkClear">Clear selection</button>` : '';
+        if (!selected.size) return;
+        $m('#mtsBulkAssign').onclick = () => mtAssignDialog(ctx, [...selected], '', () => { selected.clear(); paintBulk(); });
+        $m('#mtsBulkRemove').onclick = () => mtUnassignDialog([...selected], () => { selected.clear(); paintBulk(); });
+        $m('#mtsBulkClear').onclick = () => { selected.clear(); paintBulk(); draw(); };
+      };
+      mtBindFilters($m('#mtsFilters'), p, st, keys, draw);
+      mtBindExports(p, admin ? 'Student-Mentor Mapping' : 'My Mentees', [
+        { header: 'Registration No', key: 'roll', width: 15 }, { header: 'Student Name', key: 'name', width: 24 },
+        { header: 'Programme', key: 'course', width: 10 }, { header: 'Branch', key: 'branchName', width: 22 },
+        { header: 'Semester', key: 'semester', width: 9 }, { header: 'Section', key: 'section', width: 8 },
+        { header: 'Attendance %', key: 'attendance', width: 12 }, { header: 'CGPA', key: 'cgpa', width: 8 },
+        { header: 'Backlogs', key: 'backlogs', width: 9 }, { header: 'Mentor', key: 'mentorName', width: 22 },
+        { header: 'Last Student Contact', key: 'lastStudentContact', width: 16 }, { header: 'Last Parent Contact', key: 'lastParentContact', width: 16 },
+        { header: 'Risk', key: 'risk', width: 10 }, { header: 'Next Follow-up', key: 'nextFollowUp', width: 14 },
+      ], () => mtGet('mt-students', Object.assign(params(), { export: '1' })));
+      draw();
+      viewMentorStudents.redraw = draw;
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub(admin ? 'Every student with their mentor, engagement and risk. Select students to assign, change or remove a mentor.'
+          : 'Your mentees with their attendance, results, last contact and risk — record a conversation in one click.')}
+        <div class="mt-head-tools"><span id="mtsScope"></span>${exportButtons(p)}</div></div>
+      <div class="panel">
+        <div class="panel-head mt-panel-head"><input class="search-box" id="mtsQ" placeholder="Search name, registration no, mentor…">
+          <div class="mt-counts" id="mtsCounts"></div></div>
+        <div id="mtsFilters"></div>
+        <div class="mt-bulk" id="mtsBulk"></div>
+        <div id="mtsTable">${mtLoading()}</div>
+      </div>
+      ${admin ? `<div class="panel"><div class="panel-head"><h3>Assignment History</h3>
+          <div class="panel-tools"><select class="filter-sel" id="mtsHistStatus"><option value="">All</option><option>Active</option><option>Ended</option></select>
+          <input class="search-box" id="mtsHistQ" placeholder="Search student or mentor…"></div></div>
+          <div id="mtsHist">${mtLoading()}</div></div>` : ''}
+      <div id="mtsBox"></div></div>`;
+  }
+  // the history panel on the mapping page
+  function mtAssignmentHistory() {
+    const box = $m('#mtsHist');
+    if (!box) return;
+    const st = { q: '', status: '', page: 1, sort: 'assignedAt', dir: 'desc' };
+    const draw = async () => {
+      const d = await mtGet('mt-assignments', Object.assign({}, st, { size: 15 }));
+      if (d.error) { box.innerHTML = mtError(d); return; }
+      box.innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+          ${mtTh('Assigned', 'assignedAt', st)}${mtTh('Student', 'studentName', st)}${mtTh('Mentor', 'mentorName', st)}
+          ${mtTh('Academic Year', 'academicYear', st)}${mtTh('Status', 'status', st)}${mtTh('Ended', 'endedAt', st)}<th>Note</th><th>By</th></tr></thead><tbody>
+        ${d.rows.length ? d.rows.map(r => `<tr><td>${mtDate(r.assignedAt)}</td>
+          <td>${esc(r.studentName)} <small class="mt-muted mono">${esc(r.roll)}</small></td>
+          <td>${esc(r.mentorName)} <small class="mt-muted">${esc(r.empId)}</small></td><td>${esc(r.academicYear || '—')}</td>
+          <td><span class="pill ${r.status === 'Active' ? 'green' : 'grey'}">${esc(r.status)}</span></td>
+          <td>${r.endedAt ? mtDate(r.endedAt) : '—'}</td><td>${esc(r.endReason || '')}</td><td>${esc(r.assignedBy || '')}</td></tr>`).join('')
+          : `<tr><td colspan="8" class="empty">No mentor has been assigned yet.</td></tr>`}</tbody></table></div>${mtPagerHtml(d)}`;
+      mtBindSort(box, st, draw);
+      mtBindPager(box, (pg) => { st.page = pg; draw(); });
+    };
+    $m('#mtsHistStatus').onchange = (e) => { st.status = e.target.value; st.page = 1; draw(); };
+    let t = null;
+    $m('#mtsHistQ').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { st.q = e.target.value.trim(); st.page = 1; draw(); }, 300); };
+    draw();
+  }
+
+  /* ======================= STUDENT PROFILE ======================= */
+  async function mtOpenProfile(sid, scrollToHistory) {
+    const m = mtModal('Student Mentorship Profile', mtLoading('Opening the student file…'), true);
+    const d = await mtGet('mt-student', { id: sid });
+    if (d.error) { m.body.innerHTML = mtError(d); return; }
+    const s = d.student;
+    const fu = d.followups.filter(f => ['Overdue', 'Due Today', 'Upcoming'].includes(f.state));
+    const academicStatus = s.risk === 'High' ? 'Requires intervention' : s.risk === 'Medium' ? 'Needs attention' : 'Satisfactory';
+    const avatar = s.photo ? `<img src="${esc(s.photo)}" alt="">` : `<span>${esc((s.name || '?')[0])}</span>`;
+    const sem = Object.keys(d.semesterGpa || {});
+    m.body.innerHTML = `<div class="mt-profile">
+      <div class="mt-prof-head">
+        <div class="mt-avatar">${avatar}</div>
+        <div class="mt-prof-id"><h3>${esc(s.name)}</h3>
+          <p><span class="mono">${esc(s.roll)}</span> · ${mtBranch(s)} · Semester ${esc(s.semester || '—')} · Section ${esc(s.section || '—')}</p>
+          <p>${ic('user')} Mentor: <b>${esc(s.mentorName || 'Not assigned')}</b>${s.assignedAt ? ` <span class="mt-muted">since ${mtDate(s.assignedAt)}</span>` : ''}</p></div>
+        <div class="mt-prof-risk">${mtRiskPill(s.risk, s.riskScore)}<small class="mt-muted">Score ${s.riskScore}</small></div>
+      </div>
+      ${s.riskReasons.length ? `<div class="mt-reasons">${s.riskReasons.map(r => `<span class="mt-chip">${esc(r)}</span>`).join('')}</div>` : ''}
+      ${d.canWrite ? `<div class="mt-prof-actions">
+        <button class="btn-primary btn-sm" id="mtpInter">${ic('plus')} Add Interaction</button>
+        <button class="btn-outline btn-sm" id="mtpParent">${ic('phone')} Parent Contact</button>
+        <button class="btn-outline btn-sm" id="mtpFollow">${ic('clock')} Follow-up</button></div>` : ''}
+      <div class="mt-prof-grid">
+        <div class="mt-card"><h4>${ic('cap')} Academic Performance</h4>
+          <div class="mt-kv"><span>CGPA</span><b>${esc(s.cgpa || '—')}</b></div>
+          <div class="mt-kv"><span>SGPA (latest)</span><b>${s.sgpa ?? '—'}</b></div>
+          <div class="mt-kv"><span>Backlogs</span><b>${s.backlogs}</b></div>
+          <div class="mt-kv"><span>Internal marks (avg)</span><b>${s.internalAvg !== null ? s.internalAvg + ' / ' + INTERNAL_MAX : '—'}</b></div>
+          <div class="mt-kv"><span>Academic status</span><b>${esc(academicStatus)}</b></div>
+          ${sem.length > 1 ? `<div class="mt-kv"><span>SGPA by semester</span><b>${sem.map(k => 'S' + k + ': ' + d.semesterGpa[k]).join(' · ')}</b></div>` : ''}
+        </div>
+        <div class="mt-card"><h4>${ic('check')} Attendance</h4>
+          ${s.attendance === null ? '<p class="mt-muted">No classes recorded yet.</p>' : `<div class="mt-big">${mtAtt(s.attendance)}</div>
+            <div class="dist-bar"><i style="width:${s.attendance}%"></i></div>
+            <p class="mt-muted">${s.attendanceClasses} ${s.attendanceClasses === 1 ? 'class' : 'classes'} recorded</p>`}
+        </div>
+        <div class="mt-card"><h4>${ic('activity')} Mentorship Activity</h4>
+          <div class="mt-kv"><span>Interactions</span><b>${s.interactions}</b></div>
+          <div class="mt-kv"><span>Last student contact</span><b>${s.lastStudentContact ? mtDate(s.lastStudentContact) : 'Never'}</b></div>
+          <div class="mt-kv"><span>Contact status</span><b>${esc(s.contactStatus)}</b></div>
+          <div class="mt-kv"><span>Open issues</span><b>${s.openIssues}</b></div>
+          <div class="mt-kv"><span>Resolved</span><b>${s.resolved}</b></div>
+        </div>
+        <div class="mt-card"><h4>${ic('home')} Parent Communication</h4>
+          <div class="mt-kv"><span>Last parent contact</span><b>${s.lastParentContact ? mtDate(s.lastParentContact) : 'Never'}</b></div>
+          ${d.guardians.length ? d.guardians.map(g => `<div class="mt-guardian"><b>${esc(g.name)}</b> <span class="mt-muted">${esc(g.relation)}</span>
+            ${g.mobile ? `<a href="tel:${esc(g.mobile)}">${ic('phone')} ${esc(g.mobile)}</a>
+              <a href="https://wa.me/91${esc(String(g.mobile).replace(/\D/g, '').slice(-10))}" target="_blank" rel="noopener">WhatsApp</a>` : ''}</div>`).join('')
+            : '<p class="mt-muted">No parent or guardian details on the student record.</p>'}
+        </div>
+        <div class="mt-card mt-card-wide"><h4>${ic('clock')} Follow-ups</h4>
+          ${fu.length ? fu.map(f => `<div class="mt-fu-row">${mtStatePill(f.state)} <b>${mtDate(f.dueDate)}</b> <span>${esc(f.reason)}</span>
+            ${d.canWrite ? `<button class="btn-sm btn-outline" data-fudone="${esc(f.id)}">${ic('check')} Complete</button>` : ''}</div>`).join('')
+            : '<p class="mt-muted">No pending follow-ups.</p>'}
+        </div>
+      </div>
+      <div class="mt-card mt-card-wide" id="mtpHistory"><h4>${ic('notes')} Student Interaction History</h4>
+        ${d.interactions.length ? mtTimelineHtml(d.interactions, false) : '<p class="mt-muted">No interactions recorded for this student yet.</p>'}
+      </div>
+      ${d.assignments.length ? `<div class="mt-card mt-card-wide"><h4>${ic('users')} Mentor History</h4>
+        ${d.assignments.map(a => `<div class="mt-fu-row"><span class="pill ${a.status === 'Active' ? 'green' : 'grey'}">${esc(a.status)}</span>
+          <b>${esc(a.mentorName)}</b> <span class="mt-muted">${mtDate(a.assignedAt)}${a.endedAt ? ' – ' + mtDate(a.endedAt) : ''}
+          ${a.academicYear ? ' · ' + esc(a.academicYear) : ''}${a.endReason ? ' · ' + esc(a.endReason) : ''}</span></div>`).join('')}</div>` : ''}
+    </div>`;
+    const again = () => { mtOpenProfile(sid); };
+    if (d.canWrite) {
+      $m('#mtpInter').onclick = () => mtInteractionForm('student', sid, again);
+      $m('#mtpParent').onclick = () => mtInteractionForm('parent', sid, again);
+      $m('#mtpFollow').onclick = () => mtFollowupForm(sid, again);
+      m.body.querySelectorAll('[data-fudone]').forEach(b => b.onclick = () => mtFollowupAction(b.dataset.fudone, 'complete', again));
+    }
+    if (scrollToHistory) setTimeout(() => { const h = $m('#mtpHistory'); if (h) h.scrollIntoView({ behavior: 'smooth' }); }, 50);
+  }
+
+  /* ========================= FORMS ========================= */
+  // the students a form may be filed against: the mentor's own, or any for the administration
+  async function mtWritableStudents(ctx) {
+    const d = await mtGet('mt-students', { export: '1', mine: ctx.level === 'all' ? '' : '1', sort: 'name' });
+    return d.error ? [] : d.rows.filter(r => ctx.level === 'all' || r.mentorId === ctx.mentorId);
+  }
+
+  async function mtInteractionForm(kind, sid, after) {
+    const ctx = await mtContext();
+    if (ctx.error) { toast(ctx.error, 'err'); return; }
+    if (!ctx.write) { toast('Your account can view mentorship records but not add them.', 'err'); return; }
+    const parent = kind === 'parent';
+    const L = ctx.lists;
+    const m = mtModal(parent ? 'Add Parent Interaction' : 'Add Student Interaction', mtLoading(), true);
+    const students = await mtWritableStudents(ctx);
+    if (!students.length) {
+      m.body.innerHTML = mtEmpty('No students are currently assigned to you, so there is no one to record an interaction for.');
+      return;
+    }
+    const sel = (name, label, list, val, req) => `<div class="field"><label>${label}${req ? ' <span class="req">*</span>' : ''}</label>
+      <select name="${name}" ${req ? 'required' : ''}>${mtOpts(list, val)}</select></div>`;
+    const area = (name, label, req, ph) => `<div class="field full"><label>${label}${req ? ' <span class="req">*</span>' : ''}</label>
+      <textarea name="${name}" rows="3" maxlength="4000" ${req ? 'required' : ''} placeholder="${esc(ph || '')}"></textarea></div>`;
+    m.body.innerHTML = `<form id="mtIf" class="mt-form">
+      <div class="form-grid">
+        <div class="field"><label>Student <span class="req">*</span></label>
+          <select name="studentId" id="mtIfStu" required>${mtOpts(students.map(s => ({ value: s.id, label: s.name + ' — ' + s.roll })), sid, 'Choose a student')}</select></div>
+        ${fDate('date', 'Date', today())}
+        ${parent ? `<div class="field"><label>Parent / Guardian <span class="req">*</span></label>
+            <input name="guardianName" id="mtIfG" list="mtIfGl" maxlength="120" required placeholder="Name of the person you spoke to">
+            <datalist id="mtIfGl"></datalist></div>
+          ${sel('relationship', 'Relationship', L.relations, 'Father')}
+          ${sel('mode', 'Contact Mode', L.parentModes, 'Phone')}`
+        : `${sel('type', 'Interaction Type', L.studentTypes, 'Student Meeting', true)}
+          ${sel('mode', 'Interaction Mode', L.studentModes, 'In Person')}`}
+        ${sel('category', 'Category', L.categories, 'Academic')}
+        ${sel('priority', 'Priority', L.priorities, 'Medium')}
+        ${sel('status', 'Status', L.statuses, 'Open')}
+        <div class="field"><label>Next Follow-up</label><input type="date" name="nextFollowUp" min="${today()}"></div>
+        ${area('discussion', 'Discussion', true, parent ? 'What was discussed with the parent…' : 'What was discussed…')}
+        ${area('concern', parent ? 'Parent Concern' : 'Student Concern')}
+        ${area('actionTaken', 'Action Taken')}
+        ${parent ? area('parentResponse', 'Parent Response') : ''}
+        ${area('outcome', 'Outcome')}
+        ${parent ? area('remarks', 'Remarks') : ''}
+      </div>
+      <p class="mt-muted">A follow-up date books a follow-up automatically. Status “Follow-up Required” needs a date.</p>
+      <div class="modal-actions"><button type="button" class="btn-outline" id="mtIfX">Cancel</button>
+        <button type="submit" class="btn-primary">Save Interaction</button></div></form>`;
+    $m('#mtIfX').onclick = m.close;
+    if (parent) {
+      const fillGuardians = async () => {
+        const id = $m('#mtIfStu').value;
+        const dl = $m('#mtIfGl');
+        dl.innerHTML = '';
+        if (!id) return;
+        const d = await mtGet('mt-student', { id });
+        if (d.error) return;
+        dl.innerHTML = d.guardians.map(g => `<option value="${esc(g.name)}">${esc(g.relation)}${g.mobile ? ' · ' + esc(g.mobile) : ''}</option>`).join('');
+        if (d.guardians[0] && !$m('#mtIfG').value) {
+          $m('#mtIfG').value = d.guardians[0].name;
+          const rel = $m('#mtIf').querySelector('[name="relationship"]');
+          if (rel && (ctx.lists.relations || []).includes(d.guardians[0].relation)) rel.value = d.guardians[0].relation;
+        }
+      };
+      $m('#mtIfStu').onchange = fillGuardians;
+      fillGuardians();
+    }
+    $m('#mtIf').onsubmit = async (e) => {
+      e.preventDefault();
+      const body = formData(e.target);
+      body.kind = kind;
+      const btn = e.target.querySelector('[type="submit"]');
+      btn.disabled = true;
+      const r = await mtPost('mt-interaction', body);
+      btn.disabled = false;
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close();
+      toast(parent ? 'Parent interaction saved.' : 'Interaction saved.' + (r.followupId ? ' Follow-up booked.' : ''));
+      if (after) after(); else mtRefresh();
+    };
+  }
+
+  async function mtFollowupForm(sid, after) {
+    const ctx = await mtContext();
+    if (ctx.error) { toast(ctx.error, 'err'); return; }
+    if (!ctx.write) { toast('Your account can view follow-ups but not create them.', 'err'); return; }
+    const m = mtModal('Create Follow-up', mtLoading());
+    const students = await mtWritableStudents(ctx);
+    if (!students.length) { m.body.innerHTML = mtEmpty('No students are currently assigned to you.'); return; }
+    m.body.innerHTML = `<form id="mtFf"><div class="form-grid">
+        <div class="field full"><label>Student <span class="req">*</span></label>
+          <select name="studentId" required>${mtOpts(students.map(s => ({ value: s.id, label: s.name + ' — ' + s.roll })), sid, 'Choose a student')}</select></div>
+        <div class="field full"><label>Reason <span class="req">*</span></label>
+          <input name="reason" maxlength="255" required placeholder="e.g. Review attendance after counselling"></div>
+        <div class="field"><label>Due Date <span class="req">*</span></label><input type="date" name="dueDate" min="${today()}" value="${addDays(today(), 7)}" required></div>
+        <div class="field"><label>Priority</label><select name="priority">${mtOpts(ctx.lists.priorities, 'Medium')}</select></div>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn-outline" id="mtFfX">Cancel</button>
+        <button type="submit" class="btn-primary">Create Follow-up</button></div></form>`;
+    $m('#mtFfX').onclick = m.close;
+    $m('#mtFf').onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await mtPost('mt-followup', formData(e.target));
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close();
+      toast('Follow-up created.');
+      if (after) after(); else mtRefresh();
+    };
+  }
+
+  function mtFollowupAction(id, action, after) {
+    if (action === 'reschedule') {
+      const m = mtModal('Reschedule Follow-up', `<form id="mtRf"><div class="form-grid">
+          <div class="field"><label>New Due Date</label><input type="date" name="dueDate" min="${today()}" value="${addDays(today(), 7)}" required></div></div>
+        <div class="modal-actions"><button type="button" class="btn-outline" id="mtRfX">Cancel</button>
+          <button type="submit" class="btn-primary">Reschedule</button></div></form>`);
+      $m('#mtRfX').onclick = m.close;
+      $m('#mtRf').onsubmit = async (e) => {
+        e.preventDefault();
+        const r = await mtPost('mt-followup-update', { id, action, dueDate: formData(e.target).dueDate });
+        if (r.error) { toast(r.error, 'err'); return; }
+        m.close(); toast('Follow-up rescheduled.');
+        if (after) after(); else mtRefresh();
+      };
+      return;
+    }
+    const label = action === 'complete' ? 'Complete' : action === 'cancel' ? 'Cancel' : 'Reopen';
+    const m = mtModal(label + ' Follow-up', `<form id="mtCf"><div class="form-grid">
+        <div class="field full"><label>${action === 'complete' ? 'What was done (optional)' : 'Note (optional)'}</label>
+          <textarea name="note" rows="3" maxlength="1000"></textarea></div></div>
+      <div class="modal-actions"><button type="button" class="btn-outline" id="mtCfX">Back</button>
+        <button type="submit" class="${action === 'cancel' ? 'btn-del' : 'btn-primary'}">${label} Follow-up</button></div></form>`);
+    $m('#mtCfX').onclick = m.close;
+    $m('#mtCf').onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await mtPost('mt-followup-update', { id, action, note: formData(e.target).note });
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close(); toast(action === 'complete' ? 'Follow-up completed.' : action === 'cancel' ? 'Follow-up cancelled.' : 'Follow-up reopened.');
+      if (after) after(); else mtRefresh();
+    };
+  }
+
+  /* ===================== INTERACTION LISTS ===================== */
+  function viewMentorInteractions() {
+    const view = splitViewKey(currentView).view;
+    const kind = view === 'mtparent' ? 'parent' : view === 'mtinter' ? 'student' : '';
+    const p = 'mti';
+    const feed = view === 'mgactivity';
+    viewMentorInteractions.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtiTable').innerHTML = mtError(ctx); return; }
+      const st = { q: '', page: 1, sort: 'date', dir: 'desc', from: '', to: '', status: '', mentorId: MT_PRESET.mentorId || '', kind: '', category: '' };
+      MT_PRESET = {};
+      const L = ctx.lists;
+      $m('#mtiFilters').innerHTML = `<div class="mt-filter-grid mt-filter-inline">
+        <label class="mt-f"><span>From</span><input type="date" class="filter-sel" data-mtf="from"></label>
+        <label class="mt-f"><span>To</span><input type="date" class="filter-sel" data-mtf="to"></label>
+        ${feed ? `<label class="mt-f"><span>Activity</span><select class="filter-sel" data-mtf="kind">${mtOpts(['Student Interaction', 'Parent Interaction'], '', 'All activity')}</select></label>`
+          : `<label class="mt-f"><span>Status</span><select class="filter-sel" data-mtf="status">${mtOpts(L.statuses, '', 'Any status')}</select></label>
+             <label class="mt-f"><span>Category</span><select class="filter-sel" data-mtf="category">${mtOpts(L.categories, '', 'Any category')}</select></label>`}
+        ${ctx.level !== 'mentor' ? `<label class="mt-f"><span>Mentor</span><select class="filter-sel" data-mtf="mentorId">${mtMentorOpts(ctx, st.mentorId, 'All mentors')}</select></label>` : ''}
+        <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="mtiClear">Clear</button></div></div>`;
+      if (!feed && ctx.write) {
+        $m('#mtiAddWrap').innerHTML = `<button class="btn-primary" id="mtiAdd">${ic('plus')} ${kind === 'parent' ? 'Add Parent Interaction' : 'Add Student Interaction'}</button>`;
+        $m('#mtiAdd').onclick = () => mtInteractionForm(kind || 'student', '');
+      }
+      const path = feed ? 'mt-activity' : 'mt-interactions';
+      const params = () => Object.assign({}, st, feed ? {} : { kind });
+      const draw = async () => {
+        $m('#mtiTable').innerHTML = mtLoading();
+        const d = await mtGet(path, Object.assign(params(), { size: 20 }));
+        if (d.error) { $m('#mtiTable').innerHTML = mtError(d); return; }
+        const emptyMsg = feed ? 'No mentor activity has been recorded for these filters.'
+          : kind === 'parent' ? (st.from || st.to || st.q ? 'No parent interactions match these filters.' : 'No parent interactions recorded yet.')
+          : (st.from || st.to || st.q ? 'No student interactions match these filters.' : 'No student interactions recorded yet.');
+        if (feed) {
+          $m('#mtiTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+              ${mtTh('Date', 'date', st)}${mtTh('Mentor', 'mentorName', st)}${mtTh('Student', 'studentName', st)}${mtTh('Activity', 'kind', st)}
+              ${mtTh('Type', 'type', st)}<th>Summary</th>${mtTh('Status', 'status', st)}</tr></thead><tbody>
+            ${d.rows.length ? d.rows.map(r => `<tr><td>${mtDate(r.date)}</td><td>${esc(r.mentorName || '—')}</td>
+              <td><button type="button" class="mt-link" data-mtprofile="${esc(r.studentId)}">${esc(r.studentName)}</button> <small class="mt-muted mono">${esc(r.roll)}</small></td>
+              <td><span class="pill ${r.kind === 'Parent Interaction' ? 'sky' : 'blue'}">${esc(r.kind)}</span></td>
+              <td>${esc(r.type)}${r.mode ? ` <small class="mt-muted">· ${esc(r.mode)}</small>` : ''}</td>
+              <td class="mt-wrap">${esc((r.summary || '').slice(0, 140))}${(r.summary || '').length > 140 ? '…' : ''}</td>
+              <td>${mtStatusPill(r.status)}</td></tr>`).join('') : `<tr><td colspan="7" class="empty">${esc(emptyMsg)}</td></tr>`}
+            </tbody></table></div>${mtPagerHtml(d)}`;
+        } else {
+          $m('#mtiTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+              ${mtTh('Date', 'date', st)}${mtTh('Student', 'studentName', st)}
+              ${kind === 'parent' ? '<th>Parent / Guardian</th>' + mtTh('Mode', 'mode', st) : mtTh('Type', 'type', st) + mtTh('Mode', 'mode', st)}
+              <th>Category</th><th>Discussion</th>${mtTh('Priority', 'priority', st)}${mtTh('Status', 'status', st)}
+              ${mtTh('Next Follow-up', 'nextFollowUp', st)}${ctx.level !== 'mentor' ? mtTh('Mentor', 'mentorName', st) : ''}<th>Actions</th></tr></thead><tbody>
+            ${d.rows.length ? d.rows.map(r => `<tr><td>${mtDate(r.date)}</td>
+              <td><button type="button" class="mt-link" data-mtprofile="${esc(r.studentId)}">${esc(r.studentName)}</button><br><small class="mt-muted mono">${esc(r.roll)}</small></td>
+              ${kind === 'parent' ? `<td>${esc(r.guardianName || '—')}<br><small class="mt-muted">${esc(r.relationship || '')}</small></td><td>${esc(r.mode)}</td>`
+                : `<td>${esc(r.type)}</td><td>${esc(r.mode)}</td>`}
+              <td>${esc(r.category)}</td>
+              <td class="mt-wrap">${esc((r.discussion || '').slice(0, 120))}${(r.discussion || '').length > 120 ? '…' : ''}</td>
+              <td>${mtPriorityPill(r.priority)}</td><td>${mtStatusPill(r.status)}</td>
+              <td>${r.nextFollowUp ? mtDate(r.nextFollowUp) : '—'}</td>
+              ${ctx.level !== 'mentor' ? `<td>${esc(r.mentorName || '—')}</td>` : ''}
+              <td><div class="row-actions"><button class="btn-sm btn-outline" data-det="${esc(r.id)}">${ic('eye')} View</button>
+                ${ctx.write && r.status !== 'Resolved' ? `<button class="btn-sm btn-edit" data-res="${esc(r.id)}">${ic('check')} Resolve</button>` : ''}</div></td></tr>`).join('')
+              : `<tr><td colspan="${ctx.level !== 'mentor' ? 11 : 10}" class="empty">${esc(emptyMsg)}</td></tr>`}
+            </tbody></table></div>${mtPagerHtml(d)}`;
+        }
+        const t = $m('#mtiTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-mtprofile]').forEach(b => b.onclick = () => mtOpenProfile(b.dataset.mtprofile));
+        t.querySelectorAll('[data-det]').forEach(b => b.onclick = () => {
+          const r = d.rows.find(x => x.id === b.dataset.det);
+          if (r) mtModal(kind === 'parent' ? 'Parent Interaction' : 'Student Interaction', `<div class="mt-detail">
+            <p><b>${esc(r.studentName)}</b> <span class="mt-muted mono">${esc(r.roll)}</span> · ${mtDate(r.date)}</p>
+            ${mtTimelineHtml([r], false)}<p class="mt-muted">Recorded by ${esc(r.createdByName || r.mentorName || '—')}</p></div>`, true);
+        });
+        t.querySelectorAll('[data-res]').forEach(b => b.onclick = () => {
+          const m = mtModal('Mark as Resolved', `<form id="mtRs"><div class="form-grid"><div class="field full">
+              <label>Outcome</label><textarea name="outcome" rows="3" maxlength="2000" placeholder="How was it resolved?"></textarea></div></div>
+            <div class="modal-actions"><button type="button" class="btn-outline" id="mtRsX">Cancel</button>
+              <button type="submit" class="btn-primary">Mark Resolved</button></div></form>`);
+          $m('#mtRsX').onclick = m.close;
+          $m('#mtRs').onsubmit = async (e) => {
+            e.preventDefault();
+            const r = await mtPost('mt-interaction-status', { id: b.dataset.res, status: 'Resolved', outcome: formData(e.target).outcome });
+            if (r.error) { toast(r.error, 'err'); return; }
+            m.close(); toast('Marked as resolved.'); draw();
+          };
+        });
+      };
+      mtBindFilters($m('#mtiFilters'), p, st, ['from', 'to', 'status', 'mentorId', 'kind', 'category'], draw);
+      const q = $m('#mtiQ');
+      let tm = null;
+      q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { st.q = q.value.trim(); st.page = 1; draw(); }, 300); };
+      const cols = feed ? [
+        { header: 'Date', key: 'date', width: 12 }, { header: 'Mentor', key: 'mentorName', width: 22 }, { header: 'Student ID', key: 'roll', width: 14 },
+        { header: 'Student', key: 'studentName', width: 22 }, { header: 'Activity', key: 'kind', width: 18 }, { header: 'Type', key: 'type', width: 18 },
+        { header: 'Mode', key: 'mode', width: 12 }, { header: 'Summary', key: 'summary', width: 40 }, { header: 'Status', key: 'status', width: 14 },
+      ] : [
+        { header: 'Date', key: 'date', width: 12 }, { header: 'Student ID', key: 'roll', width: 14 }, { header: 'Student', key: 'studentName', width: 22 },
+        ...(kind === 'parent' ? [{ header: 'Parent / Guardian', key: 'guardianName', width: 20 }, { header: 'Relationship', key: 'relationship', width: 13 }] : [{ header: 'Type', key: 'type', width: 18 }]),
+        { header: 'Mode', key: 'mode', width: 12 }, { header: 'Category', key: 'category', width: 13 }, { header: 'Discussion', key: 'discussion', width: 40 },
+        { header: kind === 'parent' ? 'Parent Concern' : 'Concern', key: 'concern', width: 26 }, { header: 'Action Taken', key: 'actionTaken', width: 26 },
+        ...(kind === 'parent' ? [{ header: 'Parent Response', key: 'parentResponse', width: 26 }] : []),
+        { header: 'Outcome', key: 'outcome', width: 24 }, { header: 'Priority', key: 'priority', width: 10 }, { header: 'Status', key: 'status', width: 14 },
+        { header: 'Next Follow-up', key: 'nextFollowUp', width: 14 }, { header: 'Mentor', key: 'mentorName', width: 20 },
+      ];
+      mtBindExports(p, feed ? 'Mentor Activity' : kind === 'parent' ? 'Parent Interactions' : 'Student Interactions', cols,
+        () => mtGet(path, Object.assign(params(), { export: '1' })));
+      draw();
+    };
+    const sub = feed ? 'Every conversation mentors have recorded — student meetings, calls, counselling and parent contacts.'
+      : kind === 'parent' ? 'Calls, messages and meetings with parents and guardians. Parent contact rate counts the last 30 days.'
+      : 'Meetings, calls, counselling and guidance sessions with your mentees.';
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub(sub)}<div class="mt-head-tools">${exportButtons(p)}<span id="mtiAddWrap"></span></div></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="mtiQ" placeholder="Search student, discussion, mentor…"></div>
+        <div id="mtiFilters"></div><div id="mtiTable">${mtLoading()}</div></div></div>`;
+  }
+
+  /* ========================= FOLLOW-UPS ========================= */
+  function viewMentorFollowups() {
+    const p = 'mtf';
+    viewMentorFollowups.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtfTable').innerHTML = mtError(ctx); return; }
+      const st = { q: '', page: 1, sort: 'dueDate', dir: 'asc', state: 'Pending', mentorId: '', priority: '', from: '', to: '' };
+      $m('#mtfTools').innerHTML = `<label class="mt-f"><span>Status</span><select class="filter-sel" data-mtf="state">${mtOpts([
+          { value: 'Pending', label: 'All pending' }, 'Overdue', 'Due Today', 'Upcoming', 'Completed', 'Cancelled'], st.state, 'Everything')}</select></label>
+        <label class="mt-f"><span>Priority</span><select class="filter-sel" data-mtf="priority">${mtOpts(ctx.lists.priorities, '', 'Any')}</select></label>
+        <label class="mt-f"><span>Due from</span><input type="date" class="filter-sel" data-mtf="from"></label>
+        <label class="mt-f"><span>Due to</span><input type="date" class="filter-sel" data-mtf="to"></label>
+        ${ctx.level !== 'mentor' ? `<label class="mt-f"><span>Mentor</span><select class="filter-sel" data-mtf="mentorId">${mtMentorOpts(ctx, '', 'All mentors')}</select></label>` : ''}
+        <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="mtfClear">Clear</button></div>`;
+      if (ctx.write) {
+        $m('#mtfAddWrap').innerHTML = `<button class="btn-primary" id="mtfAdd">${ic('plus')} Create Follow-up</button>`;
+        $m('#mtfAdd').onclick = () => mtFollowupForm('');
+      }
+      const draw = async () => {
+        $m('#mtfTable').innerHTML = mtLoading();
+        const d = await mtGet('mt-followups', Object.assign({}, st, { size: 20 }));
+        if (d.error) { $m('#mtfTable').innerHTML = mtError(d); return; }
+        const c = d.counts;
+        $m('#mtfCards').innerHTML = `
+          <div class="mt-tile red${st.state === 'Overdue' ? ' on' : ''}" data-state="Overdue"><b>${c.Overdue}</b><span>Overdue</span></div>
+          <div class="mt-tile amber${st.state === 'Due Today' ? ' on' : ''}" data-state="Due Today"><b>${c['Due Today']}</b><span>Due Today</span></div>
+          <div class="mt-tile sky${st.state === 'Upcoming' ? ' on' : ''}" data-state="Upcoming"><b>${c.Upcoming}</b><span>Upcoming</span></div>
+          <div class="mt-tile green${st.state === 'Completed' ? ' on' : ''}" data-state="Completed"><b>${c.Completed}</b><span>Completed</span></div>`;
+        $m('#mtfCards').querySelectorAll('[data-state]').forEach(t => t.onclick = () => {
+          st.state = st.state === t.dataset.state ? 'Pending' : t.dataset.state; st.page = 1;
+          const s = $m('#mtfTools').querySelector('[data-mtf="state"]'); if (s) s.value = st.state;
+          draw();
+        });
+        const empty = st.state === 'Pending' && !st.q ? 'No pending follow-ups.' : 'No follow-ups match these filters.';
+        $m('#mtfTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            ${mtTh('Student', 'studentName', st)}<th>Reason</th>${mtTh('Created', 'createdAt', st)}${mtTh('Due Date', 'dueDate', st)}
+            ${mtTh('Priority', 'priority', st)}${mtTh('Mentor', 'mentorName', st)}${mtTh('Status', 'state', st)}<th>Action</th></tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(f => {
+            const open = ['Overdue', 'Due Today', 'Upcoming'].includes(f.state);
+            return `<tr class="mt-fu-${f.state.replace(/\W+/g, '').toLowerCase()}">
+              <td><button type="button" class="mt-link" data-mtprofile="${esc(f.studentId)}">${esc(f.studentName)}</button><br><small class="mt-muted mono">${esc(f.roll)}</small></td>
+              <td class="mt-wrap">${esc(f.reason)}${f.note ? `<br><small class="mt-muted">${esc(f.note)}</small>` : ''}</td>
+              <td>${mtDate(f.createdAt)}</td><td><b>${mtDate(f.dueDate)}</b></td><td>${mtPriorityPill(f.priority)}</td>
+              <td>${esc(f.mentorName || '—')}</td><td>${mtStatePill(f.state)}</td>
+              <td><div class="row-actions">${ctx.write && open ? `<button class="btn-sm btn-edit" data-fu="complete" data-id="${esc(f.id)}">${ic('check')} Complete</button>
+                <button class="btn-sm btn-outline" data-fu="reschedule" data-id="${esc(f.id)}">${ic('calendar')} Reschedule</button>
+                <button class="btn-sm btn-outline" data-fu="cancel" data-id="${esc(f.id)}">${ic('x')} Cancel</button>`
+                : ctx.write && f.state !== 'Upcoming' ? `<button class="btn-sm btn-outline" data-fu="reopen" data-id="${esc(f.id)}">${ic('undo')} Reopen</button>` : '<span class="mt-muted">—</span>'}</div></td></tr>`;
+          }).join('') : `<tr><td colspan="8" class="empty">${esc(empty)}</td></tr>`}
+          </tbody></table></div>${mtPagerHtml(d)}`;
+        const t = $m('#mtfTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-mtprofile]').forEach(b => b.onclick = () => mtOpenProfile(b.dataset.mtprofile));
+        t.querySelectorAll('[data-fu]').forEach(b => b.onclick = () => mtFollowupAction(b.dataset.id, b.dataset.fu, draw));
+      };
+      mtBindFilters($m('#mtfTools'), p, st, ['state', 'priority', 'from', 'to', 'mentorId'], draw);
+      const q = $m('#mtfQ');
+      let tm = null;
+      q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { st.q = q.value.trim(); st.page = 1; draw(); }, 300); };
+      mtBindExports(p, 'Follow-up Report', [
+        { header: 'Student ID', key: 'roll', width: 14 }, { header: 'Student', key: 'studentName', width: 22 }, { header: 'Reason', key: 'reason', width: 36 },
+        { header: 'Created', key: 'createdAt', width: 12 }, { header: 'Due', key: 'dueDate', width: 12 }, { header: 'Priority', key: 'priority', width: 10 },
+        { header: 'Mentor', key: 'mentorName', width: 20 }, { header: 'Status', key: 'state', width: 12 }, { header: 'Note', key: 'note', width: 26 },
+      ], () => mtGet('mt-followups', Object.assign({}, st, { export: '1' })));
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub('Every promise to check back — overdue ones first. Green is done, blue upcoming, orange due today, red overdue.')}
+        <div class="mt-head-tools">${exportButtons(p)}<span id="mtfAddWrap"></span></div></div>
+      <div class="mt-tiles mt-tiles-top" id="mtfCards"></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="mtfQ" placeholder="Search student, reason, mentor…"></div>
+        <div class="mt-filter-grid mt-filter-inline" id="mtfTools"></div><div id="mtfTable">${mtLoading()}</div></div></div>`;
+  }
+
+  /* ====================== AT-RISK / ATTENTION ====================== */
+  function viewMentorRisk() {
+    const p = 'mtr';
+    viewMentorRisk.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtrTable').innerHTML = mtError(ctx); return; }
+      const st = { q: '', page: 1, sort: 'risk', dir: 'desc', attention: '1', academicYear: '', course: '', branch: '', semester: '',
+                   section: '', risk: '', att: '', contact: '', mentorId: '' };
+      const s = ctx.settings;
+      $m('#mtrRules').innerHTML = `<b>High risk:</b> attendance below ${s.attHigh}%, CGPA below ${s.cgpaHigh}, ${s.backlogHigh}+ backlogs,
+        or no mentor contact for ${s.noContactDays}+ days. <b>Needs attention:</b> attendance ${s.attHigh}–${s.attMedium}%,
+        CGPA ${s.cgpaHigh}–${s.cgpaMedium}, a backlog, a falling SGPA, an overdue follow-up or an unresolved issue.
+        ${ctx.manage ? `<a href="#" id="mtrSettings">Change thresholds</a>` : ''}`;
+      const ms = $m('#mtrSettings'); if (ms) ms.onclick = (e) => { e.preventDefault(); navigate('mgsettings'); };
+      $m('#mtrFilters').innerHTML = mtFilterBar(p, ctx, st, { mentor: ctx.level !== 'mentor' });
+      const draw = async () => {
+        $m('#mtrTable').innerHTML = mtLoading('Checking every student against the risk rules…');
+        const d = await mtGet('mt-students', Object.assign({}, st, { size: 25, mine: ctx.level === 'mentor' ? '1' : '' }));
+        if (d.error) { $m('#mtrTable').innerHTML = mtError(d); return; }
+        $m('#mtrCards').innerHTML = `${statCard(ic('alert'), d.counts.High, 'High Risk', 'c4')}
+          ${statCard(ic('bell'), d.counts.Medium, 'Needs Attention', 'c2')}
+          ${statCard(ic('users'), d.counts.total, 'Students Requiring Attention')}`;
+        const empty = st.q || st.risk ? 'No students match these filters.' : 'No students require attention right now.';
+        $m('#mtrTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            ${mtTh('Student', 'name', st)}<th>Issues</th>${mtTh('Risk', 'risk', st)}${mtTh('Attendance', 'attendance', st)}${mtTh('CGPA', 'cgpa', st)}
+            ${mtTh('Last Contact', 'lastStudentContact', st)}${mtTh('Follow-up', 'nextFollowUp', st)}
+            ${ctx.level !== 'mentor' ? mtTh('Mentor', 'mentorName', st) : ''}<th>Action</th></tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(r => `<tr>
+            <td><button type="button" class="mt-link" data-mtprofile="${esc(r.id)}">${esc(r.name)}</button><br>
+              <small class="mt-muted"><span class="mono">${esc(r.roll)}</span> · ${esc(r.course || '')} · Sem ${esc(r.semester || '—')}</small></td>
+            <td class="mt-wrap">${r.riskReasons.map(x => `<span class="mt-chip ${/Attendance|CGPA|Backlog|contact/.test(x) && r.risk === 'High' ? 'hi' : ''}">${esc(x)}</span>`).join('')}</td>
+            <td>${mtRiskPill(r.risk, r.riskScore)}<br><small class="mt-muted">Score ${r.riskScore}</small></td>
+            <td>${mtAtt(r.attendance)}</td><td>${esc(r.cgpa || '—')}</td>
+            <td>${r.lastStudentContact ? mtAgo(r.lastStudentContact) : '<span class="mt-muted">Never</span>'}</td>
+            <td>${r.nextFollowUp ? mtDate(r.nextFollowUp) + (r.overdueFollowups ? ' <span class="pill red">Overdue</span>' : '') : '<span class="mt-muted">None</span>'}</td>
+            ${ctx.level !== 'mentor' ? `<td>${r.mentorName ? esc(r.mentorName) : '<span class="pill grey">Not assigned</span>'}</td>` : ''}
+            <td><div class="row-actions"><button class="btn-sm btn-outline" data-mtprofile="${esc(r.id)}">${ic('eye')} View</button>
+              ${ctx.write && (ctx.level === 'all' || r.mentorId === ctx.mentorId) ? `<button class="btn-sm btn-edit" data-act="inter" data-id="${esc(r.id)}">${ic('plus')} Interaction</button>
+              <button class="btn-sm btn-outline" data-act="follow" data-id="${esc(r.id)}">${ic('clock')} Follow-up</button>` : ''}</div></td></tr>`).join('')
+            : `<tr><td colspan="${ctx.level !== 'mentor' ? 9 : 8}" class="empty">${esc(empty)}</td></tr>`}
+          </tbody></table></div>${mtPagerHtml(d)}`;
+        const t = $m('#mtrTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-mtprofile]').forEach(b => b.onclick = () => mtOpenProfile(b.dataset.mtprofile));
+        t.querySelectorAll('[data-act]').forEach(b => b.onclick = () =>
+          b.dataset.act === 'inter' ? mtInteractionForm('student', b.dataset.id) : mtFollowupForm(b.dataset.id));
+      };
+      mtBindFilters($m('#mtrFilters'), p, st, ['academicYear', 'course', 'branch', 'semester', 'section', 'risk', 'att', 'contact', 'mentorId'], draw);
+      mtBindExports(p, 'At-Risk Students', [
+        { header: 'Student ID', key: 'roll', width: 14 }, { header: 'Student', key: 'name', width: 22 }, { header: 'Programme', key: 'course', width: 10 },
+        { header: 'Semester', key: 'semester', width: 9 }, { header: 'Risk', key: 'risk', width: 10 }, { header: 'Score', key: 'riskScore', width: 8 },
+        { header: 'Attendance %', key: 'attendance', width: 12 }, { header: 'CGPA', key: 'cgpa', width: 8 }, { header: 'Backlogs', key: 'backlogs', width: 9 },
+        { header: 'Last Contact', key: 'lastStudentContact', width: 14 }, { header: 'Next Follow-up', key: 'nextFollowUp', width: 14 },
+        { header: 'Mentor', key: 'mentorName', width: 20 },
+      ], async () => {
+        const r = await mtGet('mt-students', Object.assign({}, st, { export: '1', mine: ctx.level === 'mentor' ? '1' : '' }));
+        if (!r.error) r.rows = r.rows.map(x => Object.assign({}, x, { risk: MT_RISK_LABEL[x.risk] + ' — ' + x.riskReasons.join('; ') }));
+        return r;
+      });
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub('Students Requiring Attention — found automatically from attendance, results, backlogs, mentor contact and open issues.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="stat-grid" id="mtrCards"></div>
+      <div class="mt-rules" id="mtrRules"></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="mtrQ" placeholder="Search name, registration no, mentor…"></div>
+        <div id="mtrFilters"></div><div id="mtrTable">${mtLoading()}</div></div></div>`;
+  }
+
+  /* ============================ REPORTS ============================ */
+  const MT_REPORTS = [
+    { key: 'activity', label: 'Mentor Activity', icon: 'activity', dated: true },
+    { key: 'students', label: 'Student Mentorship', icon: 'users', students: true },
+    { key: 'parents', label: 'Parent Contact', icon: 'home', dated: true },
+    { key: 'risk', label: 'At-Risk Students', icon: 'alert', students: true },
+    { key: 'followups', label: 'Follow-ups', icon: 'clock', dated: true },
+    { key: 'performance', label: 'Mentor Performance', icon: 'trending-up', dated: true, admin: true },
+  ];
+  function viewMentorReports() {
+    const p = 'mtrp';
+    viewMentorReports.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtrpBody').innerHTML = mtError(ctx); return; }
+      const list = MT_REPORTS.filter(r => !r.admin || ctx.level !== 'mentor');
+      const st = { type: list[0].key, from: addDays(today(), -30), to: today(), q: '', mentorId: '', state: '',
+                   academicYear: '', course: '', branch: '', semester: '', section: '', risk: '', att: '', contact: '' };
+      let last = null;
+      const tabs = () => { $m('#mtrpTabs').innerHTML = list.map(r => `<button type="button" class="fin-tab${st.type === r.key ? ' active' : ''}" data-rt="${r.key}">${ic(r.icon)} ${esc(r.label)}</button>`).join('');
+        $m('#mtrpTabs').querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { st.type = b.dataset.rt; tabs(); filters(); draw(); }); };
+      const filters = () => {
+        const def = list.find(r => r.key === st.type);
+        $m('#mtrpFilters').innerHTML = (def.dated ? `<div class="mt-filter-grid mt-filter-inline">
+            <label class="mt-f"><span>From</span><input type="date" class="filter-sel" data-mtf="from" value="${st.from}"></label>
+            <label class="mt-f"><span>To</span><input type="date" class="filter-sel" data-mtf="to" value="${st.to}"></label>
+            ${st.type === 'followups' ? `<label class="mt-f"><span>Status</span><select class="filter-sel" data-mtf="state">${mtOpts(['Overdue', 'Due Today', 'Upcoming', 'Completed', 'Cancelled'], st.state, 'Any')}</select></label>` : ''}
+            ${ctx.level !== 'mentor' && st.type !== 'performance' ? `<label class="mt-f"><span>Mentor</span><select class="filter-sel" data-mtf="mentorId">${mtMentorOpts(ctx, st.mentorId, 'All mentors')}</select></label>` : ''}
+            <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="mtrpClear">Clear</button></div></div>`
+          : mtFilterBar(p, ctx, st, { mentor: ctx.level !== 'mentor', noRisk: st.type === 'risk' }));
+        mtBindFilters($m('#mtrpFilters'), p, st, ['from', 'to', 'state', 'mentorId', 'academicYear', 'course', 'branch', 'semester', 'section', 'risk', 'att', 'contact'], draw);
+      };
+      const draw = async () => {
+        $m('#mtrpBody').innerHTML = mtLoading('Building the report…');
+        const d = await mtGet('mt-report', Object.assign({}, st, { from: list.find(r => r.key === st.type).dated ? st.from : '', to: list.find(r => r.key === st.type).dated ? st.to : '' }));
+        if (d.error) { $m('#mtrpBody').innerHTML = mtError(d); return; }
+        last = d;
+        const shown = d.rows.slice(0, 200);
+        $m('#mtrpBody').innerHTML = `<p class="mt-muted mt-pad">${plural(d.total, 'record')}${d.from ? ' · ' + mtDate(d.from) + ' to ' + mtDate(d.to) : ''}${d.total > 200 ? ' · showing the first 200 here — Print / Excel include all' : ''}</p>
+          ${reportTableHtml(d.columns, shown, ({ activity: 'No mentor activity in this period.', parents: 'No parent interactions recorded in this period.',
+            followups: 'No follow-ups in this period.', risk: 'No students require attention.', students: 'No students match these filters.',
+            performance: 'No mentor activity in this period.' })[st.type])}`;
+      };
+      const q = $m('#mtrpQ');
+      let tm = null;
+      q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { st.q = q.value.trim(); draw(); }, 300); };
+      const sub = () => last && last.from ? `Period ${mtDate(last.from)} – ${mtDate(last.to)}` : '';
+      const get = () => last ? { title: last.title, subtitle: (sub() ? sub() + ' · ' : '') + 'GITAM B-School · Mentorship · Generated on ' + new Date().toLocaleString('en-IN'),
+        columns: last.columns, rows: last.rows, signatory: 'Mentorship Coordinator' } : null;
+      const on = (s, fn) => { const el = $m('#' + p + s); if (el) el.onclick = fn; };
+      on('Print', () => { const r = get(); if (r) printReport(r); });
+      on('Pdf', () => { const r = get(); if (r) { printReport(r); toast('Choose "Save as PDF" in the print dialog.'); } });
+      on('Xls', () => { const r = get(); if (r) downloadXlsx(r); });
+      tabs(); filters(); draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub('Mentor activity, student mentorship, parent contact, risk, follow-up and performance reports — filter, print or export.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="fin-tabs" id="mtrpTabs"></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="mtrpQ" placeholder="Search within the report…"></div>
+        <div id="mtrpFilters"></div><div id="mtrpBody">${mtLoading()}</div></div></div>`;
+  }
+
+  /* ======================== ADMIN: MENTORS ======================== */
+  function viewMentorList() {
+    const p = 'mtm';
+    viewMentorList.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtmTable').innerHTML = mtError(ctx); return; }
+      const st = { q: '', page: 1, sort: 'name', dir: 'asc', department: '', status: '', onlyMentors: '' };
+      const depts = [...new Set((ctx.mentors || []).map(m => m.department).filter(Boolean))].sort();
+      $m('#mtmTools').innerHTML = `<label class="mt-f"><span>Department</span><select class="filter-sel" data-mtf="department">${mtOpts(depts, '', 'All departments')}</select></label>
+        <label class="mt-f"><span>Status</span><select class="filter-sel" data-mtf="status">${mtOpts(['Active', 'Inactive'], '', 'Any')}</select></label>
+        <label class="mt-f"><span>Show</span><select class="filter-sel" data-mtf="onlyMentors">${mtOpts([{ value: '1', label: 'Only with mentees' }], '', 'All faculty')}</select></label>
+        <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="mtmClear">Clear</button></div>`;
+      const draw = async () => {
+        $m('#mtmTable').innerHTML = mtLoading();
+        const d = await mtGet('mt-mentors', Object.assign({}, st, { size: 20 }));
+        if (d.error) { $m('#mtmTable').innerHTML = mtError(d); return; }
+        $m('#mtmTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            ${mtTh('Employee ID', 'empId', st)}${mtTh('Mentor Name', 'name', st)}${mtTh('Department', 'department', st)}<th>Designation</th>
+            ${mtTh('Students', 'students', st)}${mtTh('Student Contact', 'studentContactRate', st)}${mtTh('Parent Contact', 'parentContactRate', st)}
+            ${mtTh('At-Risk', 'atRisk', st)}${mtTh('Pending Follow-ups', 'pendingFollowups', st)}<th>Status</th><th>Actions</th></tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(m => `<tr class="${m.status === 'Inactive' ? 'row-off' : ''}">
+            <td class="mono">${esc(m.empId || '—')}</td><td><b>${esc(m.name)}</b></td><td>${esc(m.department || '—')}</td><td>${esc(m.designation || '—')}</td>
+            <td>${m.students}</td><td>${m.students ? m.studentContactRate + '%' : '—'}</td><td>${m.students ? m.parentContactRate + '%' : '—'}</td>
+            <td>${m.atRisk ? `<span class="pill red">${m.atRisk}</span>` : '0'}</td>
+            <td>${m.overdueFollowups ? `${m.pendingFollowups} <span class="pill red">${m.overdueFollowups} overdue</span>` : m.pendingFollowups}</td>
+            <td><span class="pill ${m.status === 'Active' ? 'green' : 'grey'}">${esc(m.status)}</span></td>
+            <td><div class="row-actions mt-actions">
+              <button class="btn-sm btn-outline" data-mv="view" data-id="${esc(m.id)}">${ic('eye')} View</button>
+              ${ctx.manage && m.status === 'Active' ? `<button class="btn-sm btn-edit" data-mv="assign" data-id="${esc(m.id)}">${ic('plus')} Assign Students</button>` : ''}
+              <button class="btn-sm btn-outline" data-mv="perf" data-id="${esc(m.id)}">${ic('trending-up')} Performance</button>
+              <button class="btn-sm btn-outline" data-mv="act" data-id="${esc(m.id)}">${ic('activity')} Activity</button>
+              ${ctx.manage ? `<button class="btn-sm ${m.status === 'Active' ? 'btn-del' : 'btn-outline'}" data-mv="${m.status === 'Active' ? 'off' : 'on'}" data-id="${esc(m.id)}">${m.status === 'Active' ? 'Deactivate' : 'Activate'}</button>` : ''}
+            </div></td></tr>`).join('') : `<tr><td colspan="11" class="empty">No faculty match these filters.</td></tr>`}
+          </tbody></table></div>${mtPagerHtml(d)}`;
+        const t = $m('#mtmTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-mv]').forEach(b => b.onclick = async () => {
+          const m = d.rows.find(x => x.id === b.dataset.id);
+          const a = b.dataset.mv;
+          if (a === 'view') mtMentorViewModal(m);
+          if (a === 'assign') navigateMentor('mgassign', m.id);
+          if (a === 'perf') mtMentorViewModal(m);
+          if (a === 'act') navigateMentor('mgactivity', m.id);
+          if (a === 'off' || a === 'on') {
+            confirmAction(a === 'off' ? 'Deactivate mentor' : 'Activate mentor',
+              a === 'off' ? `<b>${esc(m.name)}</b> will not be offered for new assignments. Their current mentees stay with them until you transfer them.`
+                : `<b>${esc(m.name)}</b> can be assigned students again.`, a === 'off' ? 'Deactivate' : 'Activate', async () => {
+                const r = await mtPost('mt-mentor-status', { mentorId: m.id, active: a === 'on' });
+                if (r.error) { toast(r.error, 'err'); return; }
+                await mtContext(true);
+                toast(a === 'off' ? 'Mentor deactivated.' : 'Mentor activated.'); draw();
+              });
+          }
+        });
+      };
+      mtBindFilters($m('#mtmTools'), p, st, ['department', 'status', 'onlyMentors'], draw);
+      const q = $m('#mtmQ');
+      let tm = null;
+      q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { st.q = q.value.trim(); st.page = 1; draw(); }, 300); };
+      mtBindExports(p, 'Mentor List', [
+        { header: 'Employee ID', key: 'empId', width: 13 }, { header: 'Mentor', key: 'name', width: 22 }, { header: 'Department', key: 'department', width: 16 },
+        { header: 'Designation', key: 'designation', width: 18 }, { header: 'Students Assigned', key: 'students', width: 12 },
+        { header: 'Student Contact %', key: 'studentContactRate', width: 13 }, { header: 'Parent Contact %', key: 'parentContactRate', width: 13 },
+        { header: 'At-Risk', key: 'atRisk', width: 9 }, { header: 'Pending Follow-ups', key: 'pendingFollowups', width: 14 }, { header: 'Status', key: 'status', width: 10 },
+      ], () => mtGet('mt-mentors', Object.assign({}, st, { export: '1' })));
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${mtSub('Every faculty member as a mentor — how many students they carry, how often they reach them and their parents, and what is pending.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="mtmQ" placeholder="Search mentor, employee ID, department…"></div>
+        <div class="mt-filter-grid mt-filter-inline" id="mtmTools"></div><div id="mtmTable">${mtLoading()}</div></div></div>`;
+  }
+  function navigateMentor(view, mentorId) { MT_PRESET = { mentorId }; navigate(view); }
+  function mtMentorViewModal(m) {
+    const k = (label, v) => `<div class="mt-kv"><span>${esc(label)}</span><b>${v}</b></div>`;
+    const md = mtModal('Mentor — ' + m.name, `<div class="mt-profile">
+      <div class="mt-prof-head"><div class="mt-avatar"><span>${esc((m.name || '?')[0])}</span></div>
+        <div class="mt-prof-id"><h3>${esc(m.name)}</h3><p>${esc(m.designation || '')}${m.department ? ' · ' + esc(m.department) : ''} · <span class="mono">${esc(m.empId || '')}</span></p>
+          <p class="mt-muted">${esc(m.email || '')}${m.phone ? ' · ' + esc(m.phone) : ''}</p></div>
+        <div class="mt-prof-risk"><span class="pill ${m.status === 'Active' ? 'green' : 'grey'}">${esc(m.status)}</span></div></div>
+      <div class="stat-grid">${statCard(ic('users'), m.students, 'Students')}${statCard(ic('phone'), m.studentContactRate + '%', 'Student Contact', 'c3')}
+        ${statCard(ic('home'), m.parentContactRate + '%', 'Parent Contact', 'c2')}${statCard(ic('alert'), m.atRisk, 'At-Risk', 'c4')}</div>
+      <div class="mt-prof-grid"><div class="mt-card"><h4>${ic('activity')} Interactions</h4>
+          ${k('Total', m.interactions)}${k('With students', m.studentInteractions)}${k('With parents', m.parentInteractions)}${k('Resolved cases', m.resolved)}
+          ${k('Last activity', m.lastActivity ? mtDate(m.lastActivity) : 'None yet')}</div>
+        <div class="mt-card"><h4>${ic('clock')} Follow-ups</h4>${k('Completed', m.completedFollowups)}${k('Pending', m.pendingFollowups)}${k('Overdue', m.overdueFollowups)}
+          ${k('Needs attention (students)', m.attention)}</div></div>
+      <div class="modal-actions"><button class="btn-outline" id="mtmvStu">${ic('users')} View their students</button>
+        <button class="btn-outline" id="mtmvAct">${ic('activity')} View activity</button></div></div>`, true);
+    $m('#mtmvStu').onclick = () => { md.close(); navigateMentor('mgmapping', m.id); };
+    $m('#mtmvAct').onclick = () => { md.close(); navigateMentor('mgactivity', m.id); };
+  }
+
+  /* ===================== ADMIN: ASSIGNMENTS ===================== */
+  function mtAssignDialog(ctx, studentIds, name, after) {
+    const active = (ctx.mentors || []).filter(m => m.active);
+    const m = mtModal(studentIds.length === 1 ? 'Assign Mentor — ' + (name || 'student') : `Assign Mentor — ${studentIds.length} students`, `<form id="mtAd"><div class="form-grid">
+        <div class="field full"><label>Mentor <span class="req">*</span></label><select name="mentorId" required>${mtMentorOpts({ mentors: active }, '', 'Choose a mentor')}</select></div>
+        <div class="field"><label>Academic Year</label><select name="academicYear">${mtOpts(ctx.years, ctx.years[0] || '', 'Keep the student’s own')}</select></div>
+        <div class="field"><label class="chk"><input type="checkbox" name="transfer" value="1" checked> Move students who already have a mentor</label></div>
+      </div><p class="mt-muted">A student keeps one active mentor at a time. Moving them ends the old assignment and keeps it in the history.</p>
+      <div class="modal-actions"><button type="button" class="btn-outline" id="mtAdX">Cancel</button><button type="submit" class="btn-primary">Assign</button></div></form>`);
+    $m('#mtAdX').onclick = m.close;
+    $m('#mtAd').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = formData(e.target);
+      const r = await mtPost('mt-assign', { mentorId: f.mentorId, studentIds, academicYear: f.academicYear, transfer: !!f.transfer });
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close();
+      toast(mtAssignSummary(r));
+      if (after) after();
+      mtRefresh();
+    };
+  }
+  function mtAssignSummary(r) {
+    const parts = [];
+    if (r.assigned) parts.push(plural(r.assigned, 'student') + ' assigned');
+    if (r.transferred) parts.push(r.transferred + ' moved');
+    if (r.duplicate) parts.push(r.duplicate + ' already with this mentor');
+    if (r.skipped) parts.push(r.skipped + ' skipped (already mentored)');
+    if (r.invalid) parts.push(r.invalid + ' not found');
+    return parts.join(' · ') || 'Nothing changed.';
+  }
+  function mtUnassignDialog(studentIds, after) {
+    const m = mtModal('Remove Mentor', `<form id="mtUa"><p>Remove the mentor from <b>${plural(studentIds.length, 'student')}</b>?
+        Their interactions and follow-ups are kept; the assignment moves to the history.</p>
+      <div class="form-grid"><div class="field full"><label>Reason</label><input name="reason" maxlength="255" placeholder="e.g. Mentor on leave"></div></div>
+      <div class="modal-actions"><button type="button" class="btn-outline" id="mtUaX">Cancel</button><button type="submit" class="btn-del">Remove Mentor</button></div></form>`);
+    $m('#mtUaX').onclick = m.close;
+    $m('#mtUa').onsubmit = async (e) => {
+      e.preventDefault();
+      const r = await mtPost('mt-unassign', { studentIds, reason: formData(e.target).reason });
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close(); toast(plural(r.removed, 'assignment') + ' ended.');
+      if (after) after();
+      mtRefresh();
+    };
+  }
+
+  function viewAssignMentors() {
+    viewAssignMentors.after = async () => {
+      const ctx = await mtContext(true);
+      if (ctx.error) { $m('#mtaBody').innerHTML = mtError(ctx); return; }
+      if (!ctx.manage) { $m('#mtaBody').innerHTML = mtEmpty('Only the Super Admin can assign mentors.'); return; }
+      let tab = 'assign';
+      const presetMentor = MT_PRESET.mentorId || '';
+      MT_PRESET = {};
+      const tabs = () => {
+        $m('#mtaTabs').innerHTML = [['assign', 'users', 'Assign Students'], ['import', 'upload', 'Bulk Import (Excel)'], ['transfer', 'refresh', 'Transfer Students']]
+          .map(([k, i, l]) => `<button type="button" class="fin-tab${tab === k ? ' active' : ''}" data-tab="${k}">${ic(i)} ${l}</button>`).join('');
+        $m('#mtaTabs').querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; tabs(); body(); });
+      };
+      const body = () => (tab === 'assign' ? mtAssignTab : tab === 'import' ? mtImportTab : mtTransferTab)(ctx, presetMentor);
+      tabs(); body();
+    };
+    return `<div class="mt-page"><div class="mt-head">${mtSub('Assign mentors one class at a time, upload a spreadsheet, or move a mentor’s students to someone else. Every change is kept in the history.')}</div>
+      <div class="fin-tabs" id="mtaTabs"></div><div id="mtaBody">${mtLoading()}</div></div>`;
+  }
+  function mtAssignTab(ctx, presetMentor) {
+    const st = { academicYear: '', course: '', branch: '', semester: '', section: '', assigned: 'no', q: '' };
+    const sel = new Set();
+    $m('#mtaBody').innerHTML = `<div class="panel">
+      <div class="panel-head"><h3>1 · Choose the class</h3></div>
+      <div class="mt-filter-grid mt-filter-inline">
+        <label class="mt-f"><span>Academic Year</span><select class="filter-sel" data-a="academicYear">${mtOpts(ctx.years, '', 'All years')}</select></label>
+        <label class="mt-f"><span>Department</span><select class="filter-sel" data-a="course">${mtOpts(ctx.courses, '', 'All programmes')}</select></label>
+        <label class="mt-f"><span>Branch</span><select class="filter-sel" data-a="branch">${mtOpts(ctx.branches, '', 'All branches')}</select></label>
+        <label class="mt-f"><span>Semester</span><select class="filter-sel" data-a="semester">${mtOpts(['1', '2', '3', '4'], '', 'All')}</select></label>
+        <label class="mt-f"><span>Section</span><select class="filter-sel" data-a="section">${mtOpts(ctx.sections, '', 'All')}</select></label>
+        <label class="mt-f"><span>Show</span><select class="filter-sel" data-a="assigned">${mtOpts([{ value: 'no', label: 'Without a mentor' }, { value: 'yes', label: 'With a mentor' }], 'no', 'Everyone')}</select></label>
+        <label class="mt-f"><span>Search</span><input class="filter-sel" data-a="q" placeholder="Name or registration no"></label>
+      </div>
+      <div class="panel-head"><h3>2 · Pick the mentor</h3></div>
+      <div class="mt-filter-grid mt-filter-inline">
+        <label class="mt-f mt-f-wide"><span>Mentor</span><select class="filter-sel" id="mtaMentor">${mtMentorOpts({ mentors: (ctx.mentors || []).filter(m => m.active) }, presetMentor, 'Choose a mentor')}</select></label>
+        <label class="mt-f"><span>Academic Year</span><select class="filter-sel" id="mtaYear">${mtOpts(ctx.years, ctx.years[0] || '', 'Keep the student’s own')}</select></label>
+        <label class="mt-f mt-f-btn"><span>&nbsp;</span><label class="chk"><input type="checkbox" id="mtaMove"> Move students who already have a mentor</label></label>
+      </div>
+      <div class="panel-head"><h3>3 · Select students</h3><div class="panel-tools"><span id="mtaCount" class="mt-muted"></span>
+        <button class="btn-primary" id="mtaGo" disabled>${ic('check')} Assign selected</button></div></div>
+      <div id="mtaList">${mtLoading()}</div></div>`;
+    let rows = [];
+    const paint = () => {
+      $m('#mtaCount').textContent = sel.size ? `${sel.size} selected` : '';
+      $m('#mtaGo').disabled = !sel.size || !$m('#mtaMentor').value;
+    };
+    const load = async () => {
+      $m('#mtaList').innerHTML = mtLoading();
+      const d = await mtGet('mt-students', Object.assign({}, st, { export: '1', all: '1', sort: 'roll' }));
+      if (d.error) { $m('#mtaList').innerHTML = mtError(d); return; }
+      rows = d.rows;
+      $m('#mtaList').innerHTML = `<div class="tbl-wrap tbl-sticky"><table class="mt-table"><thead><tr>
+          <th class="mt-chk"><input type="checkbox" id="mtaAll"></th><th>Registration No</th><th>Student</th><th>Branch</th><th>Sem</th><th>Sec</th><th>Current Mentor</th><th>Risk</th></tr></thead><tbody>
+        ${rows.length ? rows.map(r => `<tr><td class="mt-chk"><input type="checkbox" data-s="${esc(r.id)}" ${sel.has(r.id) ? 'checked' : ''}></td>
+          <td class="mono">${esc(r.roll)}</td><td>${esc(r.name)}</td><td>${mtBranch(r)}</td><td>${esc(r.semester || '—')}</td><td>${esc(r.section || '—')}</td>
+          <td>${r.mentorName ? esc(r.mentorName) : '<span class="pill grey">None</span>'}</td><td>${mtRiskPill(r.risk, r.riskScore)}</td></tr>`).join('')
+          : `<tr><td colspan="8" class="empty">${st.assigned === 'no' ? 'Every student in this class already has a mentor.' : 'No students in this class.'}</td></tr>`}</tbody></table></div>`;
+      $m('#mtaList').querySelectorAll('[data-s]').forEach(c => c.onchange = () => { c.checked ? sel.add(c.dataset.s) : sel.delete(c.dataset.s); paint(); });
+      $m('#mtaAll').onchange = (e) => { $m('#mtaList').querySelectorAll('[data-s]').forEach(c => { c.checked = e.target.checked; e.target.checked ? sel.add(c.dataset.s) : sel.delete(c.dataset.s); }); paint(); };
+      paint();
+    };
+    let tm = null;
+    $m('#mtaBody').querySelectorAll('[data-a]').forEach(el => {
+      const go = () => { st[el.dataset.a] = el.value.trim(); sel.clear(); load(); };
+      if (el.tagName === 'INPUT') el.oninput = () => { clearTimeout(tm); tm = setTimeout(go, 300); };
+      else el.onchange = go;
+    });
+    $m('#mtaMentor').onchange = paint;
+    $m('#mtaGo').onclick = async () => {
+      const r = await mtPost('mt-assign', { mentorId: $m('#mtaMentor').value, studentIds: [...sel], academicYear: $m('#mtaYear').value, transfer: $m('#mtaMove').checked });
+      if (r.error) { toast(r.error, 'err'); return; }
+      toast(mtAssignSummary(r));
+      if (r.messages && r.messages.length) {
+        mtModal('Some students were skipped', `<ul class="mt-msgs">${r.messages.slice(0, 50).map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+          <p class="mt-muted">Tick “Move students who already have a mentor” to transfer them instead.</p>`);
+      }
+      sel.clear(); load();
+    };
+    load();
+  }
+
+  function mtImportTab(ctx) {
+    $m('#mtaBody').innerHTML = `<div class="panel"><div class="panel-head"><h3>Bulk mentor assignment</h3>
+        <div class="panel-tools"><button class="btn-outline btn-sm" id="mtiTpl">${ic('download')} Download template</button></div></div>
+      <div class="imp-intro"><p>Upload an <b>.xlsx</b> or <b>.csv</b> with the columns <b>Registration No</b>, <b>Mentor Employee ID</b> and <b>Academic Year</b>.
+        Every row is checked first — the student and the mentor must exist, the academic year must be one the CMS uses, and a student
+        who already has a mentor is reported rather than moved.</p>
+        <label class="btn-primary imp-pick">${ic('upload')} Choose file<input type="file" id="mtiFile" accept=".xlsx,.csv" hidden></label>
+        <span id="mtiName" class="mt-muted"></span></div>
+      <div id="mtiRes"></div></div>`;
+    $m('#mtiTpl').onclick = () => {
+      if (!window.XLSXLite) { toast('Excel module failed to load.', 'err'); return; }
+      const m = (ctx.mentors || []).find(x => x.active) || {};
+      XLSXLite.download('Mentor-Assignment-Template.xlsx', [{ name: 'Mentor Assignment', title: 'Mentor Assignment', subtitle: 'One student per row',
+        columns: [{ header: 'Registration No', key: 'roll', width: 18 }, { header: 'Mentor Employee ID', key: 'empId', width: 20 }, { header: 'Academic Year', key: 'academicYear', width: 14 }],
+        rows: [{ roll: '2025180001', empId: m.empId || 'EMP001', academicYear: ctx.years[0] || '2026-27' }] }]);
+    };
+    let parsed = [];
+    const head = (h) => String(h || '').toLowerCase().replace(/[^a-z]/g, '');
+    const KEYS = { roll: ['registrationno', 'regno', 'registrationnumber', 'studentid', 'rollno', 'roll'],
+                   empId: ['mentoremployeeid', 'employeeid', 'empid', 'mentorid', 'mentorempid'], academicYear: ['academicyear', 'year', 'ay'] };
+    const check = async (commit) => {
+      $m('#mtiRes').innerHTML = mtLoading(commit ? 'Importing…' : 'Checking every row…');
+      const r = await mtPost('mt-import', { rows: parsed, commit });
+      if (r.error) { $m('#mtiRes').innerHTML = mtError(r); return; }
+      const s = r.summary;
+      $m('#mtiRes').innerHTML = `<div class="stat-grid mt-imp-stats">
+          ${statCard(ic('file'), s.total, 'Total Records')}
+          ${statCard(ic('check'), commit ? s.imported : r.ready, commit ? 'Imported' : 'Ready to import', 'c3')}
+          ${statCard(ic('x'), s.failed, 'Failed', 'c4')}${statCard(ic('refresh'), s.duplicate, 'Duplicate', 'c2')}
+          ${statCard(ic('alert'), s.invalid, 'Invalid', 'c4')}</div>
+        ${!commit && r.ready ? `<div class="mt-bulk"><span><b>${r.ready}</b> row(s) are valid.</span>
+          <button class="btn-primary" id="mtiCommit">${ic('upload')} Import ${plural(r.ready, 'valid row')}</button></div>` : ''}
+        ${commit ? `<p class="mt-ok">${ic('check')} Import finished — ${plural(s.imported, 'student')} assigned.</p>` : ''}
+        ${r.errors.length ? `<div class="panel-head"><h3>Rows with problems</h3><div class="panel-tools">
+            <button class="btn-outline btn-sm" id="mtiErr">${ic('download')} Download error report</button></div></div>
+          ${reportTableHtml([{ header: 'Row', key: 'row' }, { header: 'Registration No', key: 'roll' }, { header: 'Mentor Emp ID', key: 'empId' },
+            { header: 'Academic Year', key: 'academicYear' }, { header: 'Type', key: 'type' }, { header: 'Problem', key: 'problem' }], r.errors.slice(0, 300))}` : ''}`;
+      const c = $m('#mtiCommit'); if (c) c.onclick = () => check(true);
+      const e = $m('#mtiErr'); if (e) e.onclick = () => downloadXlsx({ title: 'Mentor Import Errors', subtitle: 'Rows that were not imported',
+        columns: [{ header: 'Row', key: 'row', width: 6 }, { header: 'Registration No', key: 'roll', width: 18 }, { header: 'Mentor Employee ID', key: 'empId', width: 18 },
+          { header: 'Academic Year', key: 'academicYear', width: 14 }, { header: 'Type', key: 'type', width: 10 }, { header: 'Problem', key: 'problem', width: 60 }], rows: r.errors });
+    };
+    $m('#mtiFile').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      $m('#mtiName').textContent = file.name;
+      let rows;
+      try { rows = await XLSXLite.read(file); } catch (err) { $m('#mtiRes').innerHTML = mtError({ error: err.message || 'Could not read that file.' }); return; }
+      // the heading row is looked for, not assumed — an exported sheet carries a title above it
+      let at = -1, map = {};
+      for (let i = 0; i < Math.min(rows.length, 12); i++) {
+        const m = {};
+        (rows[i] || []).forEach((h, ci) => Object.keys(KEYS).forEach(k => { if (KEYS[k].includes(head(h)) && m[k] === undefined) m[k] = ci; }));
+        if (m.roll !== undefined && m.empId !== undefined) { at = i; map = m; break; }
+      }
+      if (at < 0) { $m('#mtiRes').innerHTML = mtError({ error: 'Could not find the "Registration No" and "Mentor Employee ID" headings. Download the template to see the format.' }); return; }
+      parsed = rows.slice(at + 1).filter(r => (r || []).some(v => String(v ?? '').trim() !== ''))
+        .map(r => ({ roll: String(r[map.roll] ?? '').trim(), empId: String(r[map.empId] ?? '').trim(),
+                     academicYear: map.academicYear !== undefined ? String(r[map.academicYear] ?? '').trim() : '' }));
+      if (!parsed.length) { $m('#mtiRes').innerHTML = mtError({ error: 'The file has no rows under the headings.' }); return; }
+      check(false);
+    };
+  }
+
+  function mtTransferTab(ctx, presetMentor) {
+    const ms = ctx.mentors || [];
+    $m('#mtaBody').innerHTML = `<div class="panel"><div class="panel-head"><h3>Transfer students between mentors</h3></div>
+      <form id="mtTr"><div class="form-grid">
+        <div class="field"><label>From mentor <span class="req">*</span></label><select name="fromMentorId" id="mtTrFrom" required>${mtMentorOpts({ mentors: ms }, presetMentor, 'Choose')}</select></div>
+        <div class="field"><label>To mentor <span class="req">*</span></label><select name="toMentorId" required>${mtMentorOpts({ mentors: ms.filter(m => m.active) }, '', 'Choose')}</select></div>
+        <div class="field"><label>Academic Year</label><select name="academicYear">${mtOpts(ctx.years, '', 'Keep each student’s own')}</select></div>
+      </div>
+      <div id="mtTrList" class="mt-pad"></div>
+      <div class="modal-actions"><button type="submit" class="btn-primary">${ic('refresh')} Transfer</button></div></form></div>`;
+    const listFor = async () => {
+      const from = $m('#mtTrFrom').value;
+      const box = $m('#mtTrList');
+      if (!from) { box.innerHTML = '<p class="mt-muted">Choose the mentor whose students are moving.</p>'; return; }
+      box.innerHTML = mtLoading();
+      const d = await mtGet('mt-students', { mentorId: from, export: '1', all: '1', sort: 'roll' });
+      if (d.error) { box.innerHTML = mtError(d); return; }
+      box.innerHTML = d.rows.length ? `<p class="mt-muted">Untick anyone who should stay. ${plural(d.rows.length, 'student')} with this mentor.</p>
+        <div class="mt-pick">${d.rows.map(r => `<label class="chk"><input type="checkbox" name="s" value="${esc(r.id)}" checked> ${esc(r.name)} <small class="mt-muted mono">${esc(r.roll)}</small></label>`).join('')}</div>`
+        : '<p class="mt-muted">This mentor has no students to transfer.</p>';
+    };
+    $m('#mtTrFrom').onchange = listFor;
+    listFor();
+    $m('#mtTr').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = formData(e.target);
+      const ids = [...e.target.querySelectorAll('input[name="s"]:checked')].map(c => c.value);
+      if (!ids.length) { toast('Select at least one student to transfer.', 'err'); return; }
+      const r = await mtPost('mt-transfer', { fromMentorId: f.fromMentorId, toMentorId: f.toMentorId, studentIds: ids, academicYear: f.academicYear });
+      if (r.error) { toast(r.error, 'err'); return; }
+      toast(mtAssignSummary(r));
+      listFor();
+    };
+  }
+
+  /* ====================== ADMIN: PERFORMANCE ====================== */
+  function viewMentorPerformance() {
+    const p = 'mtp';
+    viewMentorPerformance.after = async () => {
+      const ctx = await mtContext();
+      if (ctx.error) { $m('#mtpTable').innerHTML = mtError(ctx); return; }
+      const st = { page: 1, sort: 'name', dir: 'asc', from: addDays(today(), -90), to: today(), department: '', course: '', academicYear: '', semester: '' };
+      const depts = [...new Set((ctx.mentors || []).map(m => m.department).filter(Boolean))].sort();
+      $m('#mtpTools').innerHTML = `<label class="mt-f"><span>From</span><input type="date" class="filter-sel" data-mtf="from" value="${st.from}"></label>
+        <label class="mt-f"><span>To</span><input type="date" class="filter-sel" data-mtf="to" value="${st.to}"></label>
+        <label class="mt-f"><span>Department</span><select class="filter-sel" data-mtf="department">${mtOpts(depts, '', 'All departments')}</select></label>
+        <label class="mt-f"><span>Programme</span><select class="filter-sel" data-mtf="course">${mtOpts(ctx.courses, '', 'All')}</select></label>
+        <label class="mt-f"><span>Academic Year</span><select class="filter-sel" data-mtf="academicYear">${mtOpts(ctx.years, '', 'All')}</select></label>
+        <label class="mt-f"><span>Semester</span><select class="filter-sel" data-mtf="semester">${mtOpts(['1', '2', '3', '4'], '', 'All')}</select></label>
+        <div class="mt-f mt-f-btn"><button type="button" class="btn-outline btn-sm" id="mtpClear">Clear</button></div>`;
+      const draw = async () => {
+        $m('#mtpTable').innerHTML = mtLoading();
+        const d = await mtGet('mt-performance', Object.assign({}, st, { size: 25 }));
+        if (d.error) { $m('#mtpTable').innerHTML = mtError(d); return; }
+        const pct = (v) => `<div class="mt-pct"><div class="dist-bar"><i style="width:${v}%"></i></div><b>${v}%</b></div>`;
+        $m('#mtpTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            ${mtTh('Mentor', 'name', st)}${mtTh('Total Students', 'students', st)}${mtTh('Student Contact %', 'studentContactRate', st)}
+            ${mtTh('Parent Contact %', 'parentContactRate', st)}${mtTh('Interactions', 'interactions', st)}${mtTh('Completed Follow-ups', 'completedFollowups', st)}
+            ${mtTh('Pending Follow-ups', 'pendingFollowups', st)}${mtTh('At-Risk', 'atRisk', st)}${mtTh('Resolved', 'resolved', st)}</tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(m => `<tr><td><b>${esc(m.name)}</b><br><small class="mt-muted">${esc(m.department || '')} · ${esc(m.empId || '')}</small></td>
+            <td>${m.students}</td><td>${pct(m.studentContactRate)}</td><td>${pct(m.parentContactRate)}</td><td>${m.interactions}</td>
+            <td>${m.completedFollowups}</td><td>${m.pendingFollowups}${m.overdueFollowups ? ` <span class="pill red">${m.overdueFollowups} overdue</span>` : ''}</td>
+            <td>${m.atRisk ? `<span class="pill red">${m.atRisk}</span>` : 0}</td><td>${m.resolved}</td></tr>`).join('')
+            : `<tr><td colspan="9" class="empty">No mentor activity for these filters.</td></tr>`}</tbody></table></div>${mtPagerHtml(d)}`;
+        const t = $m('#mtpTable');
+        mtBindSort(t, st, draw);
+        mtBindPager(t, (pg) => { st.page = pg; draw(); });
+      };
+      mtBindFilters($m('#mtpTools'), p, st, ['department', 'course', 'academicYear', 'semester'], draw);
+      mtBindExports(p, 'Mentor Performance', [
+        { header: 'Emp ID', key: 'empId', width: 12 }, { header: 'Mentor', key: 'name', width: 22 }, { header: 'Department', key: 'department', width: 16 },
+        { header: 'Total Students', key: 'students', width: 12 }, { header: 'Student Contact %', key: 'studentContactRate', width: 14 },
+        { header: 'Parent Contact %', key: 'parentContactRate', width: 14 }, { header: 'Total Interactions', key: 'interactions', width: 14 },
+        { header: 'Completed Follow-ups', key: 'completedFollowups', width: 16 }, { header: 'Pending Follow-ups', key: 'pendingFollowups', width: 15 },
+        { header: 'At-Risk Students', key: 'atRisk', width: 13 }, { header: 'Resolved Cases', key: 'resolved', width: 13 },
+      ], () => mtGet('mt-performance', Object.assign({}, st, { export: '1' })), `Period ${st.from} to ${st.to}`);
+      draw();
+    };
+    return `<div class="mt-page"><div class="mt-head">${mtSub('How each mentor is doing over a period — reach, follow-through and outcomes.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="panel"><div class="mt-filter-grid mt-filter-inline" id="mtpTools"></div><div id="mtpTable">${mtLoading()}</div></div></div>`;
+  }
+
+  /* ======================== ADMIN: SETTINGS ======================== */
+  function viewMentorSettings() {
+    viewMentorSettings.after = async () => {
+      const r = await mtGet('mt-settings');
+      const ctx = await mtContext();
+      if (r.error || ctx.error) { $m('#mtsetBody').innerHTML = mtError(r.error ? r : ctx); return; }
+      const s = r.settings, d = r.defaults, ro = !ctx.manage;
+      const num = (k, label, hint, step) => `<div class="field"><label>${label}</label>
+        <input type="number" name="${k}" value="${s[k]}" min="0" step="${step || 1}" ${ro ? 'disabled' : ''}>
+        <small class="hint">${esc(hint)} · default ${d[k]}</small></div>`;
+      $m('#mtsetBody').innerHTML = `<form id="mtSet">
+        <div class="panel"><div class="panel-head"><h3>${ic('alert')} High risk</h3></div><div class="form-grid">
+          ${num('attHigh', 'Attendance below (%)', 'Attendance under this marks a student high risk')}
+          ${num('cgpaHigh', 'CGPA below', 'A CGPA under this is high risk', '0.1')}
+          ${num('backlogHigh', 'Backlogs — this many or more', '“Multiple backlogs”')}
+          ${num('noContactDays', 'No mentor interaction for more than (days)', 'Counted from the last student or parent contact')}</div></div>
+        <div class="panel"><div class="panel-head"><h3>${ic('bell')} Needs attention</h3></div><div class="form-grid">
+          ${num('attMedium', 'Attendance up to (%)', 'Between the high-risk limit and this')}
+          ${num('cgpaMedium', 'CGPA up to', 'Between the high-risk limit and this', '0.1')}
+          ${num('backlogMedium', 'Backlogs — this many', 'Set 0 to ignore a single backlog')}
+          ${num('declineDrop', 'SGPA fall of at least', '“Declining academic performance”, semester on semester', '0.1')}</div></div>
+        <div class="panel"><div class="panel-head"><h3>${ic('phone')} Contact windows</h3></div><div class="form-grid">
+          ${num('contactWindowDays', 'Student counts as contacted within (days)', 'Drives “Contacted / Due for Contact”')}
+          ${num('parentWindowDays', 'Parent contact rate window (days)', 'Parents contacted in the last N days')}</div></div>
+        ${ro ? '<p class="mt-muted">Only the Super Admin can change these thresholds.</p>' : `<div class="modal-actions">
+          <button type="button" class="btn-outline" id="mtSetReset">Restore defaults</button><button type="submit" class="btn-primary">Save Settings</button></div>`}
+      </form>`;
+      if (ro) return;
+      $m('#mtSetReset').onclick = () => Object.keys(d).forEach(k => { const el = $m('#mtSet').querySelector(`[name="${k}"]`); if (el) el.value = d[k]; });
+      $m('#mtSet').onsubmit = async (e) => {
+        e.preventDefault();
+        const r2 = await mtPost('mt-settings', { settings: formData(e.target) });
+        if (r2.error) { toast(r2.error, 'err'); return; }
+        await mtContext(true);
+        toast('Mentor settings saved — risk levels now follow the new thresholds.');
+      };
+    };
+    return `<div class="mt-page"><div class="mt-head">${mtSub('The rules that decide who is at risk. Every page and report recalculates from these immediately.')}</div>
+      <div id="mtsetBody">${mtLoading()}</div></div>`;
+  }
+
+  // the mapping page draws its history panel once the student table is up
+  function viewMentorMapping() {
+    const html = viewMentorStudents();
+    viewMentorMapping.after = async () => { await viewMentorStudents.after(); mtAssignmentHistory(); };
+    return html;
+  }
+
   function restoreView() {
     let saved = null;
     try { saved = sessionStorage.getItem(VIEW_KEY); } catch (e) { /* private mode */ }

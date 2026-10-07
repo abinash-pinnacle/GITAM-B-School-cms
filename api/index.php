@@ -60,6 +60,12 @@ register_shutdown_function(static function (): void {
 });
 
 require_once __DIR__ . '/db.php';
+/* The mentorship module. Loaded only when the file is there: a Hostinger
+   deploy lands file by file, and the rest of the API must keep answering
+   while it arrives. */
+if (is_file(__DIR__ . '/mentor.php')) {
+    require_once __DIR__ . '/mentor.php';
+}
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -1204,7 +1210,13 @@ function guard_request(string $resource, string $method, ?string $id = null): vo
     if (in_array($resource, TICKET_TABLES, true)) {
         send_json(['error' => 'forbidden', 'message' => 'Tickets are reached through the helpdesk.'], 403);
     }
-    if (preg_match('/^(tk|nt|ap|rp)-/', $resource)) {
+    /* Mentorship rows are private to the mentor, the department head and the
+       administration; mentor.php checks each one against the caller, so the
+       generic collection API never serves or writes them. */
+    if (in_array($resource, defined('MENTOR_TABLES') ? MENTOR_TABLES : [], true)) {
+        send_json(['error' => 'forbidden', 'message' => 'Mentorship records are reached through the mentorship pages.'], 403);
+    }
+    if (preg_match('/^(tk|nt|ap|rp|mt)-/', $resource)) {
         return;
     }
     // a reporting relationship is set by the Super Admin alone, and must make sense
@@ -2478,7 +2490,8 @@ function bootstrap_data(): array
     $isAdmin = current_role() === 'admin';
     foreach (COLLECTIONS as $col => $_) {
         // tickets are served per caller by the helpdesk endpoints, never in bulk
-        if (in_array($col, TICKET_TABLES, true)) {
+        if (in_array($col, TICKET_TABLES, true)
+            || in_array($col, defined('MENTOR_TABLES') ? MENTOR_TABLES : [], true)) {
             continue;
         }
         /* Every session needs the role table: it is how the browser works out
@@ -5951,6 +5964,10 @@ function dispatch(string $method, string $resource, ?string $id, bool $isCollect
     }
     if ($method === 'DELETE' && $isCollection && $id !== null) {
         api_delete($resource, $id);
+    }
+    // mentorship: every mt-* call is authorised inside mentor.php
+    if (strncmp($resource, 'mt-', 3) === 0 && function_exists('mt_dispatch')) {
+        mt_dispatch($method, $resource, $id);
     }
 
     send_json(['error' => 'not found'], 404);

@@ -320,7 +320,26 @@ const COLLECTIONS = [
                      'linkType', 'linkData'],
     'approvalsteps' => ['id', 'approvalId', 'action', 'fromUser', 'fromName', 'fromRole', 'toUser', 'toName',
                         'toRole', 'status', 'remarks', 'level', 'at', 'assignedAt', 'completedAt', 'seconds'],
+    /* ---- Mentorship. Private like the helpdesk: reached only through the mt-*
+       endpoints in mentor.php, which check every row against the caller.
+       Students, mentors (faculty), attendance and marks are the CMS's own
+       tables — these hold only what the mentoring itself adds. ---- */
+    // who mentors whom; ending an assignment keeps it as history
+    'mentorassignments' => ['id', 'studentId', 'mentorId', 'academicYear', 'status', 'assignedAt',
+                            'assignedBy', 'endedAt', 'endedBy', 'endReason'],
+    // a conversation with the student (kind=student) or a parent/guardian (kind=parent)
+    'mentorinteractions' => ['id', 'kind', 'studentId', 'mentorId', 'date', 'type', 'mode', 'category',
+                             'discussion', 'concern', 'actionTaken', 'outcome', 'guardianName',
+                             'relationship', 'parentResponse', 'priority', 'status', 'nextFollowUp',
+                             'remarks', 'createdBy', 'createdByName', 'createdAt'],
+    'mentorfollowups' => ['id', 'studentId', 'mentorId', 'interactionId', 'reason', 'createdAt', 'dueDate',
+                          'priority', 'status', 'completedAt', 'completedBy', 'note', 'createdBy'],
+    // the last risk level each student was seen at (id = the student id), so a change can be audited
+    'mentorriskstate' => ['id', 'level', 'score', 'reasons', 'changedAt'],
 ];
+
+/* the mentorship tables — never served by the generic collection API or the bootstrap */
+const MENTOR_TABLES = ['mentorassignments', 'mentorinteractions', 'mentorfollowups', 'mentorriskstate'];
 
 /** columns stored as a JSON string but exposed to the UI as an object */
 const JSON_FIELDS = [
@@ -347,6 +366,9 @@ const JSON_FIELDS = [
 /** columns that hold long text (e.g. a base64 photo) — need a wide MySQL type */
 const LONGTEXT_FIELDS = [
     'students' => ['photo'],
+    'mentorinteractions' => ['discussion', 'concern', 'actionTaken', 'outcome', 'parentResponse', 'remarks'],
+    'mentorfollowups' => ['note'],
+    'mentorriskstate' => ['reasons'],
     'tickets' => ['description', 'resolution'],
     'tickethistory' => ['reason', 'comment'],
     'ticketcomments' => ['message'],
@@ -560,6 +582,13 @@ const MODULES = [
                       'write' => ['events']],
     'reports'     => ['label' => 'Reports & Departments',
                       'views' => ['chreports', 'departments', 'branches'],
+                      'write' => []],
+    /* Mentoring is written through its own mt-* endpoints, so it lists no
+       collections; the grant decides what a custom-access account may open
+       and do (view / add / edit / manage) in the mentorship management pages. */
+    'mentorship'  => ['label' => 'Mentorship',
+                      'views' => ['mgdash', 'mgmentors', 'mgassign', 'mgmapping', 'mgactivity', 'mgrisk',
+                                  'mgfollow', 'mgperf', 'mgreports', 'mgsettings'],
                       'write' => []],
     'system'      => ['label' => 'Users, Roles & Settings',
                       'views' => ['accounts', 'usersettings', 'roles'],
