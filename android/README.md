@@ -1,9 +1,7 @@
 # Android app (TWA)
 
-> **No APK is built yet.** Build one as below (site: https://cmsgitam.pintekdigital.com).
-
-The Android app is a **Trusted Web Activity**: a thin native
-shell that opens the site full-screen, with no browser UI.
+`apk/GITAM-BSCHOOL-CMS-v1.0.0.apk` is a **Trusted Web Activity**: a thin native
+shell that opens https://cmsgitam.pintekdigital.com full-screen, with no browser UI.
 There is no separate app codebase — the app *is* the site, so a `git push` that
 deploys the site also updates what the app shows. Only a change to the shell
 itself (name, icon, package, target URL) needs a new APK.
@@ -11,40 +9,28 @@ itself (name, icon, package, target URL) needs a new APK.
 | | |
 |---|---|
 | Package | `in.gitam.bschool.cms` |
-| Version | 1.1.0 (versionCode 2) |
+| Version | 1.0.0 (versionCode 1) |
 | Min / target SDK | 21 (Android 5.0) / 36 |
-| Signing SHA-256 | `E9:F2:42:…:7D:74` (see `.well-known/assetlinks.json`) |
+| Signing SHA-256 | `FE:2F:DD:…:76:2E` (see `.well-known/assetlinks.json`) |
 
 ## Installing
 
-Once built, download `https://<your-domain>/apk/GITAM-BSCHOOL-CMS-v1.1.0.apk` on the
+Download `https://cmsgitam.pintekdigital.com/apk/GITAM-BSCHOOL-CMS-v1.0.0.apk` on the
 phone and open it. Android will ask to allow installs from unknown sources —
 expected for an APK that does not come from the Play Store.
 
 ## The signing key
 
-**The current APK is signed with a throwaway key** (`android.keystore` in the
-repo root, store/key password `android`). It is git-ignored, and it is fine for
-sideloading and demos — but not for the Play Store, and anyone can produce an
-APK that Android accepts as an update to this one.
+The APK is signed with a release key that lives **outside the repository**, in
+`D:\GITAM B-SCHOOL CMS\android-signing\` on the build machine:
+`android.keystore` (alias `gitam`) and `keystore-password.txt`. Keep a backup of
+that folder somewhere safe. **Android identifies an app by its signing key**:
+lose it and the app can never be updated, only replaced under a new package
+name. Never commit it — `android.keystore` and `*.jks` are git-ignored.
 
-Before publishing, make a real key and keep it safe. **Android identifies an app
-by its signing key**: lose it and the app can never be updated, only replaced
-under a new package name.
-
-```bash
-keytool -genkeypair -v -keystore release.keystore -alias gitam \
-  -keyalg RSA -keysize 2048 -validity 10000
-```
-
-Then point `android/twa-manifest.json` at it (`signingKey.path`, `signingKey.alias`),
-rebuild, and put the new certificate's SHA-256 into `.well-known/assetlinks.json` —
-the fingerprint there must match whoever signed the APK, or Android shows the URL
-bar instead of a clean full-screen app.
-
-```bash
-keytool -list -v -keystore release.keystore -alias gitam | grep SHA256:
-```
+The certificate's SHA-256 is in `.well-known/assetlinks.json`; it must match
+whoever signed the APK, or Android shows the URL bar instead of a clean
+full-screen app.
 
 ## Rebuilding
 
@@ -56,10 +42,14 @@ docker build -t twa-builder -f android/builder.Dockerfile android
 ```
 
 Copy `android/twa-manifest.json` and the keystore into an empty working
-directory, then:
+directory. Hostinger's bot protection answers 403 to the build container, so
+point `iconUrl`, `maskableIconUrl` and `webManifestUrl` in that copy at a local
+server over this repository (`python3 -m http.server 8765` in the container),
+run `bubblewrap update --skipVersionUpgrade`, then put the real
+`webManifestUrl` back into `app/build.gradle` before building:
 
 ```bash
-docker run --rm -i -v "$PWD:/work" -w /work -e BUBBLEWRAP_KEYSTORE_PASSWORD=android -e BUBBLEWRAP_KEY_PASSWORD=android twa-builder sh -c 'printf "n\n" | bubblewrap build --skipPwaValidation'
+docker run --rm -i -v "$PWD:/work" -w /work -e BUBBLEWRAP_KEYSTORE_PASSWORD="$PW" -e BUBBLEWRAP_KEY_PASSWORD="$PW" twa-builder sh -c 'printf "n\n" | bubblewrap build --skipPwaValidation'
 ```
 
 The signed APK lands at `app-release-signed.apk`; copy it into `apk/` under a

@@ -1577,14 +1577,15 @@
 
   /* The install-app / download-APK strip shown at the top of every dashboard.
      The Install button appears only when the browser has actually offered a PWA
-     prompt (captured in index.html and exposed as window.pwaCanInstall). The APK
-     link is gone until a GITAM B-School APK is built — see android/README.md. */
+     prompt (captured in index.html and exposed as window.pwaCanInstall); the APK
+     link is always there, so it can be handed out from a desktop too. */
   function appDownloadBar() {
     const canInstall = typeof window.pwaCanInstall === 'function' && window.pwaCanInstall();
-    if (!canInstall) return '';
     return `<div class="app-get-bar">
       ${canInstall ? `<button type="button" class="btn-outline btn-sm app-get-btn" id="dashInstallBtn">
         <span>${ic('smartphone')}</span><span>Install GITAM B-School app</span></button>` : ''}
+      <a class="btn-outline btn-sm app-get-btn" href="apk/GITAM-BSCHOOL-CMS-v1.0.0.apk" download>
+        <span>${ic('bot')}</span><span>Download Android app (APK)</span></a>
     </div>`;
   }
   function wireAppDownloadBar(scope) {
