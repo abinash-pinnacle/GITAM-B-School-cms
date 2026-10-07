@@ -383,7 +383,9 @@ const BRANCH_CODES = [
     'General Management'                     => '01',
     'Logistics and Supply Chain Management'  => '02',
     'Retail Management'                      => '03',
-    'Computer Applications'                  => '04',
+    /* The MCA has no branch, so its students are numbered by the course
+       itself — see student_id_branch() in index.php. */
+    'MCA'                                    => '04',
 ];
 /** a branch nobody has given a code to, so the id is still well-formed */
 const BRANCH_CODE_FALLBACK = '00';

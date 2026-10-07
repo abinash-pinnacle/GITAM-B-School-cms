@@ -1650,6 +1650,14 @@ function lock_collection(string $col): void
     }
 }
 
+/* What a student's id is numbered by: the branch, or — for a programme that
+   has no branches, like the MCA — the course itself. */
+function student_id_branch(array $row): string
+{
+    $branch = trim((string) ($row['branchName'] ?? ''));
+    return $branch !== '' ? $branch : trim((string) ($row['course'] ?? ''));
+}
+
 /** YY + branch code + running number, e.g. 250101 */
 function format_student_id(string $yy, string $branch, int $seq): string
 {
@@ -1664,7 +1672,7 @@ function format_student_id(string $yy, string $branch, int $seq): string
 function issue_student_id(array $row): string
 {
     $yy = admission_yy((string) ($row['admissionDate'] ?? ($row['academicYear'] ?? '')));
-    return format_student_id($yy, (string) ($row['branchName'] ?? ''), take_student_seq($yy));
+    return format_student_id($yy, student_id_branch($row), take_student_seq($yy));
 }
 
 /**
@@ -1804,7 +1812,7 @@ function api_renumber_students(): void
         foreach ($students as $s) {
             $yy = $yearOf($s);
             $seqByYear[$yy] = ($seqByYear[$yy] ?? 0) + 1;
-            $newRoll = format_student_id($yy, (string) ($s['branchName'] ?? ''), $seqByYear[$yy]);
+            $newRoll = format_student_id($yy, student_id_branch($s), $seqByYear[$yy]);
             $oldRoll = (string) ($s['roll'] ?? '');
             if ($newRoll === $oldRoll) {
                 continue;                       // already exactly right — leave it

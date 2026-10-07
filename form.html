@@ -178,31 +178,22 @@
         <h3 class="sec">What you are studying</h3>
         <div class="grid">
           <div class="field"><label>Course</label>
-            <!-- data-course on the options below ties each one to a programme;
-                 picking a course hides the ones that belong to the other -->
+            <!-- the MCA has no branch or specialisation: choosing it hides those
+                 three fields (see courseFilter below) -->
             <select name="course"><option selected>MBA</option><option>MCA</option></select></div>
           <div class="field"><label>Branch <span class="req">*</span></label>
             <select name="branchName"><option value=""></option>
-              <option data-course="MBA">General Management</option>
-              <option data-course="MBA">Logistics and Supply Chain Management</option>
-              <option data-course="MBA">Retail Management</option>
-              <option data-course="MCA">Computer Applications</option></select></div>
+              <option>General Management</option>
+              <option>Logistics and Supply Chain Management</option>
+              <option>Retail Management</option></select></div>
           <div class="field"><label>Specialisation I</label>
             <select name="specialisation"><option value="">— None —</option>
-              <option data-course="MBA">Marketing</option><option data-course="MBA">Finance</option>
-              <option data-course="MBA">HR</option><option data-course="MBA">Retail</option>
-              <option data-course="MBA">Logistics</option>
-              <option data-course="MCA">Data Science</option><option data-course="MCA">Cloud Computing</option>
-              <option data-course="MCA">Cyber Security</option>
-              <option data-course="MCA">AI &amp; Machine Learning</option></select></div>
+              <option>Marketing</option><option>Finance</option><option>HR</option>
+              <option>Retail</option><option>Logistics</option></select></div>
           <div class="field"><label>Specialisation II</label>
             <select name="specialisation2"><option value="">— None —</option>
-              <option data-course="MBA">Marketing</option><option data-course="MBA">Finance</option>
-              <option data-course="MBA">HR</option><option data-course="MBA">Retail</option>
-              <option data-course="MBA">Logistics</option>
-              <option data-course="MCA">Data Science</option><option data-course="MCA">Cloud Computing</option>
-              <option data-course="MCA">Cyber Security</option>
-              <option data-course="MCA">AI &amp; Machine Learning</option></select></div>
+              <option>Marketing</option><option>Finance</option><option>HR</option>
+              <option>Retail</option><option>Logistics</option></select></div>
           <div class="field"><label>Semester <span class="req">*</span></label>
             <select name="semester"><option value=""></option>
               <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
@@ -387,23 +378,23 @@
     });
   })();
 
-  /* Branch and specialisations follow the course: an MCA applicant is never
-     offered Retail Management, nor an MBA one Cyber Security. A choice that no
-     longer fits the course is cleared rather than sent. */
+  /* The MCA is taught without branches or specialisations, so choosing it
+     hides those three fields and clears them — nothing MBA-only is sent. */
+  var NO_BRANCH_COURSES = ['MCA'];
+  function courseHasBranches() {
+    var c = document.querySelector('[name="course"]');
+    return NO_BRANCH_COURSES.indexOf(String(c.value || '').toUpperCase()) === -1;
+  }
   (function courseFilter() {
     var course = document.querySelector('[name="course"]');
     function apply() {
-      var c = course.value;
+      var show = courseHasBranches();
       ['branchName', 'specialisation', 'specialisation2'].forEach(function (name) {
         var sel = document.querySelector('[name="' + name + '"]');
         if (!sel) return;
-        Array.prototype.forEach.call(sel.options, function (o) {
-          var own = o.getAttribute('data-course');
-          var fits = !own || own === c;
-          o.hidden = !fits;
-          o.disabled = !fits;
-        });
-        if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) sel.value = '';
+        var field = sel.closest('.field') || sel.parentNode;
+        field.style.display = show ? '' : 'none';
+        if (!show) sel.value = '';
       });
     }
     course.addEventListener('change', apply);
@@ -725,6 +716,7 @@
       ['emergencyPhone', 'emergency contact mobile']
     ];
     for (var ni = 0; ni < NEED.length; ni++) {
+      if (NEED[ni][0] === 'branchName' && !courseHasBranches()) continue;
       if (!(d[NEED[ni][0]] || '').trim()) {
         var nel = document.querySelector('[name="' + NEED[ni][0] + '"]');
         if (nel) { showStep(paneOf(nel)); nel.focus(); }

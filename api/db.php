@@ -314,9 +314,6 @@ function add_mca_programme(): void
     $lists = [
         'courseList' => ['MCA'],
         'branchList' => ['MCA'],
-        'branchNameList' => ['Computer Applications'],
-        'specialisationList' => ['Data Science', 'Cloud Computing', 'Cyber Security',
-                                 'AI & Machine Learning'],
         'departmentList' => ['MCA'],
     ];
     foreach ($lists as $name => $add) {
@@ -331,12 +328,12 @@ function add_mca_programme(): void
                     [implode(',', $merged), $row['id']]);
         }
     }
-    // a saved student-id code map gets the MCA branch its own two digits
+    // a saved student-id code map gets the MCA its own two digits
     $codes = fetch_one('SELECT * FROM ' . qi('settings') . ' WHERE ' . qi('name') . " = 'branchCodes'");
     if ($codes && trim((string) $codes['value']) !== ''
-        && stripos((string) $codes['value'], 'Computer Applications') === false) {
+        && !preg_match('/(^|,)\s*MCA\s*=/i', (string) $codes['value'])) {
         run_sql('UPDATE ' . qi('settings') . ' SET ' . qi('value') . ' = ? WHERE ' . qi('id') . ' = ?',
-                [rtrim((string) $codes['value'], ', ') . ',Computer Applications=04', $codes['id']]);
+                [rtrim((string) $codes['value'], ', ') . ',MCA=04', $codes['id']]);
     }
     meta_set('mca_programme', date('c'));
 }

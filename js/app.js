@@ -3964,8 +3964,15 @@
     'General Management': '01',
     'Logistics and Supply Chain Management': '02',
     'Retail Management': '03',
+    'MCA': '04',
   };
   const BRANCH_CODE_FALLBACK = '00';
+  /* What a student's id is numbered by: the branch, or — for a programme with
+     no branches, like the MCA — the course. Mirrors student_id_branch() on
+     the server. */
+  function idBranch(r) {
+    return String((r && r.branchName) || '').trim() || String((r && r.course) || '').trim();
+  }
   function branchCodeMap() {
     const row = settingRow('branchCodes');
     const raw = String((row && row.value) || '').trim();
@@ -4003,7 +4010,7 @@
     const roll = String(student.roll || '').trim();
     if (!isIssuedId(roll)) return null;
     const wantYY = admissionYY(student.admissionDate || student.academicYear || '');
-    const wantCode = branchCode(student.branchName);
+    const wantCode = branchCode(idBranch(student));
     const hasYY = roll.slice(0, 4), hasCode = roll.slice(4, 6);
     if (hasYY === wantYY && hasCode === wantCode) return null;
     return { hasYY, hasCode, wantYY, wantCode };
@@ -4484,6 +4491,7 @@
       const rollBox = $('#rollInput');
       const dateBox = document.querySelector('[name="admissionDate"]');
       const branchBox = $('#stuFormBranch');
+      const courseBox = $('#stuFormCourse');
       let seq = 0;
       /* Changing the date and then the branch fires two requests, and the first
          can answer second — which would paint the older question's answer over
@@ -4492,7 +4500,8 @@
       const refreshRoll = async () => {
         const mine = ++asked;
         const yy = admissionYY((dateBox && dateBox.value) || '');
-        const branch = (branchBox && branchBox.value) || '';
+        const branch = idBranch({ branchName: branchBox && branchBox.value,
+                                  course: courseBox && courseBox.value });
         const j = await Store.nextStudentId(yy, branch);
         if (mine !== asked) return;            // a later change has overtaken this
         if (j && j.id) { rollBox.value = j.id; seq = j.next || 0; return; }
@@ -4501,12 +4510,14 @@
       };
       if (dateBox) dateBox.addEventListener('change', refreshRoll);
       if (branchBox) branchBox.addEventListener('change', refreshRoll);
+      if (courseBox) courseBox.addEventListener('change', refreshRoll);
       refreshRoll();
     }
     bindCustomList($('#stuFormBranch'), 'branchName');
     bindCustomList($('#stuFormSpec'), 'specialisation');
     bindCustomList($('#stuFormSpec2'), 'specialisation');
     bindCustomList($('#stuFormCourse'), 'course');
+    bindCourseFields($('#stuFormCourse'), ['#stuFormBranch', '#stuFormSpec', '#stuFormSpec2']);
     bindPhotoField();
 
     const panes = () => document.querySelectorAll('.sf-pane');
@@ -4943,7 +4954,7 @@
   function correctStudentIdModal(sid, after) {
     const s = Store.find('students', sid); if (!s) return;
     const yy = admissionYY(s.admissionDate || s.academicYear || '');
-    Store.nextStudentId(yy, s.branchName || '').then(peek => {
+    Store.nextStudentId(yy, idBranch(s)).then(peek => {
       const suggested = (peek && peek.id) || '';
       openModal2('Correct Student ID', `<form id="f">
         <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.7">
@@ -4994,7 +5005,7 @@
      has and is the username they sign in with, so the dialog says both. */
   function offerReissue(student, off) {
     const yy = admissionYY(student.admissionDate || student.academicYear || '');
-    Store.nextStudentId(yy, student.branchName || '').then(peek => {
+    Store.nextStudentId(yy, idBranch(student)).then(peek => {
       const willBe = (peek && peek.id) || '—';
       confirmAction('Student ID no longer matches',
         `<b>${esc(student.name || '—')}</b> has the ID <b class="mono">${esc(student.roll)}</b>,
@@ -12392,8 +12403,7 @@
        inside it. Editable for the same reason as the rest. */
     branchName: {
       setting: 'branchNameList',
-      defaults: ['General Management', 'Logistics and Supply Chain Management', 'Retail Management',
-                 'Computer Applications'],
+      defaults: ['General Management', 'Logistics and Supply Chain Management', 'Retail Management'],
       prompt: 'New branch (e.g. Business Analytics):',
       used: () => Store.all('students').map(s => s.branchName),
     },
@@ -12401,8 +12411,7 @@
        the rest. Editable, because no two institutes run the same set. */
     specialisation: {
       setting: 'specialisationList',
-      defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics',
-                 'Data Science', 'Cloud Computing', 'Cyber Security', 'AI & Machine Learning'],
+      defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics'],
       prompt: 'New specialisation (e.g. Business Analytics):',
       // fee heads can be set per specialisation, so one in use there counts too
       used: () => Store.all('students').map(s => s.specialisation)
@@ -12722,6 +12731,28 @@
       present += vals.filter(v => v === 'P').length;
     });
     return { marks, present, pct: marks ? Math.round(present / marks * 100) : null };
+  }
+
+  /* Programmes taught without branches or specialisations. Choosing one hides
+     those fields on the student form and clears them, so an MCA student never
+     carries an MBA stream. */
+  const NO_BRANCH_COURSES = ['MCA'];
+  function courseHasBranches(course) {
+    return !NO_BRANCH_COURSES.includes(String(course || '').trim().toUpperCase());
+  }
+  function bindCourseFields(courseSel, fieldSels) {
+    if (!courseSel) return;
+    const sync = () => {
+      const show = courseHasBranches(courseSel.value);
+      fieldSels.forEach(q => {
+        const el = $(q); if (!el) return;
+        const box = el.closest('.field') || el;
+        box.style.display = show ? '' : 'none';
+        if (!show) el.value = '';
+      });
+    };
+    courseSel.addEventListener('change', sync);
+    sync();
   }
 
   /** true when a value names a programme (MBA, MCA, …) rather than a stream inside one */
@@ -15379,8 +15410,8 @@
        issued on save. The dialog says what it will be rather than asking, since
        the college gives out these numbers by a rule and not by hand. */
     const yy = admissionYY(d.admissionDate || '');
-    Store.nextStudentId(yy, d.branchName || '').then(peek => {
-      const willBe = (peek && peek.id) || (yy + branchCode(d.branchName) + '001');
+    Store.nextStudentId(yy, idBranch(d)).then(peek => {
+      const willBe = (peek && peek.id) || (yy + branchCode(idBranch(d)) + '001');
       confirmAction('Admit Student',
         `Admit <b>${esc(who)}</b> as a student?<br>
          Their Student ID will be <b class="mono">${esc(willBe)}</b> — from the admission year
