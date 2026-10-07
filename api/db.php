@@ -270,6 +270,8 @@ function init_db(): void
     rename_accountant_designation();
     add_mca_programme();
     mentorship_indexes_and_grants();
+    teaching_indexes();
+    fix_timetable_alignment();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -323,6 +325,64 @@ function mentorship_indexes_and_grants(): void
         meta_set('mentorshipGrant', date('c'));
     } catch (Throwable $e) {
         error_log('[gitam-db] mentorship grant skipped: ' . $e->getMessage());
+    }
+}
+
+/**
+ * An early demo seed wrote timetable rows without the `branchName` value that
+ * was later added to the schema, so every column after `branch` landed one
+ * place to the left (day held a period number, courseId held a time, room was
+ * blank). This shifts such rows back — once, and only rows that carry the exact
+ * signature (courseId holding an "HH:MM" that belongs in startTime), so a
+ * correctly entered row is never touched.
+ */
+function fix_timetable_alignment(): void
+{
+    if (meta_value('timetableRealigned') !== null) {
+        return;
+    }
+    try {
+        foreach (fetch_all('SELECT * FROM ' . qi('timetable')) as $t) {
+            if (!preg_match('/^\d{1,2}:\d{2}$/', (string) ($t['courseId'] ?? ''))) {
+                continue;   // courseId is a real course id (e.g. C01) — row is aligned
+            }
+            // shifted: rebuild the real values from the one-left positions
+            $fixed = [
+                'id'         => (string) $t['id'],
+                'branch'     => (string) $t['branch'],
+                'branchName' => '',
+                'semester'   => (string) $t['branchName'],
+                'section'    => (string) $t['semester'],
+                'day'        => (string) $t['section'],
+                'period'     => (string) $t['day'],
+                'courseId'   => (string) $t['period'],
+                'startTime'  => (string) $t['courseId'],
+                'endTime'    => (string) $t['startTime'],
+                'room'       => (string) $t['endTime'],
+            ];
+            run_sql('UPDATE ' . qi('timetable') . ' SET ' . qi('branchName') . ' = ?, ' . qi('semester') . ' = ?, '
+                . qi('section') . ' = ?, ' . qi('day') . ' = ?, ' . qi('period') . ' = ?, ' . qi('courseId') . ' = ?, '
+                . qi('startTime') . ' = ?, ' . qi('endTime') . ' = ?, ' . qi('room') . ' = ? WHERE ' . qi('id') . ' = ?',
+                [$fixed['branchName'], $fixed['semester'], $fixed['section'], $fixed['day'], $fixed['period'],
+                 $fixed['courseId'], $fixed['startTime'], $fixed['endTime'], $fixed['room'], $fixed['id']]);
+        }
+        meta_set('timetableRealigned', date('c'));
+    } catch (Throwable $e) {
+        error_log('[gitam-db] timetable realign skipped: ' . $e->getMessage());
+    }
+}
+
+/** Class-attendance lookups all key on the timetable, the date and the faculty. */
+function teaching_indexes(): void
+{
+    foreach ([['ix_ca_tt', 'classattendance', 'timetableId'], ['ix_ca_date', 'classattendance', 'scheduledDate'],
+              ['ix_ca_sched', 'classattendance', 'scheduledFacultyId'], ['ix_ca_actual', 'classattendance', 'actualFacultyId'],
+              ['ix_cal_record', 'classattendancelog', 'recordId']] as [$name, $table, $col]) {
+        try {
+            db()->exec('CREATE INDEX ' . qi($name) . ' ON ' . qi($table) . ' (' . qi($col) . ')');
+        } catch (PDOException $e) {
+            // already there
+        }
     }
 }
 
@@ -749,7 +809,7 @@ function rename_accountant_designation(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-10-07-mentorship';
+const DB_MIGRATION_REV = '2026-10-07-teaching-activity';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it

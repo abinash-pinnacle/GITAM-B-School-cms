@@ -730,6 +730,9 @@
       ['assignments',ic('folder'),'Assignments'], ['timetable',ic('calendar'),'Timetable'],
       [NAV_SECTION,'','Attendance'],
       ['attendance',ic('check'),'Attendance'], ['attrecords',ic('folder'),'Attendance Records'],
+      [NAV_SECTION,'','Class Attendance'],
+      ['tcdash',ic('activity'),'Class Dashboard'], ['tcday',ic('calendar'),"Today's Classes"],
+      ['tcfaculty',ic('users'),'Faculty Teaching'], ['tcreports',ic('chart'),'Teaching Reports'],
       [NAV_SECTION,'','Marks & Results'],
       ['marks',ic('notes'),'Marks & Results'],
       [NAV_SECTION,'','Fees & Finance'],
@@ -783,6 +786,8 @@
       ['departments',ic('bank'),'Departments'], ['courses',ic('books'),'Courses'], ['branches',ic('leaf'),'Specialisations'],
       ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['attendance',ic('check'),'Attendance'], ['timetable',ic('calendar'),'Timetable'],
+      ['tcdash',ic('activity'),'Class Dashboard'], ['tcday',ic('calendar'),"Today's Classes"],
+      ['tcfaculty',ic('users'),'Faculty Teaching'], ['tcreports',ic('chart'),'Teaching Reports'],
       [NAV_SECTION,'','Fees & Finance'],
       ['finstudents',ic('money'),'Student Fees'], ['fixedfee',ic('clipboard'),'Fixed Fee'],
       ['semfee',ic('calendar'),'Semester-wise Fee'], ['payments',ic('receipt'),'Payment History'],
@@ -811,6 +816,8 @@
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      [NAV_SECTION,'','Teaching Activity'],
+      ['tcmyteaching',ic('activity'),'My Teaching'], ['tcday',ic('calendar'),"Today's Classes"], ['tcreports',ic('chart'),'Teaching Reports'],
       [NAV_SECTION,'','Mentorship'],
       ['mtdash',ic('activity'),'Mentor Dashboard'], ['mtmine',ic('users'),'My Students'],
       ['mtinter',ic('notes'),'Student Interactions'], ['mtparent',ic('home'),'Parent Interactions'],
@@ -822,6 +829,8 @@
       ['marks',ic('notes'),'Marks & Results'], ['timetable',ic('calendar'),'Timetable'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['events',ic('calendar'),'Events'],
       ['tickets',ic('receipt'),'Tickets'], ['approvals',ic('package'),'Goods Requisition'], ['hreports',ic('chart'),'Reports Centre'], EMP_ATTENDANCE, ['profile',ic('user'),'My Profile'],
+      [NAV_SECTION,'','Teaching Activity'],
+      ['tcmyteaching',ic('activity'),'My Teaching'], ['tcday',ic('calendar'),"Today's Classes"], ['tcreports',ic('chart'),'Teaching Reports'],
       [NAV_SECTION,'','Mentorship'],
       ['mtdash',ic('activity'),'Mentor Dashboard'], ['mtmine',ic('users'),'My Students'],
       ['mtinter',ic('notes'),'Student Interactions'], ['mtparent',ic('home'),'Parent Interactions'],
@@ -846,6 +855,10 @@
     course_coordinator: [
       ['dashboard',ic('chart'),'Dashboard'], ['attendance',ic('check'),'Attendance'],
       ['attrecords',ic('folder'),'Attendance Records'],
+      [NAV_SECTION,'','Class Attendance'],
+      ['tcday',ic('calendar'),"Today's Classes"], ['tcdash',ic('activity'),'Class Dashboard'],
+      ['tcfaculty',ic('users'),'Faculty Teaching'], ['tcreports',ic('chart'),'Teaching Reports'],
+      [NAV_SECTION,'','Records & Master Data'],
       ['students',ic('cap'),'Students'], ['submissions',ic('notes'),'Admission Forms'],
       ['courses',ic('books'),'Courses'],
       ['syllabus',ic('receipt'),'Subjects by Semester'], ['timetable',ic('calendar'),'Timetable'],
@@ -1136,6 +1149,8 @@
                                                     ['events']],
     ['reports',      'Reports & Departments',       ['chreports', 'departments', 'branches'],
                                                     []],
+    ['teaching',     'Class Attendance',            ['tcdash', 'tcday', 'tcfaculty', 'tcreports', 'tcmyteaching'],
+                                                    []],
     ['mentorship',   'Mentorship',                  ['mgdash', 'mgmentors', 'mgassign', 'mgmapping', 'mgactivity',
                                                      'mgrisk', 'mgfollow', 'mgperf', 'mgreports', 'mgsettings'],
                                                     []],
@@ -1170,7 +1185,8 @@
     // read-only monitoring, except the one thing it decides
     center_head: { readOnly: true, extra: { requisitions: ['approve'] } },
     // exists to run attendance, and writes nothing else
-    course_coordinator: { readOnly: true, extra: { attendance: ['add', 'edit', 'delete'] } },
+    course_coordinator: { readOnly: true, extra: { attendance: ['add', 'edit', 'delete'],
+      teaching: ['add', 'edit', 'delete'] } },
     // enrols and corrects; removing a student is not its call
     admission: { readOnly: true, extra: { students: ['add', 'edit', 'import'] } },
   };
@@ -1442,6 +1458,8 @@
     mgdash:'Mentor Dashboard', mgmentors:'Mentor List', mgassign:'Assign Mentors', mgmapping:'Student-Mentor Mapping',
     mgactivity:'Mentor Activity', mgrisk:'At-Risk Students', mgfollow:'Follow-up Reports', mgperf:'Mentor Performance',
     mgreports:'Mentor Reports', mgsettings:'Mentor Settings',
+    tcdash:'Class Dashboard', tcday:"Today's Classes", tcfaculty:'Faculty Teaching Activity',
+    tcreports:'Teaching Reports', tcmyteaching:'My Teaching Activity',
   };
   // pages the center head reaches through a different lens than the admin
   const READ_ONLY_TITLES = {
@@ -1541,6 +1559,8 @@
       mgdash: viewMentorDashboard, mgmentors: viewMentorList, mgassign: viewAssignMentors, mgmapping: viewMentorMapping,
       mgactivity: viewMentorInteractions, mgrisk: viewMentorRisk, mgfollow: viewMentorFollowups, mgperf: viewMentorPerformance,
       mgreports: viewMentorReports, mgsettings: viewMentorSettings,
+      tcdash: viewTeachingDashboard, tcday: viewTeachingDay, tcfaculty: viewTeachingFaculty,
+      tcreports: viewTeachingReports, tcmyteaching: viewMyTeaching,
     }[view] || viewDashboard;
     v.innerHTML = fn();
     /* The app-install offer and the Android APK sit at the top of everyone's
@@ -21106,6 +21126,541 @@
     const html = viewMentorStudents();
     viewMentorMapping.after = async () => { await viewMentorStudents.after(); mtAssignmentHistory(); };
     return html;
+  }
+
+  /* =====================================================================
+     FACULTY CLASS ATTENDANCE / TEACHING ACTIVITY — the tc* pages.
+
+     The timetable is the master source: today's classes are read from it, never
+     created by hand. A class is a timetable row on a date; its record snapshots
+     the scheduled faculty, so a substitute never overwrites who was assigned and
+     a later timetable edit never rewrites history. Everything goes through the
+     tc-* endpoints in api/teaching.php, which authorise each call server-side —
+     the coordinator records within scope, the HOD and center head read, a
+     faculty sees only their own teaching.
+     ===================================================================== */
+  const TC_SINK = document.createElement('div');
+  const $t = (sel) => document.querySelector(sel) || TC_SINK;
+  let TC_CTX = null, TC_CTX_AT = 0;
+
+  async function tcContext(force) {
+    if (!force && TC_CTX && Date.now() - TC_CTX_AT < 60000) return TC_CTX;
+    const r = await Store._tk('tc-context');
+    if (!r.error) { TC_CTX = r; TC_CTX_AT = Date.now(); }
+    return r;
+  }
+  function tcQuery(params) {
+    const q = new URLSearchParams();
+    Object.keys(params || {}).forEach(k => {
+      const v = params[k];
+      if (v !== '' && v !== null && v !== undefined) q.set(k, v);
+    });
+    const s = q.toString();
+    return s ? '?' + s : '';
+  }
+  const tcGet = (path, params) => Store._tk(path + tcQuery(params));
+  const tcPost = (path, body) => Store._tk(path, 'POST', body);
+  const tcIsAdminView = () => !['own'].includes((TC_CTX && TC_CTX.level) || '');
+
+  function tcDate(d) {
+    if (!d) return '—';
+    const t = new Date(String(d).slice(0, 10) + 'T00:00:00');
+    return isNaN(t) ? esc(d) : t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  function tcMinsText(m) { return !m ? '—' : (m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ' min'); }
+  const TC_BADGE = { Completed: 'green', Ongoing: 'blue', Pending: 'amber', Scheduled: 'grey',
+    'Not Conducted': 'red', Substitute: 'orange', Rescheduled: 'purple', Cancelled: 'grey' };
+  function tcStatusPill(s) { return `<span class="pill ${TC_BADGE[s] || 'grey'}">${esc(s)}</span>`; }
+  function tcEmpty(msg) { return `<div class="mt-empty">${ic('calendar')}<p>${esc(msg)}</p></div>`; }
+  const tcLoading = (m) => `<div class="mt-loading">${esc(m || 'Loading…')}</div>`;
+  function tcError(r) { return `<div class="mt-empty mt-err">${ic('alert')}<p>${esc(r && r.error ? r.error : 'Something went wrong.')}</p></div>`; }
+  function tcSub(t) { return `<p class="mt-sub">${esc(t)}</p>`; }
+  function tcRefresh() { const v = splitViewKey(currentView).view; if (v.startsWith('tc')) render(); }
+  const tcOpts = (list, sel, blank) => (blank !== undefined ? `<option value="">${esc(blank)}</option>` : '')
+    + (list || []).map(v => {
+      const val = typeof v === 'object' ? v.value : v, lab = typeof v === 'object' ? v.label : v;
+      return `<option value="${esc(val)}" ${String(val) === String(sel ?? '') ? 'selected' : ''}>${esc(lab)}</option>`;
+    }).join('');
+  function tcMinsFromTime(s) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
+    if (!m) return null;
+    const h = +m[1], mm = +m[2];
+    return (h > 23 || mm > 59) ? null : h * 60 + mm;
+  }
+  function tcModal(title, html, wide) {
+    const first = $('#modalOverlay').classList.contains('hidden');
+    (first ? openModal : openModal2)(title, html, wide);
+    return first ? { close: closeModal, body: $('#modalBody') } : { close: closeModal2, body: $('#modal2Body') };
+  }
+  function tcPagerHtml(p) {
+    if (!p || p.pages <= 1) return p && p.total ? `<div class="pager"><span class="pager-info">${p.total} total</span></div>` : '';
+    return `<div class="pager"><span class="pager-info">${p.total} total · Page ${p.page} of ${p.pages}</span>
+      <button type="button" class="btn-sm btn-outline" data-tcpg="${p.page - 1}" ${p.page <= 1 ? 'disabled' : ''}>‹ Prev</button>
+      <button type="button" class="btn-sm btn-outline" data-tcpg="${p.page + 1}" ${p.page >= p.pages ? 'disabled' : ''}>Next ›</button></div>`;
+  }
+  function tcBindPager(el, go) { if (el) el.querySelectorAll('[data-tcpg]').forEach(b => b.onclick = () => go(+b.dataset.tcpg)); }
+  function tcTh(label, key, st) {
+    if (!key) return `<th>${label}</th>`;
+    const on = st.sort === key;
+    return `<th class="mt-sortable${on ? ' on' : ''}" data-sort="${key}">${label}${on ? (st.dir === 'desc' ? ' ▾' : ' ▴') : ''}</th>`;
+  }
+  function tcBindSort(scope, st, redraw) {
+    scope.querySelectorAll('[data-sort]').forEach(th => th.onclick = () => {
+      const k = th.dataset.sort;
+      st.dir = st.sort === k && st.dir === 'asc' ? 'desc' : 'asc';
+      st.sort = k; st.page = 1; redraw();
+    });
+  }
+  function tcBindExports(p, title, columns, fetchAll, sub) {
+    const get = async () => {
+      const r = await fetchAll();
+      if (r.error) { toast(r.error, 'err'); return null; }
+      return { title, subtitle: (sub ? sub + ' · ' : '') + `GITAM B-School · Teaching Activity · Generated on ${new Date().toLocaleString('en-IN')}`,
+        columns, rows: r.rows || [], signatory: 'Course Coordinator' };
+    };
+    const on = (suffix, fn) => { const el = $('#' + p + suffix); if (el) el.onclick = fn; };
+    on('Print', async () => { const r = await get(); if (r) printReport(r); });
+    on('Pdf', async () => { const r = await get(); if (r) { printReport(r); toast('Choose "Save as PDF" in the print dialog.'); } });
+    on('Xls', async () => { const r = await get(); if (r) downloadXlsx(r); });
+  }
+
+  /* ========================= TODAY'S CLASSES ========================= */
+  function viewTeachingDay() {
+    const p = 'tcd';
+    viewTeachingDay.after = async () => {
+      const ctx = await tcContext();
+      if (ctx.error) { $t('#tcdBox').innerHTML = tcError(ctx); return; }
+      const st = { date: ctx.today, q: '', status: '' };
+      $t('#tcdDate').value = st.date;
+      $t('#tcdDate').onchange = (e) => { st.date = e.target.value || ctx.today; draw(); };
+      $t('#tcdPrev').onclick = () => { st.date = addDays(st.date, -1); $t('#tcdDate').value = st.date; draw(); };
+      $t('#tcdNext').onclick = () => { st.date = addDays(st.date, 1); $t('#tcdDate').value = st.date; draw(); };
+      $t('#tcdToday').onclick = () => { st.date = ctx.today; $t('#tcdDate').value = st.date; draw(); };
+      let tm = null;
+      $t('#tcdQ').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => { st.q = e.target.value.trim(); draw(); }, 300); };
+      $t('#tcdStatus').onchange = (e) => { st.status = e.target.value; draw(); };
+      const draw = async () => {
+        $t('#tcdBox').innerHTML = tcLoading('Reading the timetable…');
+        const d = await tcGet('tc-day', st);
+        if (d.error) { $t('#tcdBox').innerHTML = tcError(d); return; }
+        const c = d.counts;
+        $t('#tcdWeekday').textContent = d.weekday + ' · ' + tcDate(d.date);
+        $t('#tcdCounts').innerHTML = [['green', c.Completed, 'Completed'], ['orange', c.Substitute, 'Substitute'],
+          ['amber', c.Pending, 'Pending'], ['red', c['Not Conducted'], 'Not conducted'],
+          ['purple', c.Rescheduled, 'Rescheduled'], ['grey', c.Cancelled, 'Cancelled']]
+          .filter(x => x[1]).map(x => `<span class="pill ${x[0]}">${x[1]} ${x[2]}</span>`).join('') || '<span class="mt-muted">No classes recorded yet</span>';
+        const write = ctx.write;
+        $t('#tcdBox').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            <th>Time</th><th>Subject</th><th>Scheduled Faculty</th><th>Actual Faculty</th><th>Sem / Sec</th><th>Room</th>
+            <th>Status</th><th>Actual Time</th><th>Duration</th><th>Action</th></tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(r => `<tr class="tc-row-${(r.displayStatus || '').replace(/\W+/g, '').toLowerCase()}">
+            <td class="mono">${esc(r.scheduledStart)}–${esc(r.scheduledEnd)}</td>
+            <td><b>${esc(r.subject)}</b>${r.subjectCode ? `<br><small class="mt-muted">${esc(r.subjectCode)}</small>` : ''}</td>
+            <td>${esc(r.scheduledFaculty)}</td>
+            <td>${r.isSubstitute ? `<b>${esc(r.actualFaculty)}</b> <span class="pill orange">Sub</span>` : (r.actualFaculty ? esc(r.actualFaculty) : '<span class="mt-muted">—</span>')}</td>
+            <td>${esc(r.semester || '—')} / ${esc(r.section || '—')}</td><td>${esc(r.room || '—')}</td>
+            <td>${tcStatusPill(r.displayStatus)}${r.reason ? `<br><small class="mt-muted">${esc(r.reason)}</small>` : ''}</td>
+            <td>${r.actualStart ? `<span class="mono">${esc(r.actualStart)}–${esc(r.actualEnd || '…')}</span>` : '<span class="mt-muted">—</span>'}
+              ${r.lateMinutes ? `<br><small class="tc-late">Late ${r.lateMinutes}m</small>` : ''}${r.earlyMinutes ? ` <small class="tc-early">Early ${r.earlyMinutes}m</small>` : ''}</td>
+            <td>${r.actualMinutes ? tcMinsText(r.actualMinutes) + (r.shortfallMinutes ? `<br><small class="tc-short">−${r.shortfallMinutes}m</small>` : '') : '<span class="mt-muted">—</span>'}</td>
+            <td><div class="row-actions">${write ? `<button class="btn-sm ${r.recorded ? 'btn-outline' : 'btn-edit'}" data-rec="${esc(r.timetableId)}">${ic('edit')} ${r.recorded ? 'Edit' : 'Record'}</button>` : ''}
+              <button class="btn-sm btn-outline" data-hist="${esc(r.timetableId)}">${ic('activity')} ${r.recorded ? 'History' : 'View'}</button></div></td></tr>`).join('')
+            : `<tr><td colspan="10" class="empty">${st.q || st.status ? 'No classes match these filters.' : 'No classes are scheduled on ' + d.weekday + '.'}</td></tr>`}
+          </tbody></table></div>`;
+        const box = $t('#tcdBox');
+        box.querySelectorAll('[data-rec]').forEach(b => b.onclick = () => tcRecordModal(b.dataset.rec, st.date, draw));
+        box.querySelectorAll('[data-hist]').forEach(b => b.onclick = () => tcRecordModal(b.dataset.hist, st.date, draw, !ctx.write));
+      };
+      tcBindExports(p, 'Daily Teaching Activity', [
+        { header: 'Time', key: 'scheduledTime', width: 13 }, { header: 'Subject', key: 'subject', width: 24 },
+        { header: 'Scheduled Faculty', key: 'scheduledFaculty', width: 20 }, { header: 'Actual Faculty', key: 'actualFaculty', width: 20 },
+        { header: 'Substitute', key: 'substitute', width: 10 }, { header: 'Status', key: 'displayStatus', width: 14 },
+        { header: 'Actual Time', key: 'actualTime', width: 13 }, { header: 'Duration (min)', key: 'actualMinutes', width: 12 },
+        { header: 'Shortfall (min)', key: 'shortfallMinutes', width: 13 }, { header: 'Topic', key: 'topic', width: 22 },
+      ], () => tcGet('tc-report', { type: 'daily', from: st.date, to: st.date, export: '1' }), st.date);
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${tcSub('Today’s scheduled classes from the timetable. Record who actually conducted each class, when it started and ended, and the topic — a substitute keeps both names.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="panel">
+        <div class="panel-head mt-panel-head tc-daybar">
+          <div class="tc-datenav"><button class="btn-sm btn-outline" id="tcdPrev">‹</button>
+            <input type="date" class="filter-sel" id="tcdDate"><button class="btn-sm btn-outline" id="tcdNext">›</button>
+            <button class="btn-sm btn-outline" id="tcdToday">Today</button><b id="tcdWeekday"></b></div>
+          <div class="tc-daytools"><input class="search-box" id="tcdQ" placeholder="Search subject, faculty, room…">
+            <select class="filter-sel" id="tcdStatus">${tcOpts(['Pending', 'Completed', 'Substitute', 'Not Conducted', 'Cancelled', 'Rescheduled'], '', 'All statuses')}</select></div>
+        </div>
+        <div class="tc-counts" id="tcdCounts"></div>
+        <div id="tcdBox">${tcLoading()}</div>
+      </div></div>`;
+  }
+
+  /* ----------------------- the record / update modal ----------------------- */
+  async function tcRecordModal(ttId, date, after, readOnly) {
+    const ctx = await tcContext();
+    const m = tcModal('Update Faculty Class', tcLoading('Opening the class…'), true);
+    const d = await tcGet('tc-class', { timetableId: ttId, date });
+    if (d.error) { m.body.innerHTML = tcError(d); return; }
+    const ro = readOnly || !d.canWrite;
+    const info = (label, val) => `<div class="tc-ro-item"><span>${esc(label)}</span><b>${val}</b></div>`;
+    const sub = ctx.substitutes || [];
+    // the primary outcome, derived from the saved record
+    const current = !d.recorded ? '' : (d.status === 'Completed' && d.isSubstitute ? 'substitute'
+      : d.status === 'Completed' ? 'conducted' : d.status === 'Ongoing' ? 'ongoing'
+      : d.status === 'Not Conducted' ? 'notconducted' : d.status === 'Cancelled' ? 'cancelled'
+      : d.status === 'Rescheduled' ? 'rescheduled' : '');
+    const OUT = [['conducted', 'Conducted by the scheduled faculty'], ['substitute', 'Conducted by a substitute'],
+      ['ongoing', 'Class in progress (ongoing)'], ['notconducted', 'Not conducted'], ['cancelled', 'Cancelled'],
+      ['rescheduled', 'Rescheduled']];
+    const histHtml = d.history && d.history.length ? `<div class="mt-card mt-card-wide tc-hist"><h4>${ic('activity')} Change History</h4>
+      <ul class="mt-tl">${d.history.map(h => `<li class="st-${(h.action || '').toLowerCase()}"><div class="mt-tl-date">${esc((h.at || '').slice(0, 10))}</div>
+        <div class="mt-tl-card"><div class="mt-tl-top"><b>${h.action === 'record' ? 'Recorded' : 'Corrected'}</b>
+          <span class="mt-muted">${esc(h.byName)}</span></div><p>${esc(h.summary)}</p></div></li>`).join('')}</ul></div>` : '';
+
+    m.body.innerHTML = `<div class="tc-modal">
+      <div class="tc-ro-grid">
+        ${info('Course', esc(d.course || '—'))}${info('Subject', esc(d.subject) + (d.subjectCode ? ' <small class="mt-muted">' + esc(d.subjectCode) + '</small>' : ''))}
+        ${info('Semester / Section', esc(d.semester || '—') + ' / ' + esc(d.section || '—'))}${info('Room', esc(d.room || '—'))}
+        ${info('Scheduled Faculty', '<b>' + esc(d.scheduledFaculty) + '</b>')}${info('Date', esc(d.day) + ' · ' + tcDate(date))}
+        ${info('Scheduled Time', '<span class="mono">' + esc(d.scheduledStart) + '–' + esc(d.scheduledEnd) + '</span>')}
+        ${info('Scheduled Duration', tcMinsText(d.scheduledMinutes))}
+      </div>
+      ${ro ? '' : `<form id="tcF" class="mt-form">
+        <div class="field full"><label>What happened in this class? <span class="req">*</span></label>
+          <select name="outcome" id="tcOut" required>${tcOpts(OUT.map(o => ({ value: o[0], label: o[1] })), current, 'Choose…')}</select></div>
+        <div id="tcDyn"></div>
+        <div class="form-grid" id="tcCommon">
+          <div class="field full"><label>Topic Covered</label><input name="topic" maxlength="255" value="${esc(d.topic || '')}" placeholder="e.g. Consumer Behaviour"></div>
+          <div class="field"><label>Teaching Method</label><select name="method">${tcOpts(ctx.lists.methods, d.method, '— None —')}</select></div>
+          <div class="field full"><label>Remarks</label><textarea name="remarks" rows="2" maxlength="2000">${esc(d.remarks || '')}</textarea></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn-outline" id="tcFX">Cancel</button><button type="submit" class="btn-primary">Save Class Record</button></div></form>`}
+      ${ro && d.recorded ? `<div class="tc-ro-grid tc-ro-result">
+        ${info('Status', tcStatusPill(d.displayStatus))}${info('Actual Faculty', d.actualFaculty ? esc(d.actualFaculty) + (d.isSubstitute ? ' (substitute)' : '') : '—')}
+        ${info('Actual Time', d.actualStart ? '<span class="mono">' + esc(d.actualStart) + '–' + esc(d.actualEnd) + '</span>' : '—')}
+        ${info('Actual Duration', tcMinsText(d.actualMinutes))}${info('Late Start', d.lateMinutes ? d.lateMinutes + ' min' : '—')}
+        ${info('Early Finish', d.earlyMinutes ? d.earlyMinutes + ' min' : '—')}${info('Teaching Shortfall', d.shortfallMinutes ? d.shortfallMinutes + ' min' : '—')}
+        ${d.reason ? info('Reason', esc(d.reason)) : ''}${d.topic ? info('Topic', esc(d.topic)) : ''}</div>` : (ro ? '<p class="mt-muted mt-pad">This class has not been recorded yet.</p>' : '')}
+      ${histHtml}
+    </div>`;
+    if (ro) return;
+    const dyn = $('#tcDyn');
+    const timeFields = (needEnd) => `<div class="field"><label>Actual Start <span class="req">*</span></label><input type="time" name="actualStart" value="${esc(d.actualStart || d.scheduledStart)}" required></div>
+      <div class="field"><label>Actual End ${needEnd ? '<span class="req">*</span>' : '(optional)'}</label><input type="time" name="actualEnd" value="${esc(d.actualEnd || '')}" ${needEnd ? 'required' : ''}></div>`;
+    const calcBox = '<div class="field full tc-calc" id="tcCalc"></div>';
+    const render = () => {
+      const out = $('#tcOut').value;
+      let h = '<div class="form-grid">';
+      if (out === 'conducted' || out === 'ongoing') {
+        h += timeFields(out === 'conducted') + calcBox;
+      } else if (out === 'substitute') {
+        h += `<div class="field full"><label>Substitute Faculty <span class="req">*</span></label>
+            <select name="substituteFacultyId" required>${tcOpts(sub.filter(s => s.id !== d.scheduledFacultyId).map(s => ({ value: s.id, label: s.name + (s.empId ? ' (' + s.empId + ')' : '') })), d.isSubstitute ? d.actualFacultyId : '', 'Choose the substitute')}</select></div>
+          <div class="field full"><label>Reason the scheduled faculty did not conduct <span class="req">*</span></label>
+            <select name="reason" required>${tcOpts(ctx.lists.subReasons, d.reason, 'Choose a reason')}</select></div>`
+          + timeFields(true) + calcBox;
+      } else if (out === 'notconducted' || out === 'cancelled') {
+        h += `<div class="field full"><label>Reason <span class="req">*</span></label>
+          <select name="reason" required>${tcOpts(ctx.lists.ncReasons, d.reason, 'Choose a reason')}</select></div>`;
+      } else if (out === 'rescheduled') {
+        h += `<div class="field"><label>Rescheduled To <span class="req">*</span></label><input type="date" name="rescheduledDate" min="${date}" value="${esc(d.rescheduledDate || '')}" required></div>
+          <div class="field"><label>New Start</label><input type="time" name="rescheduledStart" value="${esc(d.rescheduledStart || '')}"></div>
+          <div class="field"><label>New End</label><input type="time" name="rescheduledEnd" value="${esc(d.rescheduledEnd || '')}"></div>
+          <div class="field full"><label>Reason</label><input name="reason" maxlength="120" value="${esc(d.reason || '')}" placeholder="Why is it rescheduled?"></div>`;
+      }
+      h += '</div>';
+      dyn.innerHTML = out ? h : '';
+      $('#tcCommon').style.display = (out === 'notconducted' || out === 'cancelled' || out === 'rescheduled' || !out) ? (out === 'rescheduled' || out === 'notconducted' || out === 'cancelled' ? '' : 'none') : '';
+      bindCalc();
+    };
+    const bindCalc = () => {
+      const calc = $('#tcCalc');
+      if (!calc) return;
+      const upd = () => {
+        const f = $('#tcF');
+        const ss = tcMinsFromTime(d.scheduledStart), se = tcMinsFromTime(d.scheduledEnd);
+        const as = tcMinsFromTime(f.actualStart ? f.actualStart.value : ''), ae = tcMinsFromTime(f.actualEnd ? f.actualEnd.value : '');
+        const sched = (ss !== null && se !== null && se > ss) ? se - ss : 0;
+        const act = (as !== null && ae !== null && ae > as) ? ae - as : 0;
+        const late = (as !== null && ss !== null && as > ss) ? as - ss : 0;
+        const early = (ae !== null && se !== null && se > ae) ? se - ae : 0;
+        const short = (act > 0 && sched > act) ? sched - act : 0;
+        calc.innerHTML = `<div class="tc-calc-grid">
+          <span>Scheduled<b>${sched} min</b></span><span>Actual<b>${act || '—'}${act ? ' min' : ''}</b></span>
+          <span class="${late ? 'warn' : ''}">Late Start<b>${late} min</b></span>
+          <span class="${early ? 'warn' : ''}">Early Finish<b>${early} min</b></span>
+          <span class="${short ? 'bad' : ''}">Teaching Shortfall<b>${short} min</b></span></div>
+          <small class="mt-muted">These are calculated automatically from the times above.</small>`;
+      };
+      const f = $('#tcF');
+      ['actualStart', 'actualEnd'].forEach(n => { if (f[n]) f[n].oninput = upd; });
+      upd();
+    };
+    $('#tcOut').onchange = render;
+    render();
+    $('#tcFX').onclick = m.close;
+    $('#tcF').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = formData(e.target);
+      const out = f.outcome;
+      const body = { timetableId: ttId, date, topic: f.topic, method: f.method, remarks: f.remarks };
+      if (out === 'conducted') { body.status = 'Completed'; body.conducted = true; body.actualStart = f.actualStart; body.actualEnd = f.actualEnd; }
+      else if (out === 'ongoing') { body.status = 'Ongoing'; body.conducted = true; body.actualStart = f.actualStart; body.actualEnd = f.actualEnd || ''; }
+      else if (out === 'substitute') { body.status = 'Completed'; body.conducted = false; body.substituteFacultyId = f.substituteFacultyId; body.reason = f.reason; body.actualStart = f.actualStart; body.actualEnd = f.actualEnd; }
+      else if (out === 'notconducted') { body.status = 'Not Conducted'; body.reason = f.reason; }
+      else if (out === 'cancelled') { body.status = 'Cancelled'; body.reason = f.reason; }
+      else if (out === 'rescheduled') { body.status = 'Rescheduled'; body.rescheduledDate = f.rescheduledDate; body.rescheduledStart = f.rescheduledStart; body.rescheduledEnd = f.rescheduledEnd; body.reason = f.reason; }
+      else { toast('Choose what happened in the class.', 'err'); return; }
+      const btn = e.target.querySelector('[type="submit"]');
+      btn.disabled = true;
+      const r = await tcPost('tc-record', body);
+      btn.disabled = false;
+      if (r.error) { toast(r.error, 'err'); return; }
+      m.close();
+      toast('Class record saved.');
+      if (after) after(); else tcRefresh();
+    };
+  }
+
+  /* ========================= DASHBOARD ========================= */
+  function viewTeachingDashboard() {
+    viewTeachingDashboard.after = async () => {
+      const ctx = await tcContext();
+      if (ctx.error) { $t('#tcDash').innerHTML = tcError(ctx); return; }
+      const st = { date: ctx.today };
+      $t('#tcDashDate').value = st.date;
+      $t('#tcDashDate').onchange = (e) => { st.date = e.target.value || ctx.today; draw(); };
+      $t('#tcDashToday').onclick = () => { st.date = ctx.today; $t('#tcDashDate').value = st.date; draw(); };
+      const draw = async () => {
+        $t('#tcDash').innerHTML = tcLoading('Gathering today’s teaching figures…');
+        const d = await tcGet('tc-dashboard', st);
+        if (d.error) { $t('#tcDash').innerHTML = tcError(d); return; }
+        const k = d.kpi;
+        $t('#tcDash').innerHTML = `
+          <p class="mt-muted mt-pad">${esc(d.weekday)} · ${tcDate(d.date)}</p>
+          <div class="stat-grid mt-kpis">
+            ${statCard(ic('calendar'), k.total, "Today's Classes")}
+            ${statCard(ic('check'), k.completed, 'Completed', 'c3')}
+            ${statCard(ic('pending'), k.pending, 'Pending', 'c2')}
+            ${statCard(ic('activity'), k.ongoing, 'Ongoing')}
+            ${statCard(ic('ban'), k.notConducted, 'Not Conducted', 'c4')}
+            ${statCard(ic('refresh'), k.substitute, 'Substitute Classes', 'c2', k.substitute ? 'tcSubCard' : '')}
+          </div>
+          <div class="dash-2col">
+            <div class="panel"><div class="panel-head"><h3>Teaching Hours</h3></div>
+              <div class="mt-kv"><span>Scheduled teaching</span><b>${tcMinsText(k.scheduledMin)}</b></div>
+              <div class="mt-kv"><span>Actual teaching</span><b>${tcMinsText(k.actualMin)}</b></div>
+              <div class="mt-kv"><span>Teaching shortfall</span><b class="${k.shortfallMin ? 'tc-short' : ''}">${tcMinsText(k.shortfallMin)}</b></div>
+              <div class="dist-bar tc-hrbar"><i style="width:${k.scheduledMin ? Math.round(k.actualMin / k.scheduledMin * 100) : 0}%"></i></div>
+              <small class="mt-muted">${k.scheduledMin ? Math.round(k.actualMin / k.scheduledMin * 100) : 0}% of scheduled teaching time delivered</small>
+            </div>
+            <div class="panel"><div class="panel-head"><h3>Faculty Activity</h3></div>
+              <div class="mt-tiles mt-tiles-2">
+                <div class="mt-tile amber"><b>${k.lateStarts}</b><span>Late Starts</span></div>
+                <div class="mt-tile sky"><b>${k.earlyFinishes}</b><span>Early Finishes</span></div>
+                <div class="mt-tile orange"><b>${k.substitute}</b><span>Substitute Classes</span></div>
+                <div class="mt-tile red"><b>${k.facultyNotConducted}</b><span>Faculty Not Conducted</span></div>
+              </div></div>
+          </div>
+          <div class="panel"><div class="panel-head"><h3>${ic('refresh')} Substitute Classes Today</h3></div>
+            ${d.substitutes.length ? `<div class="tbl-wrap"><table class="mt-table"><thead><tr><th>Subject</th><th>Original Faculty</th><th>Substitute Faculty</th><th>Sem/Sec</th><th>Actual Time</th><th>Reason</th></tr></thead><tbody>
+              ${d.substitutes.map(s => `<tr><td><b>${esc(s.subject)}</b></td><td>${esc(s.scheduledFaculty)}</td><td><b>${esc(s.actualFaculty)}</b></td>
+                <td>${esc(s.section)}</td><td class="mono">${esc(s.time)}</td><td>${esc(s.reason)}</td></tr>`).join('')}</tbody></table></div>`
+              : '<p class="mt-muted mt-pad">No substitute classes today.</p>'}
+          </div>
+          ${d.notConducted.length ? `<div class="panel"><div class="panel-head"><h3>${ic('ban')} Not Conducted Today</h3></div>
+            <div class="tbl-wrap"><table class="mt-table"><thead><tr><th>Subject</th><th>Scheduled Faculty</th><th>Sem/Sec</th><th>Time</th><th>Reason</th></tr></thead><tbody>
+            ${d.notConducted.map(s => `<tr><td><b>${esc(s.subject)}</b></td><td>${esc(s.scheduledFaculty)}</td><td>${esc(s.section)}</td><td class="mono">${esc(s.time)}</td><td>${esc(s.reason)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
+        const sc = $('#tcSubCard'); if (sc) sc.onclick = () => navigate('tcday');
+      };
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${tcSub('Teaching activity for the day: what was scheduled, conducted, substituted or missed, and how much teaching time was delivered.')}
+        <div class="mt-head-tools"><input type="date" class="filter-sel" id="tcDashDate"><button class="btn-outline btn-sm" id="tcDashToday">Today</button></div></div>
+      <div id="tcDash">${tcLoading()}</div></div>`;
+  }
+
+  /* ========================= FACULTY WORKLOAD ========================= */
+  function viewTeachingFaculty() {
+    const p = 'tcf';
+    viewTeachingFaculty.after = async () => {
+      const ctx = await tcContext();
+      if (ctx.error) { $t('#tcfTable').innerHTML = tcError(ctx); return; }
+      if (ctx.level === 'own') { $t('#tcfTable').innerHTML = tcEmpty('The faculty workload list is for coordinators, heads of department and administrators. See “My Teaching” for your own activity.'); return; }
+      const st = { q: '', page: 1, sort: 'name', dir: 'asc', from: addDays(today(), -30), to: today(), department: '' };
+      $t('#tcfFrom').value = st.from; $t('#tcfTo').value = st.to;
+      $t('#tcfFrom').onchange = (e) => { st.from = e.target.value; st.page = 1; draw(); };
+      $t('#tcfTo').onchange = (e) => { st.to = e.target.value; st.page = 1; draw(); };
+      $t('#tcfDept').innerHTML = tcOpts(ctx.departments, '', 'All departments');
+      $t('#tcfDept').onchange = (e) => { st.department = e.target.value; st.page = 1; draw(); };
+      let tm = null;
+      $t('#tcfQ').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => { st.q = e.target.value.trim(); st.page = 1; draw(); }, 300); };
+      const draw = async () => {
+        $t('#tcfTable').innerHTML = tcLoading();
+        const d = await tcGet('tc-faculty', Object.assign({}, st, { size: 25 }));
+        if (d.error) { $t('#tcfTable').innerHTML = tcError(d); return; }
+        $t('#tcfTable').innerHTML = `<div class="tbl-wrap"><table class="mt-table"><thead><tr>
+            ${tcTh('Faculty', 'name', st)}${tcTh('Department', 'department', st)}${tcTh('Scheduled', 'scheduled', st)}
+            ${tcTh('Regular Conducted', 'conducted', st)}${tcTh('Substitute Taken', 'substitute', st)}${tcTh('Not Conducted', 'notConducted', st)}
+            ${tcTh('Total Conducted', 'totalConducted', st)}${tcTh('Scheduled Hrs', 'scheduledHours', st)}${tcTh('Actual Hrs', 'actualHours', st)}
+            ${tcTh('Shortfall Hrs', 'shortfallHours', st)}${tcTh('Completion', 'completion', st)}<th>Action</th></tr></thead><tbody>
+          ${d.rows.length ? d.rows.map(r => `<tr><td><b>${esc(r.name)}</b><br><small class="mt-muted mono">${esc(r.empId || '')}</small></td>
+            <td>${esc(r.department || '—')}</td><td>${r.scheduled}</td><td>${r.conducted}</td>
+            <td>${r.substitute ? `<span class="pill orange">${r.substitute}</span>` : 0}</td>
+            <td>${r.notConducted ? `<span class="pill red">${r.notConducted}</span>` : 0}</td>
+            <td><b>${r.totalConducted}</b></td><td>${r.scheduledHours}</td><td>${r.actualHours}</td>
+            <td>${r.shortfallHours ? `<span class="tc-short">${r.shortfallHours}</span>` : 0}</td>
+            <td><div class="mt-pct"><div class="dist-bar"><i style="width:${r.completion}%"></i></div><b>${r.completion}%</b></div></td>
+            <td><button class="btn-sm btn-outline" data-fac="${esc(r.id)}">${ic('eye')} Detail</button></td></tr>`).join('')
+            : `<tr><td colspan="12" class="empty">No teaching activity for these filters.</td></tr>`}
+          </tbody></table></div>${tcPagerHtml(d)}`;
+        const t = $t('#tcfTable');
+        tcBindSort(t, st, draw);
+        tcBindPager(t, (pg) => { st.page = pg; draw(); });
+        t.querySelectorAll('[data-fac]').forEach(b => b.onclick = () => tcFacultyModal(b.dataset.fac, st.from, st.to));
+      };
+      tcBindExports(p, 'Faculty Teaching Report', [
+        { header: 'Emp ID', key: 'empId', width: 12 }, { header: 'Faculty', key: 'name', width: 22 }, { header: 'Department', key: 'department', width: 16 },
+        { header: 'Scheduled', key: 'scheduled', width: 10 }, { header: 'Regular Conducted', key: 'conducted', width: 14 }, { header: 'Substitute Taken', key: 'substitute', width: 14 },
+        { header: 'Not Conducted', key: 'notConducted', width: 13 }, { header: 'Total Conducted', key: 'totalConducted', width: 13 },
+        { header: 'Scheduled Hrs', key: 'scheduledHours', width: 12 }, { header: 'Actual Hrs', key: 'actualHours', width: 11 }, { header: 'Completion %', key: 'completion', width: 12 },
+      ], () => tcGet('tc-faculty', Object.assign({}, st, { export: '1' })), st.from + ' to ' + st.to);
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${tcSub('Each faculty’s teaching workload — classes scheduled, regularly conducted, taken as a substitute, and not conducted. Substitute classes count for the substitute, never for the original faculty.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="tcfQ" placeholder="Search faculty, employee ID, department…"></div>
+        <div class="mt-filter-grid mt-filter-inline">
+          <label class="mt-f"><span>From</span><input type="date" class="filter-sel" id="tcfFrom"></label>
+          <label class="mt-f"><span>To</span><input type="date" class="filter-sel" id="tcfTo"></label>
+          <label class="mt-f"><span>Department</span><select class="filter-sel" id="tcfDept"></select></label></div>
+        <div id="tcfTable">${tcLoading()}</div></div></div>`;
+  }
+
+  async function tcFacultyModal(fid, from, to) {
+    const m = tcModal('Faculty Teaching Activity', tcLoading(), true);
+    const d = await tcGet('tc-faculty-detail', { id: fid, from, to });
+    if (d.error) { m.body.innerHTML = tcError(d); return; }
+    tcRenderFacultyDetail(m.body, d);
+  }
+  function tcRenderFacultyDetail(box, d) {
+    const f = d.faculty, x = d.metrics;
+    const kv = (l, v) => `<div class="mt-kv"><span>${esc(l)}</span><b>${v}</b></div>`;
+    box.innerHTML = `<div class="mt-profile">
+      <div class="mt-prof-head"><div class="mt-avatar"><span>${esc((f.name || '?')[0])}</span></div>
+        <div class="mt-prof-id"><h3>${esc(f.name)}</h3><p>${esc(f.designation || '')}${f.department ? ' · ' + esc(f.department) : ''} · <span class="mono">${esc(f.empId || '')}</span></p>
+          <p class="mt-muted">${tcDate(d.from)} – ${tcDate(d.to)}</p></div>
+        <div class="mt-prof-risk"><span class="pill ${x.completion >= 85 ? 'green' : x.completion >= 70 ? 'amber' : 'red'}">${x.completion}% completion</span></div></div>
+      <div class="stat-grid">
+        ${statCard(ic('calendar'), x.scheduled, 'Scheduled Classes')}
+        ${statCard(ic('check'), x.conducted, 'Regularly Conducted', 'c3')}
+        ${statCard(ic('refresh'), x.substitute, 'Substitute Classes Taken', 'c2')}
+        ${statCard(ic('ban'), x.notConducted, 'Did Not Conduct', 'c4')}
+        ${statCard(ic('cap'), x.totalConducted, 'Total Classes Conducted')}
+      </div>
+      <div class="mt-prof-grid">
+        <div class="mt-card"><h4>${ic('clock')} Teaching Hours</h4>
+          ${kv('Scheduled hours', x.scheduledHours)}${kv('Actual hours', x.actualHours)}${kv('Teaching shortfall', x.shortfallHours + ' hrs')}
+          ${kv('Classes cancelled', x.cancelled)}</div>
+        <div class="mt-card"><h4>${ic('activity')} Summary</h4>
+          ${kv('Regular + substitute', x.totalConducted)}${kv('Completion', x.completion + '%')}
+          <p class="mt-muted">Substitute classes count towards this faculty’s own teaching; classes a substitute took for them are shown as “did not conduct”, never as conducted.</p></div>
+      </div>
+      <div class="mt-card mt-card-wide"><h4>${ic('notes')} Recent Classes</h4>
+        ${d.recent.length ? `<div class="tbl-wrap"><table class="mt-table"><thead><tr><th>Date</th><th>Subject</th><th>Role</th><th>Status</th><th>Actual Time</th><th>Topic</th></tr></thead><tbody>
+          ${d.recent.map(r => `<tr><td>${tcDate(r.date)}</td><td>${esc(r.subject)}</td>
+            <td>${r.isSubstitute && r.role === 'Substitute' ? '<span class="pill orange">Substitute</span>' : esc(r.role)}</td>
+            <td>${tcStatusPill(r.isSubstitute && r.status === 'Completed' ? 'Substitute' : r.status)}</td>
+            <td class="mono">${r.actualStart ? esc(r.actualStart) + '–' + esc(r.actualEnd) : '—'}</td><td>${esc(r.topic || '—')}</td></tr>`).join('')}
+          </tbody></table></div>` : '<p class="mt-muted">No classes recorded in this period.</p>'}</div>
+    </div>`;
+  }
+
+  /* ========================= MY TEACHING (faculty) ========================= */
+  function viewMyTeaching() {
+    viewMyTeaching.after = async () => {
+      const ctx = await tcContext();
+      if (ctx.error) { $t('#tcMy').innerHTML = tcError(ctx); return; }
+      const st = { from: addDays(today(), -90), to: today() };
+      $t('#tcMyFrom').value = st.from; $t('#tcMyTo').value = st.to;
+      const draw = async () => {
+        $t('#tcMy').innerHTML = tcLoading('Gathering your teaching activity…');
+        const d = await tcGet('tc-faculty-detail', st);
+        if (d.error) { $t('#tcMy').innerHTML = tcError(d); return; }
+        tcRenderFacultyDetail($t('#tcMy'), d);
+      };
+      $t('#tcMyFrom').onchange = (e) => { st.from = e.target.value; draw(); };
+      $t('#tcMyTo').onchange = (e) => { st.to = e.target.value; draw(); };
+      draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${tcSub('Your teaching activity — classes scheduled, conducted, taken as a substitute, and any you could not conduct.')}
+        <div class="mt-head-tools"><label class="mt-f"><span>From</span><input type="date" class="filter-sel" id="tcMyFrom"></label>
+          <label class="mt-f"><span>To</span><input type="date" class="filter-sel" id="tcMyTo"></label></div></div>
+      <div id="tcMy">${tcLoading()}</div></div>`;
+  }
+
+  /* ========================= REPORTS ========================= */
+  const TC_REPORTS = [
+    { key: 'daily', label: 'Daily Teaching Activity', icon: 'calendar' },
+    { key: 'faculty', label: 'Faculty Teaching', icon: 'users', admin: true },
+    { key: 'substitute', label: 'Substitute Teaching', icon: 'refresh' },
+    { key: 'notconducted', label: 'Non-Conducted', icon: 'ban' },
+    { key: 'course', label: 'Course-wise', icon: 'books', admin: true },
+    { key: 'department', label: 'Department-wise', icon: 'building', admin: true },
+    { key: 'shortfall', label: 'Teaching Shortfall', icon: 'trending-down' },
+    { key: 'late', label: 'Late Start', icon: 'clock' },
+    { key: 'early', label: 'Early Finish', icon: 'clock' },
+    { key: 'rescheduled', label: 'Rescheduled', icon: 'skip' },
+    { key: 'performance', label: 'Faculty Performance', icon: 'trending-up', admin: true },
+  ];
+  function viewTeachingReports() {
+    const p = 'tcrp';
+    viewTeachingReports.after = async () => {
+      const ctx = await tcContext();
+      if (ctx.error) { $t('#tcrpBody').innerHTML = tcError(ctx); return; }
+      const list = TC_REPORTS.filter(r => !r.admin || ctx.level !== 'own');
+      const st = { type: list[0].key, from: addDays(today(), -30), to: today(), q: '', department: '', facultyId: '' };
+      let last = null;
+      const tabs = () => { $t('#tcrpTabs').innerHTML = list.map(r => `<button type="button" class="fin-tab${st.type === r.key ? ' active' : ''}" data-rt="${r.key}">${ic(r.icon)} ${esc(r.label)}</button>`).join('');
+        $t('#tcrpTabs').querySelectorAll('[data-rt]').forEach(b => b.onclick = () => { st.type = b.dataset.rt; tabs(); draw(); }); };
+      $t('#tcrpFrom').value = st.from; $t('#tcrpTo').value = st.to;
+      $t('#tcrpFrom').onchange = (e) => { st.from = e.target.value; draw(); };
+      $t('#tcrpTo').onchange = (e) => { st.to = e.target.value; draw(); };
+      $t('#tcrpDept').innerHTML = tcOpts(ctx.departments, '', 'All departments');
+      $t('#tcrpDept').onchange = (e) => { st.department = e.target.value; draw(); };
+      let tm = null;
+      $t('#tcrpQ').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => { st.q = e.target.value.trim(); draw(); }, 300); };
+      const draw = async () => {
+        $t('#tcrpBody').innerHTML = tcLoading('Building the report…');
+        const d = await tcGet('tc-report', st);
+        if (d.error) { $t('#tcrpBody').innerHTML = tcError(d); return; }
+        last = d;
+        const shown = d.rows.slice(0, 200);
+        $t('#tcrpBody').innerHTML = `<p class="mt-muted mt-pad">${plural(d.total, 'record')}${d.from ? ' · ' + tcDate(d.from) + ' to ' + tcDate(d.to) : ''}${d.total > 200 ? ' · showing first 200 — Print / Excel include all' : ''}</p>
+          ${reportTableHtml(d.columns, shown, 'No records for these filters.')}`;
+      };
+      const get = () => last ? { title: last.title, subtitle: (last.from ? tcDate(last.from) + ' – ' + tcDate(last.to) + ' · ' : '') + 'GITAM B-School · Teaching Activity · ' + new Date().toLocaleString('en-IN'),
+        columns: last.columns, rows: last.rows, signatory: 'Course Coordinator' } : null;
+      const on = (s, fn) => { const el = $('#' + p + s); if (el) el.onclick = fn; };
+      on('Print', () => { const r = get(); if (r) printReport(r); });
+      on('Pdf', () => { const r = get(); if (r) { printReport(r); toast('Choose "Save as PDF" in the print dialog.'); } });
+      on('Xls', () => { const r = get(); if (r) downloadXlsx(r); });
+      tabs(); draw();
+    };
+    return `<div class="mt-page">
+      <div class="mt-head">${tcSub('Daily activity, faculty teaching, substitutes, non-conducted, shortfall, late starts, early finishes, rescheduled and performance — filter, print or export.')}
+        <div class="mt-head-tools">${exportButtons(p)}</div></div>
+      <div class="fin-tabs" id="tcrpTabs"></div>
+      <div class="panel"><div class="panel-head mt-panel-head"><input class="search-box" id="tcrpQ" placeholder="Search within the report…"></div>
+        <div class="mt-filter-grid mt-filter-inline">
+          <label class="mt-f"><span>From</span><input type="date" class="filter-sel" id="tcrpFrom"></label>
+          <label class="mt-f"><span>To</span><input type="date" class="filter-sel" id="tcrpTo"></label>
+          <label class="mt-f"><span>Department</span><select class="filter-sel" id="tcrpDept"></select></label></div>
+        <div id="tcrpBody">${tcLoading()}</div></div></div>`;
   }
 
   function restoreView() {

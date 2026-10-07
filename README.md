@@ -150,6 +150,19 @@ Faculty mentors apne assigned students ko track karte hain; Super Admin mentors 
 - **Data:** students, faculty, attendance, marks CMS ke apne tables se. Naye tables sirf `mentorassignments`, `mentorinteractions`, `mentorfollowups`, `mentorriskstate`. Ye generic API/bootstrap se kabhi nahi milte — sirf `api/mentor.php` ke `mt-*` endpoints se, jo har request par server-side check karte hain ki user us student/mentor ko dekh/badal sakta hai ya nahi. Har assignment, interaction, follow-up aur risk badlav audit log me jata hai.
 - **Bulk import format:** `Registration No`, `Mentor Employee ID`, `Academic Year` (template page par milta hai).
 
+## Faculty Class Attendance / Teaching Activity
+
+Timetable ke class conduct hone ka record — ye **employee attendance nahi** hai.
+
+- **Master source = existing timetable.** Aaj ke classes timetable se khud aate hain (weekday match); koi class haath se nahi banti. Ek class = timetable row + date. Record me **scheduled faculty snapshot** hota hai, isliye substitute original faculty ko overwrite nahi karta aur timetable kabhi badalti nahi.
+- **Course Coordinator → Today's Classes:** har class ke liye record karo — scheduled faculty ne liya (YES), ya substitute ne liya (NO + reason + substitute), ya Not Conducted / Cancelled / Rescheduled. Actual start/end se **late, early finish, shortfall, duration khud calculate** hote hain (manual entry nahi).
+- **Substitute:** dono naam rehte hain — Original (scheduled) + Actual (substitute). Substitute ki class substitute ke workload me, aur original faculty ke liye "did not conduct" (conducted me kabhi nahi).
+- **Dashboard:** Today's Classes, Completed, Pending, Ongoing, Not Conducted, Substitute; Teaching Hours (scheduled/actual/shortfall); Late Starts, Early Finishes, Faculty Not Conducted; aaj ke substitute classes.
+- **Faculty Teaching / Performance:** scheduled, regular conducted, substitute taken, not conducted, completion %. **My Teaching** har faculty apni activity dekhta hai.
+- **10+ reports:** Daily, Faculty, Substitute, Non-Conducted, Course-wise, Department-wise, Shortfall, Late, Early, Rescheduled, Performance — Excel / PDF / Print.
+- **Access:** Super Admin full; Course Coordinator apne scope me record karta hai; Center Head read-only; HOD (designation me "HOD"/"Head of Department") apna department dekhta hai; Faculty sirf apni teaching. Sab authorization server-side (`api/teaching.php`, `tc-*` endpoints). Naye tables sirf `classattendance` + `classattendancelog` (audit); timetable/courses/faculty reuse. Har substitution/timing/correction audit me jati hai.
+- **Note:** ek purana demo-seed timetable row `branchName` value ke bina likha gaya tha (columns shift ho gaye the). Deploy par ek one-time migration (`fix_timetable_alignment`) aise rows ko wapas sahi kar deta hai; UI se bani entries pehle se sahi hoti hain.
+
 ## Grading Scale
 
 | Total (/100) | Grade | Points |

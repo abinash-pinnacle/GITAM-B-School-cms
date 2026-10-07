@@ -336,10 +336,29 @@ const COLLECTIONS = [
                           'priority', 'status', 'completedAt', 'completedBy', 'note', 'createdBy'],
     // the last risk level each student was seen at (id = the student id), so a change can be audited
     'mentorriskstate' => ['id', 'level', 'score', 'reasons', 'changedAt'],
+
+    /* ---- Faculty Class Attendance / Teaching Activity. Private like the
+       helpdesk and mentorship: reached only through tc-* endpoints in
+       teaching.php, which check every row against the caller. The timetable,
+       courses and faculty are the CMS's own tables — these hold only what the
+       recording adds. One record per (timetableId, scheduledDate). The
+       scheduled faculty is snapshotted so a later timetable edit never rewrites
+       who was originally assigned; the substitute never overwrites it. ---- */
+    'classattendance' => ['id', 'timetableId', 'scheduledDate', 'day', 'courseId', 'scheduledFacultyId',
+                          'actualFacultyId', 'isSubstitute', 'reason', 'scheduledStart', 'scheduledEnd',
+                          'actualStart', 'actualEnd', 'rescheduledDate', 'rescheduledStart', 'rescheduledEnd',
+                          'scheduledMinutes', 'actualMinutes', 'lateMinutes', 'earlyMinutes', 'shortfallMinutes',
+                          'status', 'topic', 'method', 'remarks', 'createdBy', 'createdByName', 'updatedBy',
+                          'updatedByName', 'createdAt', 'updatedAt'],
+    // the append-only audit of every substitution, timing change and correction
+    'classattendancelog' => ['id', 'recordId', 'timetableId', 'scheduledDate', 'action', 'summary', 'changes',
+                             'reason', 'byId', 'byName', 'at'],
 ];
 
 /* the mentorship tables — never served by the generic collection API or the bootstrap */
 const MENTOR_TABLES = ['mentorassignments', 'mentorinteractions', 'mentorfollowups', 'mentorriskstate'];
+/* the teaching-activity tables — never served by the generic collection API or the bootstrap */
+const TEACHING_TABLES = ['classattendance', 'classattendancelog'];
 
 /** columns stored as a JSON string but exposed to the UI as an object */
 const JSON_FIELDS = [
@@ -369,6 +388,8 @@ const LONGTEXT_FIELDS = [
     'mentorinteractions' => ['discussion', 'concern', 'actionTaken', 'outcome', 'parentResponse', 'remarks'],
     'mentorfollowups' => ['note'],
     'mentorriskstate' => ['reasons'],
+    'classattendance' => ['remarks'],
+    'classattendancelog' => ['summary', 'changes'],
     'tickets' => ['description', 'resolution'],
     'tickethistory' => ['reason', 'comment'],
     'ticketcomments' => ['message'],
@@ -395,7 +416,8 @@ const LONGTEXT_FIELDS = [
 /** columns the UI expects as numbers, not strings */
 const INT_FIELDS = ['year', 'semester', 'credits', 'internal', 'external', 'total', 'paid', 'period', 'available',
                     'amount', 'quantity', 'purchaseCost', 'currentValue', 'estimatedCost',
-                    'backlogs', 'openings', 'maxBacklogs', 'round'];
+                    'backlogs', 'openings', 'maxBacklogs', 'round',
+                    'scheduledMinutes', 'actualMinutes', 'lateMinutes', 'earlyMinutes', 'shortfallMinutes'];
 
 /* ---------------- student ids ----------------
    YYYY + branch code + a three-digit running number, e.g. 202601001. The live
@@ -432,6 +454,7 @@ const ID_PREFIX = [
     'companies' => 'CO', 'drives' => 'DR', 'applications' => 'AP',
     'interviews' => 'IV', 'offers' => 'OF', 'placementevents' => 'PE',
     'syllabus' => 'SY',
+    'classattendance' => 'CA', 'classattendancelog' => 'CL',
     'roles' => 'RL', 'auditlog' => 'LOG', 'submissions' => 'SUB',
 ];
 
@@ -532,7 +555,8 @@ const ROLE_CARVE_OUTS = [
     // read-only monitoring, except the one thing it decides
     'center_head'       => ['readOnly' => true, 'extra' => ['requisitions' => ['approve']]],
     // exists to run attendance, and writes nothing else
-    'course_coordinator' => ['readOnly' => true, 'extra' => ['attendance' => ['add', 'edit', 'delete']]],
+    'course_coordinator' => ['readOnly' => true, 'extra' => ['attendance' => ['add', 'edit', 'delete'],
+                             'teaching' => ['add', 'edit', 'delete']]],
     // enrols and corrects; removing a student is not its call
     'admission'         => ['readOnly' => true, 'extra' => ['students' => ['add', 'edit', 'import']]],
 ];
@@ -582,6 +606,12 @@ const MODULES = [
                       'write' => ['events']],
     'reports'     => ['label' => 'Reports & Departments',
                       'views' => ['chreports', 'departments', 'branches'],
+                      'write' => []],
+    /* Class attendance is written through its own tc-* endpoints, so it lists
+       no collections; the grant decides what a custom-access account may open
+       and do in the teaching-activity pages. */
+    'teaching'    => ['label' => 'Class Attendance',
+                      'views' => ['tcdash', 'tcday', 'tcfaculty', 'tcreports', 'tcmyteaching'],
                       'write' => []],
     /* Mentoring is written through its own mt-* endpoints, so it lists no
        collections; the grant decides what a custom-access account may open
@@ -912,12 +942,13 @@ function seed_data(): array
              'Godrej Interio', 'Central Library', 'In Use'],
         ],
         'timetable' => [
-            ['T01', 'MBA', 2, 'A', 'Mon', 1, 'C01', '08:30', '09:30', '403'],
-            ['T02', 'MBA', 2, 'A', 'Mon', 2, 'C02', '09:30', '10:30', '403'],
-            ['T03', 'MBA', 2, 'A', 'Tue', 1, 'C03', '08:30', '09:30', '403'],
-            ['T04', 'MBA', 2, 'A', 'Wed', 2, 'C01', '09:30', '10:30', '403'],
-            ['T05', 'MBA', 2, 'A', 'Thu', 1, 'C02', '08:30', '09:30', '403'],
-            ['T06', 'MBA', 2, 'A', 'Fri', 3, 'C03', '10:30', '11:30', '403'],
+            // columns: id, branch, branchName, semester, section, day, period, courseId, startTime, endTime, room
+            ['T01', 'MBA', '', 2, 'A', 'Mon', 1, 'C01', '08:30', '09:30', '403'],
+            ['T02', 'MBA', '', 2, 'A', 'Mon', 2, 'C02', '09:30', '10:30', '403'],
+            ['T03', 'MBA', '', 2, 'A', 'Tue', 1, 'C03', '08:30', '09:30', '403'],
+            ['T04', 'MBA', '', 2, 'A', 'Wed', 2, 'C01', '09:30', '10:30', '403'],
+            ['T05', 'MBA', '', 2, 'A', 'Thu', 1, 'C02', '08:30', '09:30', '403'],
+            ['T06', 'MBA', '', 2, 'A', 'Fri', 3, 'C03', '10:30', '11:30', '403'],
         ],
         'books' => [
             ['B01', 'Marketing Management', 'Philip Kotler, Kevin Lane Keller', '9789332557185', 'Management', 5, 4],
