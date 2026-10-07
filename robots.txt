@@ -8,4 +8,4 @@ Disallow: /form.html
 Disallow: /apk/
 Disallow: /tools/
 
-Sitemap: https://cmsnmietbschool.in/sitemap.xml
+Sitemap: https://your-domain.com/sitemap.xml

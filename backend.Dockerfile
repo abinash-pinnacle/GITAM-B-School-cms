@@ -15,8 +15,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && a2enmod rewrite headers \
     && printf '<Directory /var/www/html>\n    AllowOverride All\n</Directory>\n' \
-       > /etc/apache2/conf-available/nmiet.conf \
-    && a2enconf nmiet
+       > /etc/apache2/conf-available/gitam.conf \
+    && a2enconf gitam
 
 WORKDIR /var/www/html
 

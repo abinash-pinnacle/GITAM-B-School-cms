@@ -3,7 +3,7 @@
 # Hostinger serves this repository straight out of public_html, which means
 # every file the project needs in order to be BUILT is also a file the browser
 # can ask for. Most are harmless; the SQLite database is not — with no DB_*
-# environment set, config.php falls back to sqlite and nmiet.db IS the live
+# environment set, config.php falls back to sqlite and gitam.db IS the live
 # database. It was downloadable in full until this file existed.
 #
 # Denying it costs nothing: PHP opens it from disk, not over HTTP.

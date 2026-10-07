@@ -1,4 +1,4 @@
-/* NMIET CMS — service worker.
+/* GITAM CMS — service worker.
  *
  * Deliberately conservative about what it caches:
  *   app shell (html/css/js/icons) -> cache first, refreshed in the background
@@ -12,8 +12,8 @@
 /* Bump BUILD together with the ?b= stamp in index.html on every css/js
    change. The cache name carries it, so activate() wipes the old shell
    instead of leaving a phone on a stale app.js. */
-const BUILD = '20261007a';
-const VERSION = 'nmiet-cms-' + BUILD;
+const BUILD = '20261007b';
+const VERSION = 'gitam-cms-' + BUILD;
 const SHELL = [
   './',
   'index.html',

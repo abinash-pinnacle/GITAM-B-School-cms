@@ -1,5 +1,5 @@
 # Keep the image small and the DB out of the image (it lives in a volume)
-nmiet.db
+gitam.db
 *.db
 __pycache__/
 *.pyc

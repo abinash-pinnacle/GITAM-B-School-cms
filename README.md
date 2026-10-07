@@ -1,14 +1,13 @@
-# NMIET College Management System
+# GITAM B-School College Management System
 
-NMIET (Bhubaneswar) ka college management system — **real backend + permanent database** ke saath.
+GITAM (Bhubaneswar) ka college management system — **real backend + permanent database** ke saath.
 
-> ⚠️ Logo (`assets/nmiet-logo.png`), PWA icons aur campus image (`assets/campus-building.webp`)
-> **placeholder** hain — generate kiye gaye hain, NMIET ke official assets nahi. Demo se pehle
-> inko college ke asli logo/photo se replace kar dena.
+> ⚠️ Campus image (`assets/campus-building.webp`) abhi purani hai — GITAM B-School ki
+> asli photo se replace kar dena.
 
-- **Frontend:** HTML + CSS + vanilla JavaScript (NMIET navy theme)
+- **Frontend:** HTML + CSS + vanilla JavaScript (GITAM green + Pinnacle teal theme)
 - **Backend:** PHP 8 (PDO — koi framework/composer package nahi)
-- **Database:** SQLite (`nmiet.db`) by default; MySQL ya PostgreSQL bhi support hai — data **permanently** save hota hai, browser clear karne pe bhi nahi jata
+- **Database:** SQLite (`gitam.db`) by default; MySQL ya PostgreSQL bhi support hai — data **permanently** save hota hai, browser clear karne pe bhi nahi jata
 
 > Sirf PHP 8+ chahiye (XAMPP ke saath already aata hai). Koi composer install nahi.
 
@@ -25,25 +24,25 @@ Browser me kholo **http://localhost:5500** — band karne ke liye `Ctrl + C`.
 **Option 2 — Docker (PHP install kiye bina):**
 
 ```bash
-docker run --rm -p 5503:5503 -v "D:/NMIET CLONE:/app" -w /app php:8.3-cli php -S 0.0.0.0:5503 router.php
+docker run --rm -p 5503:5503 -v "D:/GITAM CLONE:/app" -w /app php:8.3-cli php -S 0.0.0.0:5503 router.php
 ```
 
 Browser me kholo **http://localhost:5503**.
 
 **Option 3 — XAMPP / Apache:**
 
-Poore folder ko `C:\xampp\htdocs\nmiet` me rakho, Apache start karo, aur kholo
-**http://localhost/nmiet/** . `api/.htaccess` khud `/api/...` requests ko
+Poore folder ko `C:\xampp\htdocs\gitam` me rakho, Apache start karo, aur kholo
+**http://localhost/gitam/** . `api/.htaccess` khud `/api/...` requests ko
 `api/index.php` pe bhej deta hai (`mod_rewrite` on hona chahiye).
 
-Pehli baar chalane par `nmiet.db` automatically ban jata hai aur demo data se bhar jata hai.
+Pehli baar chalane par `gitam.db` automatically ban jata hai aur demo data se bhar jata hai.
 
 ### MySQL use karna ho (XAMPP wala)
 
 Environment variables set kar do — table aur database khud ban jaate hain:
 
 ```bash
-DB_BACKEND=mysql DB_HOST=localhost DB_NAME=nmiet DB_USER=root DB_PASS= php -S localhost:5500 router.php
+DB_BACKEND=mysql DB_HOST=localhost DB_NAME=gitam DB_USER=root DB_PASS= php -S localhost:5500 router.php
 ```
 
 Windows PowerShell me:
@@ -58,17 +57,17 @@ Docker me app **4 alag containers** me chalta hai:
 
 | Container | Kaam | Tech |
 |---|---|---|
-| 🟦 `nmiet-frontend` | UI serve + `/api` proxy | Nginx |
-| 🟩 `nmiet-backend` | REST API | PHP + Apache |
-| 🟨 `nmiet-db` | Database | MySQL 8 |
-| 🟧 `nmiet-phpmyadmin` | Database ka web UI | phpMyAdmin |
+| 🟦 `gitam-frontend` | UI serve + `/api` proxy | Nginx |
+| 🟩 `gitam-backend` | REST API | PHP + Apache |
+| 🟨 `gitam-db` | Database | MySQL 8 |
+| 🟧 `gitam-phpmyadmin` | Database ka web UI | phpMyAdmin |
 
 ```
 docker compose up -d --build      # sab build + start
 ```
 
 - App: **http://localhost:5500**
-- phpMyAdmin: **http://localhost:8080** (seedha khul jata hai — `nmiet` database left sidebar me)
+- phpMyAdmin: **http://localhost:8080** (seedha khul jata hai — `gitam` database left sidebar me)
 
 ```
 docker compose ps                 # saare containers dekho
@@ -77,14 +76,14 @@ docker compose down               # sab band (database volume safe rehta hai)
 ```
 
 **Docker Desktop me kahan dikhega:**
-- **Containers** tab → `nmiet-frontend`, `nmiet-backend`, `nmiet-db`, `nmiet-phpmyadmin`
-- **Volumes** tab → `gclone_nmiet-mysqldata` (MySQL ka data — restart/rebuild pe bhi safe)
+- **Containers** tab → `gitam-frontend`, `gitam-backend`, `gitam-db`, `gitam-phpmyadmin`
+- **Volumes** tab → `gitam_gitam-mysqldata` (MySQL ka data — restart/rebuild pe bhi safe)
 
-**Flow:** browser → `nmiet-frontend` (Nginx) → `nmiet-backend` (PHP API) → `nmiet-db` (MySQL). phpMyAdmin seedha `nmiet-db` se baat karta hai.
+**Flow:** browser → `gitam-frontend` (Nginx) → `gitam-backend` (PHP API) → `gitam-db` (MySQL). phpMyAdmin seedha `gitam-db` se baat karta hai.
 
-**DB credentials (demo):** database `nmiet`, user `nmiet` / password `nmiet`, root password `root`.
+**DB credentials (demo):** database `gitam`, user `gitam` / password `gitam`, root password `root`.
 
-- **Note:** Docker me **MySQL** use hota hai (apna data, volume me). Local `php -S` me **SQLite** (`nmiet.db`) use hota hai — dono databases alag hote hain. Code khud detect karta hai (`DB_BACKEND` / `PGHOST` / `MYSQL_HOST` set ho to wahi driver, warna SQLite). PostgreSQL bhi supported hai (`DB_BACKEND=pgsql`) — backend image me `pdo_mysql` aur `pdo_pgsql` dono hote hain.
+- **Note:** Docker me **MySQL** use hota hai (apna data, volume me). Local `php -S` me **SQLite** (`gitam.db`) use hota hai — dono databases alag hote hain. Code khud detect karta hai (`DB_BACKEND` / `PGHOST` / `MYSQL_HOST` set ho to wahi driver, warna SQLite). PostgreSQL bhi supported hai (`DB_BACKEND=pgsql`) — backend image me `pdo_mysql` aur `pdo_pgsql` dono hote hain.
 
 ## Database ka data ek backend se doosre me le jaana
 
@@ -97,7 +96,7 @@ php tools/db-transfer.php export dump.json
 Phir target database ke env ke saath import karo (yahan Docker wala MySQL):
 
 ```bash
-docker run --rm --network gclone_default -v "%cd%:/app" -w /app -e DB_BACKEND=mysql -e DB_HOST=db -e DB_USER=nmiet -e DB_PASS=nmiet gclone-backend php tools/db-transfer.php import dump.json
+docker run --rm --network gclone_default -v "%cd%:/app" -w /app -e DB_BACKEND=mysql -e DB_HOST=db -e DB_USER=gitam -e DB_PASS=gitam gclone-backend php tools/db-transfer.php import dump.json
 ```
 
 Import same `id` wali rows ko replace karta hai, isliye dobara chalane se duplicate nahi bante.
@@ -137,7 +136,7 @@ Saara data add/edit/delete turant SQLite database me save hota hai.
 
 **ID Card / Marksheet:** Student apne profile se ID card aur "My Results" se marksheet print/PDF kar sakta hai. Admin kisi bhi student ka ID card / marksheet Students table ke 🪪 ID / 📄 Sheet buttons se nikaal sakta hai. (Print dialog me "Save as PDF" choose karo. Popup allow karna zaroori hai.)
 
-**Theme:** NMIET ke official green logo se match karta hua green + white theme.
+**Theme:** GITAM B-School logo (GITAM green + Pinnacle teal/maroon) se match karta hua theme.
 
 ## Grading Scale
 
@@ -162,12 +161,12 @@ api/config.php     → schema (collections/columns), demo seed data, DB env conf
 api/.htaccess      → Apache rewrite: /api/... → api/index.php
 router.php         → router for `php -S` (API + static files)
 tools/db-transfer.php → data export/import (SQLite ↔ MySQL ↔ PostgreSQL)
-nmiet.db           → SQLite database (auto-created on first run)
+gitam.db           → SQLite database (auto-created on first run)
 index.html         → login + app shell
-css/styles.css     → NMIET theme
+css/styles.css     → GITAM theme
 js/store.js        → talks to the backend API (with in-memory cache)
 js/app.js          → auth, navigation, all modules
-assets/            → NMIET logo + campus images (from nmiet.ac.in)
+assets/            → GITAM B-School logo, PWA icons + campus image
 composer.json      → PHP requirements (PDO + JSON) — install ki zaroorat nahi
 Dockerfile         → single container image (PHP 8.3 + Apache + SQLite)
 docker-compose.yml → 4-container setup (Nginx + PHP API + MySQL + phpMyAdmin)
@@ -190,10 +189,10 @@ server.py          → purana Python backend (ab use nahi hota; delete kar sakte
 
 ## Database reset
 
-Demo data wapas laana ho to server band karke `nmiet.db` file delete kar do, phir server dobara chalao — naya DB apne aap ban jayega. (MySQL/Postgres me `nmiet` database drop kar do.)
+Demo data wapas laana ho to server band karke `gitam.db` file delete kar do, phir server dobara chalao — naya DB apne aap ban jayega. (MySQL/Postgres me `gitam` database drop kar do.)
 
 Schema me naya column add karo (`api/config.php` ke `COLLECTIONS` me) to next request pe woh column automatically table me add ho jata hai — DB delete karne ki zaroorat nahi.
 
 ## Note (logo & images)
 
-Logo aur campus images NMIET ki public website (nmiet.ac.in) se liye gaye hain, sirf is educational/demo project ke liye. Production/public use ke liye college ki permission ya apne images use karein.
+Logo (`assets/gitam-logo.png`) GITAM B-School ka hai — GITAM & Pinnacle HR ka joint venture. Campus image abhi placeholder hai, use college ki asli photo se replace karein.

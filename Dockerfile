@@ -1,9 +1,9 @@
-# NMIET College Management System — single-container image (PHP + Apache)
+# GITAM B-School College Management System — single-container image (PHP + Apache)
 # One web server serves the static frontend and the PHP API.
 FROM php:8.3-apache
 
 ENV PORT=5500 \
-    NMIET_DB=/data/nmiet.db
+    GITAM_DB=/data/gitam.db
 
 # pdo_pgsql for managed Postgres (only pdo_sqlite ships with the base image)
 RUN apt-get update \
@@ -12,9 +12,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # mod_rewrite powers api/.htaccess; mod_headers sets the cache policy
-COPY apache-nmiet.conf /etc/apache2/conf-available/nmiet.conf
+COPY apache-gitam.conf /etc/apache2/conf-available/gitam.conf
 RUN a2enmod rewrite headers \
-    && a2enconf nmiet
+    && a2enconf gitam
 
 WORKDIR /var/www/html
 

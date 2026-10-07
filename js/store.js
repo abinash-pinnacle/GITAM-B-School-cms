@@ -22,21 +22,21 @@ const Store = {
      minted at login, cannot be guessed, and is given up at logout. The id is
      kept alongside it only because the app reads it locally; the server no
      longer takes the id as proof of anything. */
-  userId: sessionStorage.getItem('nmiet_user') || null,
-  token: sessionStorage.getItem('nmiet_token') || null,
+  userId: sessionStorage.getItem('gitam_user') || null,
+  token: sessionStorage.getItem('gitam_token') || null,
   /* Set by the app: what to do when the server says this session is over. */
   onExpired: null,
 
   setUser(id, token) {
     this.userId = id || null;
-    if (id) sessionStorage.setItem('nmiet_user', id);
-    else sessionStorage.removeItem('nmiet_user');
+    if (id) sessionStorage.setItem('gitam_user', id);
+    else sessionStorage.removeItem('gitam_user');
     if (token !== undefined) this.setToken(token);
   },
   setToken(token) {
     this.token = token || null;
-    if (token) sessionStorage.setItem('nmiet_token', token);
-    else sessionStorage.removeItem('nmiet_token');
+    if (token) sessionStorage.setItem('gitam_token', token);
+    else sessionStorage.removeItem('gitam_token');
   },
 
   /* View-only roles (center head). The server is the real gate — it answers 403

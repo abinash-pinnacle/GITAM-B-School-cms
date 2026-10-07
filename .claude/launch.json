@@ -2,28 +2,28 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "nmiet-cms",
+      "name": "gitam-cms",
       "runtimeExecutable": "php",
       "runtimeArgs": ["-S", "0.0.0.0:5500", "router.php"],
       "port": 5500,
       "autoPort": true
     },
     {
-      "name": "nmiet-cms-python",
+      "name": "gitam-cms-python",
       "runtimeExecutable": "python",
       "runtimeArgs": ["server.py"],
       "port": 5500,
       "autoPort": true
     },
     {
-      "name": "nmiet-static",
+      "name": "gitam-static",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5502"],
       "port": 5502,
       "autoPort": true
     },
     {
-      "name": "nmiet-cms-docker",
+      "name": "gitam-cms-docker",
       "runtimeExecutable": "docker",
       "runtimeArgs": [
         "run", "--rm", "-p", "5501:5501",

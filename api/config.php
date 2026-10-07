@@ -1,9 +1,9 @@
 <?php
 /**
- * NMIET College Management System — backend configuration.
+ * GITAM B-School College Management System — backend configuration.
  *
  * Database mode is picked from the environment:
- *   sqlite (default) -> zero setup, file next to the project (nmiet.db)
+ *   sqlite (default) -> zero setup, file next to the project (gitam.db)
  *   mysql            -> DB_BACKEND=mysql   (XAMPP / cPanel / Docker)
  *   pgsql            -> DB_BACKEND=pgsql   (docker compose setup)
  */
@@ -73,7 +73,7 @@ function db_config(): array
     if ($driver === 'sqlite') {
         return [
             'driver' => 'sqlite',
-            'path'   => env('NMIET_DB', realpath(BASE_DIR) . DIRECTORY_SEPARATOR . 'nmiet.db'),
+            'path'   => env('GITAM_DB', realpath(BASE_DIR) . DIRECTORY_SEPARATOR . 'gitam.db'),
         ];
     }
     $isPg = $driver === 'pgsql';
@@ -81,9 +81,9 @@ function db_config(): array
         'driver' => $driver,
         'host'   => env('DB_HOST', env($isPg ? 'PGHOST' : 'MYSQL_HOST', $isPg ? 'db' : 'localhost')),
         'port'   => env('DB_PORT', env($isPg ? 'PGPORT' : 'MYSQL_PORT', $isPg ? '5432' : '3306')),
-        'name'   => env('DB_NAME', env($isPg ? 'PGDATABASE' : 'MYSQL_DATABASE', 'nmiet')),
-        'user'   => env('DB_USER', env($isPg ? 'PGUSER' : 'MYSQL_USER', $isPg ? 'nmiet' : 'root')),
-        'pass'   => env('DB_PASS', env($isPg ? 'PGPASSWORD' : 'MYSQL_PASSWORD', $isPg ? 'nmiet' : '')),
+        'name'   => env('DB_NAME', env($isPg ? 'PGDATABASE' : 'MYSQL_DATABASE', 'gitam')),
+        'user'   => env('DB_USER', env($isPg ? 'PGUSER' : 'MYSQL_USER', $isPg ? 'gitam' : 'root')),
+        'pass'   => env('DB_PASS', env($isPg ? 'PGPASSWORD' : 'MYSQL_PASSWORD', $isPg ? 'gitam' : '')),
         // hosted Postgres (Neon, Supabase, …) refuses plain connections
         'sslmode' => $isPg ? env('DB_SSLMODE', env('PGSSLMODE')) : null,
     ];
@@ -689,7 +689,7 @@ const SYLLABUS_WRITE_ROLES = ['admin'];
 /* ================= curriculum =================
    programme => semester => [ [code, subject], ... ]
 
-   NMIET B-SCHOOL runs one postgraduate programme, the MBA, over two years —
+   GITAM B-School runs one postgraduate programme, the MBA, over two years —
    four semesters, which is why SEMESTERS and MAX_SEMESTER stop at 4 rather
    than the eight an engineering scheme would need. What varies between
    students is the specialisation they take inside it. */
@@ -762,41 +762,41 @@ function seed_data(): array
             ['u10', 'admission', 'pass123', 'admission', 'AD01', 'Ms. Priya Sahoo'],
         ],
         'faculty' => [
-            ['F01', 'NM-F-1001', 'Dr. Rajesh Mehta', 'rmehta@nmiet.edu', '9876500011', 'MBA', 'Professor', null,
+            ['F01', 'NM-F-1001', 'Dr. Rajesh Mehta', 'rmehta@gitambschool.edu', '9876500011', 'MBA', 'Professor', null,
              'Ph.D. (Management)', 'Marketing Management, Consumer Behaviour', '18 journal papers, 6 conference papers'],
-            ['F02', 'NM-F-1002', 'Prof. S. Venkat', 'svenkat@nmiet.edu', '9876500012', 'MBA', 'Associate Professor', null,
+            ['F02', 'NM-F-1002', 'Prof. S. Venkat', 'svenkat@gitambschool.edu', '9876500012', 'MBA', 'Associate Professor', null,
              'M.Com, MBA (Finance)', 'Financial Management, Investment Analysis', '9 journal papers'],
-            ['F03', 'NM-F-1003', 'Dr. Meera Krishnan', 'meera@nmiet.edu', '9876500013', 'MBA', 'Assistant Professor', null,
+            ['F03', 'NM-F-1003', 'Dr. Meera Krishnan', 'meera@gitambschool.edu', '9876500013', 'MBA', 'Assistant Professor', null,
              'Ph.D. (Management)', 'Retail Management, Consumer Research', '12 journal papers'],
-            ['F04', 'NM-F-1004', 'Dr. Anil Kapoor', 'anil@nmiet.edu', '9876500014', 'MBA', 'Professor', null,
+            ['F04', 'NM-F-1004', 'Dr. Anil Kapoor', 'anil@gitambschool.edu', '9876500014', 'MBA', 'Professor', null,
              'Ph.D. (Operations Management)', 'Logistics, Supply Chain', '24 journal papers, 2 patents'],
         ],
         // id, roll, name, first, middle, last, email, phone, branch, year, semester,
         // section, photo, course, academicYear, cgpa, backlogs, batch, status
         'students' => [
-            ['S01', '2025180001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@nmiet.in', '9810000001', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', 'Active'],
-            ['S02', '2025180002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@nmiet.in', '9810000002', 'MBA', 'Finance', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', 'Active'],
-            ['S03', '2025180003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@nmiet.in', '9810000003', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', 'Active'],
-            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@nmiet.in', '9810000004', 'MBA', 'HR', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
-            ['S05', '2025180005', 'Karan Singh', 'Karan', null, 'Singh', 'karan@nmiet.in', '9810000005', 'MBA', 'Retail', 1, 2, 'A', null, 'MBA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
-            ['S06', '2025180006', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@nmiet.in', '9810000006', 'MBA', 'Logistics', 1, 2, 'A', null, 'MBA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
+            ['S01', '2025180001', 'Aarav Sharma', 'Aarav', null, 'Sharma', 'aarav@gitambschool.in', '9810000001', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '8.6', 0, '2025-2027', 'Active'],
+            ['S02', '2025180002', 'Diya Patel', 'Diya', null, 'Patel', 'diya@gitambschool.in', '9810000002', 'MBA', 'Finance', 1, 2, 'A', null, 'MBA', '2026-27', '7.9', 0, '2025-2027', 'Active'],
+            ['S03', '2025180003', 'Rohan Verma', 'Rohan', null, 'Verma', 'rohan@gitambschool.in', '9810000003', 'MBA', 'Marketing', 1, 2, 'A', null, 'MBA', '2026-27', '6.4', 2, '2025-2027', 'Active'],
+            ['S04', '2025180004', 'Ananya Iyer', 'Ananya', null, 'Iyer', 'ananya@gitambschool.in', '9810000004', 'MBA', 'HR', 1, 2, 'B', null, 'MBA', '2026-27', '9.1', 0, '2025-2027', 'Active'],
+            ['S05', '2025180005', 'Karan Singh', 'Karan', null, 'Singh', 'karan@gitambschool.in', '9810000005', 'MBA', 'Retail', 1, 2, 'A', null, 'MBA', '2026-27', '7.2', 1, '2025-2027', 'Active'],
+            ['S06', '2025180006', 'Ishita Nair', 'Ishita', null, 'Nair', 'ishita@gitambschool.in', '9810000006', 'MBA', 'Logistics', 1, 2, 'A', null, 'MBA', '2026-27', '8.0', 0, '2025-2027', 'Active'],
         ],
         'accountants' => [
-            ['AC01', 'NM-A-2001', 'Sunita Rao', 'sunita.rao@nmiet.edu', '9876500021', 'Senior Accountant', null],
+            ['AC01', 'NM-A-2001', 'Sunita Rao', 'sunita.rao@gitambschool.edu', '9876500021', 'Senior Accountant', null],
         ],
         'centerheads' => [
-            ['CH01', 'NM-CH-3001', 'Dr. Anand Rao', 'anand.rao@nmiet.edu', '9876500031', 'Center Head', null],
+            ['CH01', 'NM-CH-3001', 'Dr. Anand Rao', 'anand.rao@gitambschool.edu', '9876500031', 'Center Head', null],
         ],
         'placementofficers' => [
-            ['PO01', 'NM-P-4001', 'Ms. Kavita Menon', 'kavita.menon@nmiet.edu', '9876500041',
+            ['PO01', 'NM-P-4001', 'Ms. Kavita Menon', 'kavita.menon@gitambschool.edu', '9876500041',
              'Placement Officer', 'Training & Placement Cell', null],
         ],
         'coordinators' => [
-            ['CC01', 'NM-C-5001', 'Dr. Sunil Mohanty', 'sunil.mohanty@nmiet.edu', '9876500051',
+            ['CC01', 'NM-C-5001', 'Dr. Sunil Mohanty', 'sunil.mohanty@gitambschool.edu', '9876500051',
              'Course Coordinator', 'MBA', null],
         ],
         'admissions' => [
-            ['AD01', 'NM-AD-6001', 'Ms. Priya Sahoo', 'priya.sahoo@nmiet.edu', '9876500061',
+            ['AD01', 'NM-AD-6001', 'Ms. Priya Sahoo', 'priya.sahoo@gitambschool.edu', '9876500061',
              'Admission Officer', null],
         ],
         'courses' => [

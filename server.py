@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NMIET College Management System - Backend (API)
+GITAM B-School College Management System - Backend (API)
 
 Dual database mode:
   * Local / single container  -> SQLite  (default, zero setup: `python server.py`)
@@ -19,7 +19,7 @@ import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("NMIET_DB") or os.path.join(BASE_DIR, "nmiet.db")
+DB_PATH = os.environ.get("GITAM_DB") or os.path.join(BASE_DIR, "gitam.db")
 PORT = int(os.environ.get("PORT", "5500"))
 
 # Use PostgreSQL when running as a separate DB container, else SQLite.
@@ -27,9 +27,9 @@ USE_PG = os.environ.get("DB_BACKEND", "").lower() == "postgres" or bool(os.envir
 PG = {
     "host": os.environ.get("PGHOST", "db"),
     "port": os.environ.get("PGPORT", "5432"),
-    "dbname": os.environ.get("PGDATABASE", "nmiet"),
-    "user": os.environ.get("PGUSER", "nmiet"),
-    "password": os.environ.get("PGPASSWORD", "nmiet"),
+    "dbname": os.environ.get("PGDATABASE", "gitam"),
+    "user": os.environ.get("PGUSER", "gitam"),
+    "password": os.environ.get("PGPASSWORD", "gitam"),
 }
 if USE_PG:
     import psycopg2
@@ -64,18 +64,18 @@ SEED = {
         ["u5", "21CS002", "pass123", "student", "S02", "Diya Patel"],
     ],
     "faculty": [
-        ["F01", "NM-F-1001", "Dr. Rajesh Mehta", "rmehta@nmiet.edu", "9876500011", "Computer Science", "Professor"],
-        ["F02", "NM-F-1002", "Prof. S. Venkat", "svenkat@nmiet.edu", "9876500012", "Computer Science", "Associate Professor"],
-        ["F03", "NM-F-1003", "Dr. Meera Krishnan", "meera@nmiet.edu", "9876500013", "Electronics", "Assistant Professor"],
-        ["F04", "NM-F-1004", "Dr. Anil Kapoor", "anil@nmiet.edu", "9876500014", "Mechanical", "Professor"],
+        ["F01", "NM-F-1001", "Dr. Rajesh Mehta", "rmehta@gitambschool.edu", "9876500011", "Computer Science", "Professor"],
+        ["F02", "NM-F-1002", "Prof. S. Venkat", "svenkat@gitambschool.edu", "9876500012", "Computer Science", "Associate Professor"],
+        ["F03", "NM-F-1003", "Dr. Meera Krishnan", "meera@gitambschool.edu", "9876500013", "Electronics", "Assistant Professor"],
+        ["F04", "NM-F-1004", "Dr. Anil Kapoor", "anil@gitambschool.edu", "9876500014", "Mechanical", "Professor"],
     ],
     "students": [
-        ["S01", "21CS001", "Aarav Sharma", "aarav@nmiet.in", "9810000001", "CSE", 3, 5, "A"],
-        ["S02", "21CS002", "Diya Patel", "diya@nmiet.in", "9810000002", "CSE", 3, 5, "A"],
-        ["S03", "21CS003", "Rohan Verma", "rohan@nmiet.in", "9810000003", "CSE", 3, 5, "A"],
-        ["S04", "21CS004", "Ananya Iyer", "ananya@nmiet.in", "9810000004", "CSE", 3, 5, "B"],
-        ["S05", "21EC001", "Karan Singh", "karan@nmiet.in", "9810000005", "ECE", 2, 3, "A"],
-        ["S06", "21ME001", "Ishita Nair", "ishita@nmiet.in", "9810000006", "ME", 2, 3, "A"],
+        ["S01", "21CS001", "Aarav Sharma", "aarav@gitambschool.in", "9810000001", "CSE", 3, 5, "A"],
+        ["S02", "21CS002", "Diya Patel", "diya@gitambschool.in", "9810000002", "CSE", 3, 5, "A"],
+        ["S03", "21CS003", "Rohan Verma", "rohan@gitambschool.in", "9810000003", "CSE", 3, 5, "A"],
+        ["S04", "21CS004", "Ananya Iyer", "ananya@gitambschool.in", "9810000004", "CSE", 3, 5, "B"],
+        ["S05", "21EC001", "Karan Singh", "karan@gitambschool.in", "9810000005", "ECE", 2, 3, "A"],
+        ["S06", "21ME001", "Ishita Nair", "ishita@gitambschool.in", "9810000006", "ME", 2, 3, "A"],
     ],
     "courses": [
         ["C01", "CS501", "Data Structures & Algorithms", "CSE", 5, 4, "F01", "A"],
@@ -413,6 +413,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_db()
-    print(f"NMIET CMS backend on  http://localhost:{PORT}  (DB: {'PostgreSQL' if USE_PG else 'SQLite'})")
+    print(f"GITAM CMS backend on  http://localhost:{PORT}  (DB: {'PostgreSQL' if USE_PG else 'SQLite'})")
     print("Press Ctrl+C to stop.")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

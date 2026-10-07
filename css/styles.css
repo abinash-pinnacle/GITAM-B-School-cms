@@ -240,7 +240,7 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 .side-logo{box-sizing:content-box;width:40px;height:33px;background:#fff;border-radius:8px;padding:3px;
   object-fit:contain;flex-shrink:0;box-shadow:0 3px 10px rgba(0,0,0,.2)}
 /* min-width:0 so the text column may shrink, and ellipsis as the backstop:
-   "NMIET" is nowrap, and a nowrap flex item refuses to shrink below
+   "GITAM" is nowrap, and a nowrap flex item refuses to shrink below
    its content, so at 15px beside a 68px logo it punched 12px straight out
    through the side of the sidebar and got sliced off. */
 .sidebar-brand > div{min-width:0}

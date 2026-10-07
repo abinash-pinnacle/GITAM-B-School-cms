@@ -1,4 +1,4 @@
-/* ===== NMIET CMS — Application logic ===== */
+/* ===== GITAM CMS — Application logic ===== */
 (function () {
   'use strict';
 
@@ -1038,7 +1038,7 @@
       || (hasCustomAccess(user) && rawMenu(baseRoleOf(user.role)).some(([k]) => k === view));
   }
 
-  const VIEW_KEY = 'nmiet_view';
+  const VIEW_KEY = 'gitam_view';
   function navigate(key) {
     // the sidebar stays in the DOM after logout (the app screen is just hidden),
     // so ignore a stray click that arrives once the session is gone
@@ -1053,7 +1053,7 @@
   }
 
   // sidebar close/open: desktop -> collapse to icon rail (remembered); mobile -> slide in/out
-  const SIDEBAR_KEY = 'nmiet_sidebar_collapsed';
+  const SIDEBAR_KEY = 'gitam_sidebar_collapsed';
   // on a phone the drawer floats over the page, so it needs a tap-anywhere-to-close
   // backdrop and a body lock that stops the page behind it from scrolling
   function closeMobileNav() {
@@ -1577,15 +1577,14 @@
 
   /* The install-app / download-APK strip shown at the top of every dashboard.
      The Install button appears only when the browser has actually offered a PWA
-     prompt (captured in index.html and exposed as window.pwaCanInstall); the APK
-     link is always there, so it can be handed out from a desktop too. */
+     prompt (captured in index.html and exposed as window.pwaCanInstall). The APK
+     link is gone until a GITAM B-School APK is built — see android/README.md. */
   function appDownloadBar() {
     const canInstall = typeof window.pwaCanInstall === 'function' && window.pwaCanInstall();
+    if (!canInstall) return '';
     return `<div class="app-get-bar">
       ${canInstall ? `<button type="button" class="btn-outline btn-sm app-get-btn" id="dashInstallBtn">
         <span>${ic('smartphone')}</span><span>Install GITAM B-School app</span></button>` : ''}
-      <a class="btn-outline btn-sm app-get-btn" href="apk/NMIET-BSCHOOL-CMS-v1.1.0.apk" download>
-        <span>${ic('bot')}</span><span>Download Android app (APK)</span></a>
     </div>`;
   }
   function wireAppDownloadBar(scope) {
@@ -5123,7 +5122,7 @@
       title: 'Students',
       collection: 'students',
       keyField: 'roll',
-      fileBase: 'NMIET-BSCHOOL-Students-Template',
+      fileBase: 'GITAM-BSCHOOL-Students-Template',
       columns: [
         /* Optional: a blank cell means the server issues one. The column
            stays because a sheet of students who already have numbers is a real
@@ -5230,7 +5229,7 @@
       ],
       sample: {
         roll:'', firstName:'Rahul', middleName:'Kumar', lastName:'Das',
-        email:'rahul@nmiet.in', domainEmail:'rahul@nmiet.edu.in',
+        email:'rahul@gitambschool.in', domainEmail:'rahul@gitambschool.edu.in',
         phone:'9810000010', whatsapp:'9810000010',
         course:'MBA', branchName:'General Management',
         specialisation:'Marketing', specialisation2:'Finance',
@@ -5267,7 +5266,7 @@
       title: 'Employees',
       collection: 'faculty',
       keyField: 'empId',
-      fileBase: 'NMIET-BSCHOOL-Employees-Template',
+      fileBase: 'GITAM-BSCHOOL-Employees-Template',
       columns: [
         { key:'empId', header:'Employee ID', required:true, aliases:['emp id','employee no','staff id'] },
         { key:'name', header:'Full Name', required:true, aliases:['name','faculty name','employee name'] },
@@ -5337,7 +5336,7 @@
       sample: {
         empId:'NM-F-1010', name:'Dr. Meena Sahu', role:'Faculty', bputRegdNo:'BPUT-2015-1010',
         department:'MBA', designation:'Assistant Professor', category:'Teaching',
-        email:'meena@nmiet.edu', phone:'9876500010', joiningDate:'2019-07-01', status:'Active',
+        email:'meena@gitambschool.edu', phone:'9876500010', joiningDate:'2019-07-01', status:'Active',
         qualification:'Ph.D. (Management)', expertise:'Marketing Analytics',
         publications:'4 journal papers', reportingTo:'NM-F-1001',
         title:'Dr.', gender:'Female', dob:'1985-02-11', bloodGroup:'O+', maritalStatus:'Married',
@@ -9371,7 +9370,7 @@
       },
     ];
 
-    XLSXLite.download(`NMIET-BSCHOOL-Library-Report-${today()}.xlsx`, sheets);
+    XLSXLite.download(`GITAM-BSCHOOL-Library-Report-${today()}.xlsx`, sheets);
     toast('Excel report downloaded.');
   }
 
@@ -15635,7 +15634,7 @@
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `nmiet-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          a.download = `gitam-backup-${new Date().toISOString().slice(0, 10)}.json`;
           document.body.appendChild(a); a.click(); a.remove();
           URL.revokeObjectURL(url);
           toast('Backup downloaded.');

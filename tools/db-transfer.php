@@ -6,7 +6,7 @@
  *   php tools/db-transfer.php import dump.json     # write into the configured DB
  *
  * Which database is used comes from the same env vars as the API
- * (DB_BACKEND / NMIET_DB / DB_HOST / DB_USER / ...), so an export and an
+ * (DB_BACKEND / GITAM_DB / DB_HOST / DB_USER / ...), so an export and an
  * import are just two runs with different environments:
  *
  *   php tools/db-transfer.php export dump.json

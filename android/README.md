@@ -1,21 +1,24 @@
 # Android app (TWA)
 
-`apk/NMIET-BSCHOOL-CMS-v1.1.0.apk` is a **Trusted Web Activity**: a thin native
-shell that opens https://cmsnmietbschool.in full-screen, with no browser UI.
+> **No APK is built yet.** Replace `your-domain.com` in `twa-manifest.json` (and
+> `robots.txt` / `sitemap.xml`) with the real site domain, then build as below.
+
+The Android app is a **Trusted Web Activity**: a thin native
+shell that opens the site full-screen, with no browser UI.
 There is no separate app codebase — the app *is* the site, so a `git push` that
 deploys the site also updates what the app shows. Only a change to the shell
 itself (name, icon, package, target URL) needs a new APK.
 
 | | |
 |---|---|
-| Package | `in.nmiet.bschool.cms` |
+| Package | `in.gitam.bschool.cms` |
 | Version | 1.1.0 (versionCode 2) |
 | Min / target SDK | 21 (Android 5.0) / 36 |
 | Signing SHA-256 | `E9:F2:42:…:7D:74` (see `.well-known/assetlinks.json`) |
 
 ## Installing
 
-Download `https://cmsnmietbschool.in/apk/NMIET-BSCHOOL-CMS-v1.1.0.apk` on the
+Once built, download `https://<your-domain>/apk/GITAM-BSCHOOL-CMS-v1.1.0.apk` on the
 phone and open it. Android will ask to allow installs from unknown sources —
 expected for an APK that does not come from the Play Store.
 
@@ -31,7 +34,7 @@ by its signing key**: lose it and the app can never be updated, only replaced
 under a new package name.
 
 ```bash
-keytool -genkeypair -v -keystore release.keystore -alias nmiet \
+keytool -genkeypair -v -keystore release.keystore -alias gitam \
   -keyalg RSA -keysize 2048 -validity 10000
 ```
 
@@ -41,7 +44,7 @@ the fingerprint there must match whoever signed the APK, or Android shows the UR
 bar instead of a clean full-screen app.
 
 ```bash
-keytool -list -v -keystore release.keystore -alias nmiet | grep SHA256:
+keytool -list -v -keystore release.keystore -alias gitam | grep SHA256:
 ```
 
 ## Rebuilding

@@ -1,6 +1,6 @@
 <?php
 /**
- * NMIET College Management System — REST API (PHP).
+ * GITAM B-School College Management System — REST API (PHP).
  *
  * Routes
  *   GET    /api/health              -> { ok: true }
@@ -49,7 +49,7 @@ register_shutdown_function(static function (): void {
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    error_log('[nmiet-api] fatal: ' . $e['message'] . ' at ' . $e['file'] . ':' . $e['line']);
+    error_log('[gitam-api] fatal: ' . $e['message'] . ' at ' . $e['file'] . ':' . $e['line']);
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/json; charset=utf-8');
@@ -73,7 +73,7 @@ function send_json($data, int $status = 200): void
         $stray .= (string) ob_get_clean();
     }
     if (trim($stray) !== '') {
-        error_log('[nmiet-api] discarded stray output: ' . substr(trim($stray), 0, 500));
+        error_log('[gitam-api] discarded stray output: ' . substr(trim($stray), 0, 500));
     }
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -2352,7 +2352,7 @@ function audit(string $action, string $subjectType, string $subjectKey,
                 json_encode(array_merge($changes, ['action' => $action, 'ip' => client_ip()])),
             ]);
     } catch (Throwable $e) {
-        error_log('[nmiet-api] audit: ' . $e->getMessage());
+        error_log('[gitam-api] audit: ' . $e->getMessage());
     }
 }
 
@@ -2409,7 +2409,7 @@ function api_backup(): void
                    'message' => 'Only the administrator can download a backup.'], 403);
     }
     $out = [
-        'app'         => 'nmiet-cms',
+        'app'         => 'gitam-cms',
         'kind'        => 'backup',
         'generatedAt' => gmdate('c'),
         'by'          => (string) (current_user()['name'] ?? current_user()['username'] ?? ''),
@@ -4104,7 +4104,7 @@ function api_tk_create(): void
     $now = time();
     $hours = tk_sla_hours()[$pri];
     $year = gmdate('Y', $now);
-    $no = sprintf('NMIET-%s-%06d', $year, tk_take_seq('ticket:' . $year));
+    $no = sprintf('GITAM-%s-%06d', $year, tk_take_seq('ticket:' . $year));
     $meRow = tk_user((string) $me['id']) ?? $me;
     $creatorLevel = tk_level_of($chain, (string) $me['role']);
     $route = tk_route($chain, $creatorLevel + 1, tk_line_above($meRow), (string) $me['id']);
@@ -4449,7 +4449,7 @@ function nt_push(string $userId, string $kind, string $title, string $message, s
             ]);
     } catch (Throwable $e) {
         // a notification must never break the action that raised it
-        error_log('[nmiet-api] notify: ' . $e->getMessage());
+        error_log('[gitam-api] notify: ' . $e->getMessage());
     }
 }
 
@@ -4536,7 +4536,7 @@ function api_nt_list(): void
     try {
         tk_sla_sweep();
     } catch (Throwable $e) {
-        error_log('[nmiet-api] sla sweep: ' . $e->getMessage());
+        error_log('[gitam-api] sla sweep: ' . $e->getMessage());
     }
     $uid = (string) $me['id'];
     $rows = fetch_all('SELECT * FROM ' . qi('notifications') . ' WHERE ' . qi('userId') . ' = ? ORDER BY '
@@ -5983,7 +5983,7 @@ try {
             db()->query('SELECT 1');
             send_json(['ok' => true, 'db' => 'ok', 'driver' => driver()] + $build);
         } catch (Throwable $e) {
-            error_log('[nmiet-api] health db: ' . $e->getMessage());
+            error_log('[gitam-api] health db: ' . $e->getMessage());
             send_json(['ok' => false, 'db' => 'error'] + debug_detail($e), 503);
         }
     }
@@ -5997,18 +5997,18 @@ try {
         // beats serving 500s until someone notices.
         $code = (string) $e->getCode();
         if ($code === STALE_PLAN) {
-            error_log('[nmiet-api] stale query plan, retrying: ' . $e->getMessage());
+            error_log('[gitam-api] stale query plan, retrying: ' . $e->getMessage());
             dispatch($method, $resource, $id, $isCollection);
         }
         if (!in_array($code, SCHEMA_BEHIND, true)) {
             throw $e;
         }
-        error_log('[nmiet-api] schema behind (' . $code . '), rebuilding: ' . $e->getMessage());
+        error_log('[gitam-api] schema behind (' . $code . '), rebuilding: ' . $e->getMessage());
         init_db();
         dispatch($method, $resource, $id, $isCollection);
     }
 } catch (Throwable $e) {
-    error_log('[nmiet-api] ' . $e->getMessage());
+    error_log('[gitam-api] ' . $e->getMessage());
     // The SQLSTATE names the kind of failure without revealing the query, the
     // schema or the connection details, and it is what makes a production-only
     // failure diagnosable without turning APP_DEBUG on.

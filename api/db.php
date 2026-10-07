@@ -594,7 +594,7 @@ function students_login_as_studentid(): void
             }
         } catch (Throwable $e) {
             // a duplicate roll or other row-level clash: skip this one, keep going
-            error_log('[nmiet-db] student login backfill skipped ' . $s['id'] . ': ' . $e->getMessage());
+            error_log('[gitam-db] student login backfill skipped ' . $s['id'] . ': ' . $e->getMessage());
         }
     }
     meta_set('studentLoginIsRoll', date('c'));
@@ -621,7 +621,7 @@ function rename_accountant_designation(): void
                     . qi('designation') . ' = ?', [$new, $old]);
             } catch (Throwable $e) {
                 // table not ready this deploy -> the flag stays unset, retried next time
-                error_log('[nmiet-db] designation rename skipped for ' . $col . ': ' . $e->getMessage());
+                error_log('[gitam-db] designation rename skipped for ' . $col . ': ' . $e->getMessage());
                 return;
             }
         }
@@ -643,7 +643,7 @@ function rename_accountant_designation(): void
             }
         }
     } catch (Throwable $e) {
-        error_log('[nmiet-db] designationList setting rename skipped: ' . $e->getMessage());
+        error_log('[gitam-db] designationList setting rename skipped: ' . $e->getMessage());
     }
     meta_set('accountantIsFinance', date('c'));
 }
