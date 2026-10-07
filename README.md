@@ -106,9 +106,11 @@ Import same `id` wali rows ko replace karta hai, isliye dobara chalane se duplic
 |----------|-----------|------------|
 | Admin    | `admin`   | `admin123` |
 | Faculty  | `rmehta`  | `pass123`  |
-| Student  | `21CS001` | `pass123`  |
+| Student  | `2025180001` | `2025180001` (student ka password uska Student ID hi hai) |
+| Accounts | `accounts` | `pass123` |
 
-> Login karte waqt sahi **role** select karna zaroori hai.
+> Role chunne ki zaroorat nahi — login ke account se role apne aap tay hota hai.
+> Live site par in demo passwords ko turant badal dein.
 
 ## Features (Modules)
 

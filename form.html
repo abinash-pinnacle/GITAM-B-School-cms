@@ -371,6 +371,15 @@
       if (v === '') return;
       var el = document.querySelector('[name="' + name + '"]');
       if (!el) return;
+      if (el.tagName === 'SELECT') {
+        // ?course=mca picks "MCA"; a value with no matching option is ignored,
+        // so the field stays visible rather than silently sending nothing
+        var hit = Array.prototype.filter.call(el.options, function (o) {
+          return o.value.toLowerCase() === v.toLowerCase();
+        })[0];
+        if (!hit) return;
+        v = hit.value;
+      }
       el.value = v;
       el.readOnly = true;
       var field = el.closest('.field') || el.parentNode;

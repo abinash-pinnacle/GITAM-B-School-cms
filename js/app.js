@@ -4969,7 +4969,7 @@
               belong to another student.</small></div>
         </div>
         ${suggested ? `<p style="font-size:12.5px;margin:12px 0 0">
-          The next number for <b>20${esc(yy)}</b> / <b>${esc(s.branchName || 'no branch')}</b> is
+          The next number for <b>20${esc(yy)}</b> / <b>${esc(idBranch(s) || 'no branch')}</b> is
           <button type="button" class="btn-outline btn-sm" id="useNext"
                   style="font-family:ui-monospace,monospace">${esc(suggested)}</button></p>` : ''}
         <p style="font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.7">
@@ -5013,7 +5013,7 @@
          which says <b>20${esc(off.hasYY)}</b>${off.hasCode !== off.wantCode
            ? ` and branch code <b>${esc(off.hasCode)}</b>` : ''}.
          The record now says <b>20${esc(off.wantYY)}</b>${off.hasCode !== off.wantCode
-           ? ` and <b>${esc(student.branchName || 'no branch')}</b>` : ''}.<br><br>
+           ? ` and <b>${esc(idBranch(student) || 'no branch')}</b>` : ''}.<br><br>
          Re-issue it as <b class="mono">${esc(willBe)}</b>?<br>
          <small style="color:var(--muted)">The old number is not reused, and the student's login
            username changes from ${esc(student.roll)} to ${esc(willBe)} — tell them.
@@ -5611,9 +5611,10 @@
            is skipped. A report exported from this page can be uploaded straight back.</p>
         <p class="imp-cols"><b>Columns:</b> ${spec.columns.map((c) =>
             c.required ? `<b>${c.header} *</b>` : c.header).join(' · ')}</p>
-        <p class="imp-note">Every new account gets the password
-           <code>${DEFAULT_IMPORT_PASSWORD}</code>${kind === 'faculty'
-             ? ' unless a Password column says otherwise' : ''}.</p>
+        <p class="imp-note">${kind === 'students'
+           ? 'Every new student signs in with their Student ID as both username and password.'
+           : `Every new account gets the password <code>${DEFAULT_IMPORT_PASSWORD}</code>${kind === 'faculty'
+             ? ' unless a Password column says otherwise' : ''}.`}</p>
       </div>
       <div class="imp-actions">
         <button type="button" class="btn-outline" id="impTpl"> Download template</button>
@@ -12749,7 +12750,9 @@
         const el = $(q); if (!el) return;
         const box = el.closest('.field') || el;
         box.style.display = show ? '' : 'none';
-        if (!show) el.value = '';
+        // announce the clear, so anything keyed on the field (the Student ID
+        // preview) sees the branch go rather than reading it before it does
+        if (!show && el.value) { el.value = ''; el.dispatchEvent(new Event('change')); }
       });
     };
     courseSel.addEventListener('change', sync);
@@ -15332,6 +15335,12 @@
      the form should not wipe the value somebody typed in for them. */
   function mergeIntoStudent(existing, incoming) {
     const out = {};
+    /* Moving onto a programme taught without branches (the MCA) is the one
+       time a blank is meant: the old MBA branch and streams must go, or the
+       record and its Student ID keep pointing at a branch the student left. */
+    if (incoming.course && !courseHasBranches(incoming.course)) {
+      out.branchName = ''; out.specialisation = ''; out.specialisation2 = '';
+    }
     Object.keys(incoming).forEach(k => {
       const v = incoming[k];
       if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -15402,7 +15411,7 @@
     if (given) {
       confirmAction('Admit Student',
         `Admit <b>${esc(who)}</b> under the number they gave, <b>${esc(given)}</b>?
-         A login is created with the password <b>${esc(DEFAULT_IMPORT_PASSWORD)}</b>.`,
+         A login is created with <b>${esc(given)}</b> as both username and password.`,
         'Admit Student', () => commit(given));
       return;
     }
@@ -15416,9 +15425,9 @@
       confirmAction('Admit Student',
         `Admit <b>${esc(who)}</b> as a student?<br>
          Their Student ID will be <b class="mono">${esc(willBe)}</b> — from the admission year
-         and <b>${esc(d.branchName || 'no branch')}</b>.<br>
-         <small style="color:var(--muted)">A login is created with the password
-           ${esc(DEFAULT_IMPORT_PASSWORD)}.</small>`,
+         and <b>${esc(idBranch(d) || 'no branch')}</b>.<br>
+         <small style="color:var(--muted)">A login is created — the username and the
+           password are both the Student ID.</small>`,
         'Admit Student', () => commit(''));
     });
   }

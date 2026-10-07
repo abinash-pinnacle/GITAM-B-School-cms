@@ -198,7 +198,7 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion: reduce){
   .login-wrap,.login-wrap::before,.login-wrap::after,.login-waves i,
-  .login-frame::before,.login-frame::after,.login-hero-img,.hero-logo,
+  .login-frame::before,.login-frame::after,.hero-logo,
   #loginForm .btn-primary{animation:none}
   #loginForm .btn-primary:hover::after{animation:none}
   .login-frame,.login-hero-overlay,.login-footer,
