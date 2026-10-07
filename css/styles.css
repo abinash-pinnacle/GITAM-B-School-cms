@@ -81,18 +81,19 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
    ground reads as a designed surface. Motion is gentle and long-cycle. */
 .login-wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:20px;overflow:hidden;position:relative;
+  /* campus photo poori screen par; bayan taraf gehra green taaki naam padha jaye,
+     right me halka taaki building dikhe */
   background:
-    radial-gradient(50vmax 50vmax at 16% 14%,rgba(55,208,127,.28),transparent 60%),
-    radial-gradient(52vmax 52vmax at 86% 88%,rgba(0,152,153,.30),transparent 60%),
-    linear-gradient(135deg,#0a3d2a 0%,var(--primary-dark) 40%,var(--primary) 66%,#007a7b 100%);
-  background-size:190% 190%,190% 190%,220% 220%;
-  animation:auroraShift 26s ease-in-out infinite}
+    linear-gradient(90deg,rgba(8,48,33,.86) 0%,rgba(8,48,33,.58) 45%,rgba(8,48,33,.30) 100%),
+    linear-gradient(0deg,rgba(8,48,33,.6) 0%,transparent 30%),
+    url("../assets/campus-building.webp") 62% center/cover no-repeat,
+    #0a3d2a}
 /* the dot-grid stays perfectly still while the colour drifts behind it */
 .login-wrap::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.05) 1px,transparent 1.6px) 0 0/26px 26px}
 .login-footer{position:relative;z-index:1}
 /* flowing waves along the bottom — three layers gliding at different speeds */
-.login-waves{position:absolute;left:0;right:0;bottom:0;height:240px;z-index:0;pointer-events:none;overflow:hidden}
+.login-waves{display:none;position:absolute;left:0;right:0;bottom:0;height:240px;z-index:0;pointer-events:none;overflow:hidden}
 .login-waves i{position:absolute;left:0;bottom:0;width:100%;height:100%;
   background-repeat:repeat-x;background-position:0 bottom;background-size:1440px 220px;will-change:background-position}
 .login-waves i:nth-child(1){opacity:.10;background-size:1440px 240px;animation:waveMove 28s linear infinite;
@@ -108,18 +109,18 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 .login-frame::after{content:"";position:absolute;inset:-10px;border-radius:28px;z-index:-1;
   background:linear-gradient(135deg,rgba(55,208,127,.55),rgba(0,152,153,.55));filter:blur(30px);
   opacity:.4;animation:glowBreathe 7s ease-in-out infinite}
-.login-split{position:relative;z-index:1;display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden}
-.login-hero{position:relative;flex:1;min-width:0;display:flex;overflow:hidden}
-/* photo poore box ko bhare; entrance (photo me ~63% par) beech me rahe */
-.login-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:63% center;display:block}
-/* Overlay upar halka, neeche gehra — photo dikhe aur neeche ka logo/text padha ja sake */
-.login-hero-overlay{position:relative;flex:1;
-  background:linear-gradient(180deg,rgba(10,61,42,0) 0%,rgba(10,61,42,.15) 45%,rgba(10,61,42,.88) 100%);
-  color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:34px}
-.login-hero-overlay h2{font-size:24px;line-height:1.25;margin-bottom:6px}
-.login-hero-overlay p{font-size:14px;opacity:.9}
-.hero-logo{width:110px;height:90px;background:#fff;border-radius:14px;padding:6px;margin-bottom:18px;object-fit:contain}
-.login-card{background:#fff;padding:48px 44px;width:510px;max-width:100%;flex-shrink:0}
+.login-split{position:relative;z-index:1;display:flex;align-items:center;gap:56px;width:100%;max-width:1160px}
+.login-hero{position:relative;flex:1;min-width:0;display:flex}
+/* brand intro sits straight on the photo — text-shadow keeps it readable */
+.login-hero-overlay{position:relative;flex:1;color:#fff;display:flex;flex-direction:column;
+  justify-content:center;text-shadow:0 2px 14px rgba(0,0,0,.35)}
+.login-hero-overlay h2{font-size:44px;line-height:1.15;margin-bottom:10px;letter-spacing:.3px}
+.login-hero-overlay p{font-size:18px;opacity:.95}
+.hero-logo{width:132px;height:108px;background:#fff;border-radius:16px;padding:8px;margin-bottom:22px;
+  object-fit:contain;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.login-frame{flex-shrink:0;max-width:100%}
+.login-card{background:#fff;padding:44px 42px;width:470px;max-width:100%;border-radius:18px;
+  box-shadow:0 24px 60px rgba(0,0,0,.3)}
 .brand-logo{width:92px;height:76px;object-fit:contain;background:#fff;border-radius:10px;flex-shrink:0}
 .login-brand{display:flex;align-items:center;gap:16px;margin-bottom:32px}
 .login-brand h1{font-size:25px;letter-spacing:.3px;line-height:1.25;white-space:nowrap;
@@ -142,7 +143,7 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 .login-error{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;text-align:center}
 .login-hint{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .login-hint strong{color:var(--ink)}
-.login-footer{color:rgba(255,255,255,.8);font-size:12.5px;margin-top:22px}
+.login-footer{color:rgba(255,255,255,.85);font-size:12.5px;margin-top:28px;text-shadow:0 1px 6px rgba(0,0,0,.4)}
 
 /* ===== login: a stylish way in ===== */
 @keyframes loginGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
@@ -166,7 +167,7 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
 
 /* the whole card glides up on arrival; the campus photo slowly drifts behind it */
 .login-frame{animation:cardIn .8s cubic-bezier(.22,.68,.24,1) both}
-.login-hero-overlay{animation:riseIn .8s ease .35s both}
+.login-hero-overlay{animation:riseIn .8s ease .2s both}
 .login-footer{animation:footerIn 1s ease .8s both}
 
 /* brand and each form row rise in, one after another */
@@ -901,7 +902,7 @@ a.install-btn:hover{background:var(--primary-light)}
   /* a lighter glow halo behind the card, so the rotating blur stays smooth on
      a phone GPU; the crisp gradient border itself is untouched */
   .login-frame::after{filter:blur(16px);opacity:.42;inset:-8px}
-  .login-split{max-width:460px}
+  .login-split{max-width:460px;justify-content:center}
 
   .view{padding:16px 14px}
   .panel{padding:16px 14px;margin-bottom:16px}
