@@ -8,4 +8,4 @@ Disallow: /form.html
 Disallow: /apk/
 Disallow: /tools/
 
-Sitemap: https://your-domain.com/sitemap.xml
+Sitemap: https://cmsgitam.pintekdigital.com/sitemap.xml

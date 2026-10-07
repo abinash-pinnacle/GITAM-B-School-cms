@@ -1,7 +1,6 @@
 # Android app (TWA)
 
-> **No APK is built yet.** Replace `your-domain.com` in `twa-manifest.json` (and
-> `robots.txt` / `sitemap.xml`) with the real site domain, then build as below.
+> **No APK is built yet.** Build one as below (site: https://cmsgitam.pintekdigital.com).
 
 The Android app is a **Trusted Web Activity**: a thin native
 shell that opens the site full-screen, with no browser UI.

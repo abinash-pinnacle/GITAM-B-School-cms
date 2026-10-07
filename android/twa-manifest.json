@@ -1,6 +1,6 @@
 {
   "packageId": "in.gitam.bschool.cms",
-  "host": "your-domain.com",
+  "host": "cmsgitam.pintekdigital.com",
   "name": "GITAM B-School CMS",
   "launcherName": "GITAM B-School",
   "display": "standalone",
@@ -13,8 +13,8 @@
   "backgroundColor": "#FFFFFF",
   "enableNotifications": false,
   "startUrl": "/",
-  "iconUrl": "https://your-domain.com/assets/icons/icon-512.png",
-  "maskableIconUrl": "https://your-domain.com/assets/icons/maskable-512.png",
+  "iconUrl": "https://cmsgitam.pintekdigital.com/assets/icons/icon-512.png",
+  "maskableIconUrl": "https://cmsgitam.pintekdigital.com/assets/icons/maskable-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "/work/android.keystore",
@@ -24,7 +24,7 @@
   "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://your-domain.com/manifest.webmanifest",
+  "webManifestUrl": "https://cmsgitam.pintekdigital.com/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,7 +33,7 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://your-domain.com/",
+  "fullScopeUrl": "https://cmsgitam.pintekdigital.com/",
   "minSdkVersion": 21,
   "orientation": "portrait",
   "fingerprints": [],
