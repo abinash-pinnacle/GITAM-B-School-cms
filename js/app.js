@@ -98,7 +98,7 @@
   // small circular table thumbnail — actual photo if set, else the name's first letter
   const avatarHtml = (photo, name) => photo
     ? `<img src="${esc(photo)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block">`
-    : `<span style="width:32px;height:32px;border-radius:50%;background:var(--primary,#123f8c);color:#fff;
+    : `<span style="width:32px;height:32px;border-radius:50%;background:var(--primary,#187350);color:#fff;
         display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px">${esc((name||'?')[0])}</span>`;
 
   /* ---------- pagination (shared by every list table) ---------- */
@@ -1583,7 +1583,7 @@
     const canInstall = typeof window.pwaCanInstall === 'function' && window.pwaCanInstall();
     return `<div class="app-get-bar">
       ${canInstall ? `<button type="button" class="btn-outline btn-sm app-get-btn" id="dashInstallBtn">
-        <span>${ic('smartphone')}</span><span>Install NMIET B-SCHOOL app</span></button>` : ''}
+        <span>${ic('smartphone')}</span><span>Install GITAM B-School app</span></button>` : ''}
       <a class="btn-outline btn-sm app-get-btn" href="apk/NMIET-BSCHOOL-CMS-v1.1.0.apk" download>
         <span>${ic('bot')}</span><span>Download Android app (APK)</span></a>
     </div>`;
@@ -1836,12 +1836,12 @@
     let html = `<div class="welcome-banner">
       <div class="wb-text">
         <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
-        <p>NMIET B-SCHOOL · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
+        <p>GITAM B-School · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
         <div class="wb-chips"><span>Academic operations</span>${
           seeStu ? `<span>${students.length} students</span>` : ''}${
           seeAcad ? `<span>${subjects.length} subjects</span>` : ''}</div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     if (cards.length) html += `<div class="stat-grid">${cards.join('')}</div>`;
@@ -1918,10 +1918,10 @@
     let html = `<div class="welcome-banner">
       <div class="wb-text">
         <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
-        <p>NMIET B-SCHOOL · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
+        <p>GITAM B-School · ${esc(roleLabel(user.role))} · ${prettyDate()}</p>
         <div class="wb-chips"><span>${grantRows.length} module${grantRows.length === 1 ? '' : 's'} granted</span></div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     if (!grantRows.length) {
@@ -2008,13 +2008,13 @@
     let html = `<div class="welcome-banner">
       <div class="wb-text">
         <h2>${greeting()}, ${esc(firstName(user.name))}</h2>
-        <p>NMIET B-SCHOOL College Management System · ${prettyDate()}</p>
+        <p>GITAM B-School College Management System · ${prettyDate()}</p>
         <div class="wb-chips">
           <span>${nStu} students</span><span>${nCou} courses</span>
           <span>${onLoan} books on loan</span><span>${collPct}% fees collected</span>
         </div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     // ---- stat cards ----
@@ -2186,7 +2186,7 @@
         <p>${esc(f.designation || 'Faculty')} · ${esc(f.department || '')} · ${prettyDate()}</p>
         <div class="wb-chips"><span>${classes.length} classes assigned</span><span>${studentSet.length} students</span></div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     html += `<div class="stat-grid">
@@ -2290,7 +2290,7 @@
     };
     const byCourse = tally('course');
     const bySpec = tally('specialisation');
-    const colours = ['#123f8c', '#2f6fed', '#f5a623', '#8b5cf6', '#22b8b8', '#e0414f'];
+    const colours = ['#187350', '#2f6fed', '#f5a623', '#8b5cf6', '#22b8b8', '#e0414f'];
     const segments = byCourse.map(([label, value], i) =>
       ({ label, value, color: colours[i % colours.length] }));
 
@@ -2309,7 +2309,7 @@
           <span>${admittedThisYear.length} admitted in ${esc(thisYear)}</span>
         </div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     html += `<div class="stat-grid">
@@ -2381,7 +2381,7 @@
 
     const byCat = {};
     books.forEach(b => { const c = b.category || 'Others'; byCat[c] = (byCat[c] || 0) + (b.total || 0); });
-    const catColors = ['#123f8c', '#2f6fed', '#f5a623', '#8b5cf6', '#e0414f', '#22b8b8'];
+    const catColors = ['#187350', '#2f6fed', '#f5a623', '#8b5cf6', '#e0414f', '#22b8b8'];
     const catSegments = Object.entries(byCat).sort((a, b) => b[1] - a[1])
       .map(([label, value], i) => ({ label, value, color: catColors[i % catColors.length] }));
 
@@ -2399,7 +2399,7 @@
         <h2>${greeting()}, Librarian</h2>
         <p>Welcome to Library Management System · ${prettyDate()}</p>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     html += `<div class="lib-stats-grid">
@@ -2566,7 +2566,7 @@
         <p>${esc(s.branch)} · Semester ${s.semester} · Section ${esc(s.section)} · Reg No ${esc(s.roll)}</p>
         <div class="wb-chips"><span>${prettyDate()}</span></div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
     html += `<div class="stat-grid">
       ${statCard(ic('check'), (att ?? '—') + '%', 'Attendance', att !== null && att < 75 ? 'c4' : 'c3')}
@@ -3457,8 +3457,8 @@
     const gpa = studentGPA(s.id);
     return `<h4 class="ro-sub">ID Card</h4>
       <div class="idcard-preview">
-        <div class="idc-head"><img src="assets/nmiet-logo.png" alt=""><div>
-          <strong>NMIET B-SCHOOL</strong><span>Bhubaneswar</span></div></div>
+        <div class="idc-head"><img src="assets/gitam-logo.png" alt=""><div>
+          <strong>GITAM B-School</strong><span>Bhubaneswar</span></div></div>
         <div class="idc-body">
           <div class="idc-photo">${s.photo ? `<img src="${esc(s.photo)}" alt="">` : '<span>No photo</span>'}</div>
           <div class="idc-fields">
@@ -6336,7 +6336,7 @@
   function printFacultyProfile(fid) {
     const f = findEmployee(fid);
     if (!f) return;
-    const section = (title, body) => `<h3 style="margin:18px 0 6px;color:#123f8c">${title}</h3>${body}`;
+    const section = (title, body) => `<h3 style="margin:18px 0 6px;color:#187350">${title}</h3>${body}`;
     const inner = `<h2 style="margin:0 0 4px">${esc(f.name || '')}</h2>
       <p style="margin:0 0 14px;color:#555">${esc(f.roleName)} · ${esc(f.designation || '')}
         · ${esc(f.department || '')} · ${esc(f.empId || '')}</p>
@@ -8068,7 +8068,7 @@
           <td>${present}</td><td>${held.length - present}</td>
           <td${low ? ' style="color:#e0414f;font-weight:700"' : ''}>${pct === null ? '—' : pct + '%'}</td></tr>`;
       }).join('') || `<tr><td colspan="6" style="text-align:center">No students in this class.</td></tr>`;
-      return `<h2 style="font-size:16px;color:#0d2f6b;margin:22px 0 4px">${esc(c.code)} — ${esc(c.name)}</h2>
+      return `<h2 style="font-size:16px;color:#0f5238;margin:22px 0 4px">${esc(c.code)} — ${esc(c.name)}</h2>
         <p style="font-size:13px;color:#555">${esc(c.branch)} · Semester ${c.semester} · Section ${esc(c.section || 'A')}
           · ${sessions.length} session(s) held · Faculty: ${esc(facultyName(c.facultyId))}</p>
         <table><thead><tr><th>Reg No</th><th>Name</th><th>Classes Held</th><th>Present</th><th>Absent</th><th>Attendance %</th></tr></thead>
@@ -8076,7 +8076,7 @@
     }).join('');
 
     printDoc('Attendance Report', `${docHeader()}
-      <h2 style="font-size:17px;color:#0d2f6b">Attendance Report</h2>
+      <h2 style="font-size:17px;color:#0f5238">Attendance Report</h2>
       <p style="font-size:13px;color:#555">Generated on ${prettyDate()} · Minimum requirement 75%</p>
       ${blocks}
       <div class="sign"><span>Faculty Signature</span><span>HOD Signature</span></div>`);
@@ -9237,7 +9237,7 @@
   function exportLibraryExcel(rows, all) {
     if (!window.XLSXLite) { toast('Excel module failed to load.', 'err'); return; }
     const stamp = new Date().toLocaleString('en-IN');
-    const sub = `NMIET B-SCHOOL · Library Management System · Generated on ${stamp}` +
+    const sub = `GITAM B-School · Library Management System · Generated on ${stamp}` +
       (rows.length !== all.length ? ` · Filtered view (${rows.length} of ${all.length} records)` : '');
     const books = Store.all('books');
     const tone = (t) => ({ v: t.status, tone: STATUS_TONE[t.status] });
@@ -9711,35 +9711,35 @@
       *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;
         -webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
       body{padding:28px;color:#1f2a37}
-      .doc-head{display:flex;align-items:center;gap:16px;border-bottom:3px solid #123f8c;padding-bottom:14px;margin-bottom:20px}
-      .doc-head img{width:104px;height:60px;object-fit:contain}
-      .doc-head h1{font-size:22px;color:#0d2f6b}
+      .doc-head{display:flex;align-items:center;gap:16px;border-bottom:3px solid #187350;padding-bottom:14px;margin-bottom:20px}
+      .doc-head img{width:80px;height:66px;object-fit:contain}
+      .doc-head h1{font-size:22px;color:#0f5238}
       .doc-head p{font-size:13px;color:#555}
       table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
       th,td{border:1px solid #cfd8dc;padding:9px 11px;text-align:left}
-      th{background:#e8eefb;color:#0d2f6b}
+      th{background:#e7f4ee;color:#0f5238}
       .gpa{margin-top:16px;font-size:16px}
-      .gpa b{color:#0d2f6b;font-size:20px}
+      .gpa b{color:#0f5238;font-size:20px}
       /* fee receipt */
       .receipt-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
-      .receipt-title h2{font-size:19px;color:#0d2f6b;letter-spacing:2px}
-      .receipt-no{text-align:right;font-size:13px;font-weight:700;color:#0d2f6b}
+      .receipt-title h2{font-size:19px;color:#0f5238;letter-spacing:2px}
+      .receipt-no{text-align:right;font-size:13px;font-weight:700;color:#0f5238}
       .receipt-no span{display:block;font-weight:400;color:#666;font-size:12px}
-      .receipt-amount{margin-top:16px;background:#e8eefb;border:1px solid #123f8c;border-radius:8px;
-        padding:12px 16px;font-size:15px;color:#0d2f6b}
+      .receipt-amount{margin-top:16px;background:#e7f4ee;border:1px solid #187350;border-radius:8px;
+        padding:12px 16px;font-size:15px;color:#0f5238}
       .receipt-amount b{font-size:20px}
       .sign{margin-top:60px;display:flex;justify-content:space-between;font-size:13px;color:#555}
       .sign span{border-top:1px solid #888;padding-top:6px}
       /* ID card */
-      .idcard{width:700px;max-width:100%;border:2px solid #123f8c;border-radius:22px;overflow:hidden;
+      .idcard{width:700px;max-width:100%;border:2px solid #187350;border-radius:22px;overflow:hidden;
         margin:0 auto;display:flex;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08)}
       .idcard-left{width:230px;flex-shrink:0;background:linear-gradient(160deg,#229350,#0f5c2a);
         clip-path:polygon(0 0,100% 0,78% 100%,0 100%);color:#fff;padding:28px 18px 20px;
         display:flex;flex-direction:column;align-items:center;text-align:center}
       .idcard-left .photo-ring{width:150px;height:150px;border-radius:50%;background:#fff;padding:5px;
         margin-bottom:14px;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
-      .idcard-left .photo-inner{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#e8eefb;
-        display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:#123f8c}
+      .idcard-left .photo-inner{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#e7f4ee;
+        display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;color:#187350}
       .idcard-left .photo-inner img{width:100%;height:100%;object-fit:cover;border-radius:50%}
       .idcard-left h3{font-size:19px;margin-bottom:8px;line-height:1.25}
       .idcard-left .badge{background:rgba(255,255,255,.92);color:#0f5c2a;font-weight:700;font-size:12.5px;
@@ -9750,13 +9750,13 @@
       .idcard-right{flex:1;padding:24px 26px;min-width:0}
       .idcard-right .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px}
       .idcard-right .hd-brand{display:flex;align-items:center;gap:10px;min-width:0}
-      .idcard-right .hd-brand img{width:60px;height:35px;object-fit:contain;flex-shrink:0}
+      .idcard-right .hd-brand img{width:46px;height:38px;object-fit:contain;flex-shrink:0}
       .idcard-right .hd-brand strong{font-size:16px;color:#0f5c2a;display:block;line-height:1.15}
       .idcard-right .hd-brand small{font-size:10.5px;color:#666;letter-spacing:.3px}
-      .idcard-right .hd-pill{background:#123f8c;color:#fff;font-size:11px;font-weight:700;
+      .idcard-right .hd-pill{background:#187350;color:#fff;font-size:11px;font-weight:700;
         padding:7px 14px;border-radius:18px;white-space:nowrap;flex-shrink:0}
       .idcard-right .row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #eef1ee;font-size:13px}
-      .idcard-right .row .ic{width:26px;height:26px;border-radius:50%;background:#123f8c;color:#fff;
+      .idcard-right .row .ic{width:26px;height:26px;border-radius:50%;background:#187350;color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:12.5px;flex-shrink:0}
       .idcard-right .row b{width:120px;color:#222;flex-shrink:0}
       .idcard-right .row span{color:#333}
@@ -9771,14 +9771,14 @@
     w.document.close();
   }
   function docHeader() {
-    const logo = location.origin + '/assets/nmiet-logo.png';
-    return `<div class="doc-head"><img src="${logo}" alt="NMIET B-SCHOOL">
-      <div><h1>NMIET B-SCHOOL</h1>
+    const logo = location.origin + '/assets/gitam-logo.png';
+    return `<div class="doc-head"><img src="${logo}" alt="GITAM B-School">
+      <div><h1>GITAM B-School</h1>
       <p>Bhubaneswar</p></div></div>`;
   }
   // shared card template used by both student and faculty ID cards
   function idCardHtml({ badgeText, name, roleLine, subLine, photo, rows }) {
-    const logo = location.origin + '/assets/nmiet-logo.png';
+    const logo = location.origin + '/assets/gitam-logo.png';
     return `<div class="idcard">
       <div class="idcard-left">
         <div class="photo-ring"><div class="photo-inner">${photo ?
@@ -9790,7 +9790,7 @@
       </div>
       <div class="idcard-right">
         <div class="hd">
-          <div class="hd-brand"><img src="${logo}"><div><strong>NMIET B-SCHOOL</strong><small>CMS · BHUBANESWAR</small></div></div>
+          <div class="hd-brand"><img src="${logo}"><div><strong>GITAM B-School</strong><small>CMS · BHUBANESWAR</small></div></div>
           <div class="hd-pill">${esc(badgeText)}</div>
         </div>
         ${rows.map(([ic,label,val]) => `<div class="row"><span class="ic">${ic}</span><b>${esc(label)}</b><span>: ${esc(val ?? '—')}</span></div>`).join('')}
@@ -9847,7 +9847,7 @@
         <td>${m.internal??'—'}</td><td>${pct === null ? '—' : pct + '%'}</td><td>${pct === null ? '—' : g.g}</td></tr>`;
     }).join('') || `<tr><td colspan="6" style="text-align:center">No results published.</td></tr>`;
     const inner = `${docHeader()}
-      <h2 style="font-size:17px;color:#0d2f6b;margin-bottom:10px">Statement of Grades</h2>
+      <h2 style="font-size:17px;color:#0f5238;margin-bottom:10px">Statement of Grades</h2>
       <table style="margin-bottom:6px"><tbody>
         <tr><th style="width:120px">Name</th><td>${esc(s.name)}</td><th style="width:120px">Reg No</th><td>${esc(s.roll)}</td></tr>
         <tr><th>Specialisation</th><td>${esc(s.branch)}</td><th>Semester</th><td>${esc(s.semester)}</td></tr>
@@ -9868,7 +9868,7 @@
      ledger, `payments` is the receipt trail behind fees.paid.
      ========================================================= */
 
-  // NMIET B-SCHOOL runs two programmes, both two-year and four-semester
+  // GITAM B-School runs two programmes, both two-year and four-semester
   const ACADEMIC_COURSES = ['MBA'];
   const FEE_TYPES = ['Tuition Fee', 'Admission Fee', 'Examination Fee', 'Library Fee',
                      'Laboratory Fee', 'Development Fee', 'Other Fee'];
@@ -10123,7 +10123,7 @@
     on('Xls', () => downloadXlsx(get()));
   }
   function reportStamp() {
-    return `NMIET B-SCHOOL · ${reportOffice()} · Generated on ${new Date().toLocaleString('en-IN')}`;
+    return `GITAM B-School · ${reportOffice()} · Generated on ${new Date().toLocaleString('en-IN')}`;
   }
   // whose report this is — the same builders serve the accounts office and the
   // center head, so the letterhead follows the signed-in role
@@ -10138,7 +10138,7 @@
       `<td style="font-weight:700${c.money ? ';text-align:right' : ''}">${esc(
         r.totals[c.key] === undefined ? '' : (c.money ? money(r.totals[c.key]) : r.totals[c.key]))}</td>`).join('')}</tr></tfoot>` : '';
     printDoc(r.title, `${docHeader()}
-      <h2 style="font-size:17px;color:#0d2f6b;margin-bottom:4px">${esc(r.title)}</h2>
+      <h2 style="font-size:17px;color:#0f5238;margin-bottom:4px">${esc(r.title)}</h2>
       <p style="font-size:12px;color:#666;margin-bottom:10px">${esc(r.subtitle || reportStamp())}</p>
       <table><thead><tr>${r.columns.map(c =>
         `<th${c.money ? ' style="text-align:right"' : ''}>${esc(c.header)}</th>`).join('')}</tr></thead>
@@ -10201,7 +10201,7 @@
           <span>${payments.length} receipts on record</span>
         </div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     html += `<div class="stat-grid">
@@ -12934,7 +12934,7 @@
           <span>${collPct}% fees collected</span>
         </div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     html += readOnlyBanner('This dashboard is a monitoring view of the live CMS. '
@@ -14255,7 +14255,7 @@
           <span>${st.placed} placed</span><span>${st.pct}% placement</span>
         </div>
       </div>
-      <div class="wb-logo"><img src="assets/nmiet-logo.png" alt="NMIET B-SCHOOL"></div>
+      <div class="wb-logo"><img src="assets/gitam-logo.png" alt="GITAM B-School"></div>
     </div>`;
 
     // eligibility is computed from CGPA / backlogs / branch / course on the
@@ -16623,7 +16623,7 @@
           <div class="tk-owner-role">No handler was available — an authority must assign it.</div>`;
       }
       return `<div class="tk-owner-name">${esc(t.assignedName)}</div>
-        <div class="tk-owner-role">${esc(roleLabel(t.assignedRole))} · NMIET B-SCHOOL, Bhubaneswar</div>
+        <div class="tk-owner-role">${esc(roleLabel(t.assignedRole))} · GITAM B-School, Bhubaneswar</div>
         <div class="tk-kv"><span>Status</span><b>${esc(t.status)}</b></div>
         <div class="tk-kv"><span>Assigned</span><b>${tkWhen(t.assignedAt)}</b></div>
         <div class="tk-kv"><span>Time here</span><b data-tk-since="${t.assignedAt}" data-tk-long="1">${tkDurLong(now - t.assignedAt)}</b></div>`;
@@ -16982,7 +16982,7 @@
           ${statCard(ic('shield'), new Set(users.map(u => u.role)).size, 'Roles in Use', 'c2')}
         </div>
         <div class="org-tree"><ul><li><div class="org-node org-root"><span class="org-ico">${ic('school')}</span>
-          <div class="org-txt"><b>NMIET B-SCHOOL</b><small>Bhubaneswar Centre</small></div></div>
+          <div class="org-txt"><b>GITAM B-School</b><small>Bhubaneswar Centre</small></div></div>
           ${top.length ? `<ul>${top.map(node).join('')}</ul>` : ''}</li></ul></div>
       </div>
       ${unlinked.length ? `<div class="panel">
@@ -17465,7 +17465,7 @@
     const applied = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${RP_FILTER_LABEL[k] || k}: ${v}`).join(' · ');
     const doc = () => ({
       title: d.label, sheetName: d.label.slice(0, 28),
-      subtitle: `NMIET B-SCHOOL · Bhubaneswar Centre · ${roleLabel(user.role)} · Generated ${d.generatedAt}${applied ? ' · ' + applied : ''}`,
+      subtitle: `GITAM B-School · Bhubaneswar Centre · ${roleLabel(user.role)} · Generated ${d.generatedAt}${applied ? ' · ' + applied : ''}`,
       signatory: roleLabel(user.role),
       columns: d.columns.map(c => ({ header: c.label, key: c.key, width: c.type === 'text' ? 22 : 14,
         money: c.type === 'money', type: c.type === 'number' ? 'number' : undefined })),
@@ -19082,7 +19082,7 @@
 
   /* =========================== PLACEMENT REPORTS =========================== */
   function placementStamp() {
-    return `NMIET B-SCHOOL · Training & Placement Cell · Generated on ${new Date().toLocaleString('en-IN')}`;
+    return `GITAM B-School · Training & Placement Cell · Generated on ${new Date().toLocaleString('en-IN')}`;
   }
   const PL_REPORTS = [
     ['placement', 'Placement Report'],

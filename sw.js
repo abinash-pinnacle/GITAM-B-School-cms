@@ -12,7 +12,7 @@
 /* Bump BUILD together with the ?b= stamp in index.html on every css/js
    change. The cache name carries it, so activate() wipes the old shell
    instead of leaving a phone on a stale app.js. */
-const BUILD = '20260920d';
+const BUILD = '20261007a';
 const VERSION = 'nmiet-cms-' + BUILD;
 const SHELL = [
   './',
@@ -21,7 +21,7 @@ const SHELL = [
   'js/xlsx.js?b=' + BUILD,
   'js/store.js?b=' + BUILD,
   'js/app.js?b=' + BUILD,
-  'assets/nmiet-logo.png',
+  'assets/gitam-logo.png',
   'assets/campus-building.webp',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
