@@ -12,7 +12,7 @@
 /* Bump BUILD together with the ?b= stamp in index.html on every css/js
    change. The cache name carries it, so activate() wipes the old shell
    instead of leaving a phone on a stale app.js. */
-const BUILD = '20261007b';
+const BUILD = '20261007c';
 const VERSION = 'gitam-cms-' + BUILD;
 const SHELL = [
   './',

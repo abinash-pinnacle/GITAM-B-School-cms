@@ -2,8 +2,7 @@
 
 GITAM (Bhubaneswar) ka college management system — **real backend + permanent database** ke saath.
 
-> ⚠️ Campus image (`assets/campus-building.webp`) abhi purani hai — GITAM B-School ki
-> asli photo se replace kar dena.
+> Campus image (`assets/campus-building.webp`) GITAM B-School campus ki photo hai.
 
 - **Frontend:** HTML + CSS + vanilla JavaScript (GITAM green + Pinnacle teal theme)
 - **Backend:** PHP 8 (PDO — koi framework/composer package nahi)
@@ -195,4 +194,4 @@ Schema me naya column add karo (`api/config.php` ke `COLLECTIONS` me) to next re
 
 ## Note (logo & images)
 
-Logo (`assets/gitam-logo.png`) GITAM B-School ka hai — GITAM & Pinnacle HR ka joint venture. Campus image abhi placeholder hai, use college ki asli photo se replace karein.
+Logo (`assets/gitam-logo.png`) GITAM B-School ka hai — GITAM & Pinnacle HR ka joint venture. Campus image (`assets/campus-building.webp`) college building ki photo hai.
