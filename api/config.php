@@ -151,7 +151,7 @@ const COLLECTIONS = [
     /* `name` stays the full name every other screen prints — the ID card, the
        marksheet, the fee receipt — and is composed from the three parts on
        save, so nothing downstream had to learn about them. */
-    /* branch is the programme a student belongs to (MBA); specialisation is
+    /* branch is the programme a student belongs to (MBA / MCA); specialisation is
        the stream inside it (Marketing, Finance, HR, Retail, Logistics).
        Attendance is taken per specialisation, so both are recorded. */
     'students'   => ['id', 'roll', 'name', 'firstName', 'middleName', 'lastName',
@@ -383,6 +383,7 @@ const BRANCH_CODES = [
     'General Management'                     => '01',
     'Logistics and Supply Chain Management'  => '02',
     'Retail Management'                      => '03',
+    'Computer Applications'                  => '04',
 ];
 /** a branch nobody has given a code to, so the id is still well-formed */
 const BRANCH_CODE_FALLBACK = '00';
@@ -689,10 +690,10 @@ const SYLLABUS_WRITE_ROLES = ['admin'];
 /* ================= curriculum =================
    programme => semester => [ [code, subject], ... ]
 
-   GITAM B-School runs one postgraduate programme, the MBA, over two years —
-   four semesters, which is why SEMESTERS and MAX_SEMESTER stop at 4 rather
-   than the eight an engineering scheme would need. What varies between
-   students is the specialisation they take inside it. */
+   GITAM B-School runs two postgraduate programmes, the MBA and the MCA, both
+   over two years — four semesters, which is why SEMESTERS and MAX_SEMESTER
+   stop at 4 rather than the eight an engineering scheme would need. What
+   varies between students is the specialisation they take inside them. */
 function curriculum(): array
 {
     return [
@@ -712,6 +713,27 @@ function curriculum(): array
                   ['MBA-E2', 'Elective – II'], ['MBA-E3', 'Elective – III'],
                   ['MBA491', 'Dissertation / Project']],
         ],
+        'MCA' => mca_curriculum(),
+    ];
+}
+
+/* The MCA scheme on its own, because a live database seeded before the MCA
+   existed gets it through add_mca_programme() in db.php rather than the seed. */
+function mca_curriculum(): array
+{
+    return [
+        1 => [['MCA101', 'Discrete Mathematics'], ['MCA102', 'Programming & Problem Solving using C'],
+              ['MCA103', 'Computer Organisation & Architecture'], ['MCA104', 'Operating Systems'],
+              ['MCA105', 'Database Management Systems'], ['MCA106', 'C Programming & DBMS Lab']],
+        2 => [['MCA201', 'Data Structures & Algorithms'], ['MCA202', 'Object Oriented Programming using Java'],
+              ['MCA203', 'Computer Networks'], ['MCA204', 'Software Engineering'],
+              ['MCA205', 'Web Technologies'], ['MCA206', 'Java & Web Technologies Lab']],
+        3 => [['MCA301', 'Python Programming'], ['MCA302', 'Artificial Intelligence & Machine Learning'],
+              ['MCA303', 'Cloud Computing'], ['MCA304', 'Cyber Security'],
+              ['MCA-E1', 'Elective – I'], ['MCA306', 'Python & Machine Learning Lab']],
+        4 => [['MCA401', 'Big Data Analytics'], ['MCA402', 'Mobile Application Development'],
+              ['MCA-E2', 'Elective – II'], ['MCA-E3', 'Elective – III'],
+              ['MCA491', 'Major Project / Dissertation']],
     ];
 }
 
@@ -834,6 +856,11 @@ function seed_data(): array
             ['FF04', 'MBA', 'MBA', '2026-27', 'Development Fee',   10000, '2026-06-01', 'Active'],
             ['FF05', 'MBA', 'MBA', '2026-27', 'Placement Fee',     12000, '2026-06-01', 'Active'],
             ['FF06', 'MBA', 'MBA', '2026-27', 'Alumni Fee',        3000, '2026-06-01', 'Active'],
+            ['FF07', 'MCA', 'MCA', '2026-27', 'Tuition Fee',     120000, '2026-06-01', 'Active'],
+            ['FF08', 'MCA', 'MCA', '2026-27', 'Examination Fee',   8000, '2026-06-01', 'Active'],
+            ['FF09', 'MCA', 'MCA', '2026-27', 'Library Fee',        5000, '2026-06-01', 'Active'],
+            ['FF10', 'MCA', 'MCA', '2026-27', 'Laboratory Fee',    10000, '2026-06-01', 'Active'],
+            ['FF11', 'MCA', 'MCA', '2026-27', 'Placement Fee',     12000, '2026-06-01', 'Active'],
         ],
         'assets' => [
             ['AS01', 'Dell OptiPlex Desktop', 'Computer', 40, '2024-07-12', 1800000, 1080000,

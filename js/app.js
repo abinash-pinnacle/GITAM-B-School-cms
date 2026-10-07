@@ -6475,7 +6475,7 @@
     'Senior Finance Officer', 'Center Head', 'Placement Officer',
     'Training & Placement Head', 'Course Coordinator', 'Admission Officer',
     'Office Assistant', 'System Administrator', 'Support Staff'];
-  const DEPARTMENTS = ['MBA', 'Management', 'Computer Applications', 'Finance',
+  const DEPARTMENTS = ['MBA', 'MCA', 'Management', 'Computer Applications', 'Finance',
     'Marketing', 'Human Resources', 'Administration', 'Accounts', 'Library',
     'Training & Placement', 'Examination Cell', 'IT & Systems', 'Maintenance'];
   const MARITAL_STATUS = ['Unmarried', 'Married', 'Widowed', 'Divorced'];
@@ -7387,6 +7387,7 @@
     const map = {
       'management': 'MBA', 'business administration': 'MBA',
       'master of business administration': 'MBA', 'mba': 'MBA',
+      'computer applications': 'MCA', 'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[dep.toLowerCase()] || null;
   }
@@ -9868,7 +9869,7 @@
      ========================================================= */
 
   // GITAM B-School runs two programmes, both two-year and four-semester
-  const ACADEMIC_COURSES = ['MBA'];
+  const ACADEMIC_COURSES = ['MBA', 'MCA'];
   const FEE_TYPES = ['Tuition Fee', 'Admission Fee', 'Examination Fee', 'Library Fee',
                      'Laboratory Fee', 'Development Fee', 'Other Fee'];
   const PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque'];
@@ -9992,7 +9993,8 @@
   }
   // the fee structure that applies to a student — used to pre-fill a new fee record
   function structureTotalFor(course, branch, academicYear) {
-    const wholeIntake = (v) => !v || String(v).trim().toUpperCase() === 'MBA';
+    // a fee head filed against the programme itself applies to its whole intake
+    const wholeIntake = (v) => !v || isProgramme(v);
     return Store.all('fixedfees').filter(f =>
       (f.status || 'Active') === 'Active' &&
       (!course || f.course === course) &&
@@ -12292,7 +12294,7 @@
   }
   /* ---------- branch list: saved by the admin + every branch actually in use ---------- */
   const COURSE_TYPES = ['Core', 'Elective', 'Lab', 'Project'];
-  const DEFAULT_BRANCHES = ['MBA'];
+  const DEFAULT_BRANCHES = ['MBA', 'MCA'];
   const SET_BRANCHES = 'branchList';
   let BRANCHES = DEFAULT_BRANCHES.slice();     // kept as one array — bindListAddNew holds a reference
 
@@ -12390,7 +12392,8 @@
        inside it. Editable for the same reason as the rest. */
     branchName: {
       setting: 'branchNameList',
-      defaults: ['General Management', 'Logistics and Supply Chain Management', 'Retail Management'],
+      defaults: ['General Management', 'Logistics and Supply Chain Management', 'Retail Management',
+                 'Computer Applications'],
       prompt: 'New branch (e.g. Business Analytics):',
       used: () => Store.all('students').map(s => s.branchName),
     },
@@ -12398,12 +12401,13 @@
        the rest. Editable, because no two institutes run the same set. */
     specialisation: {
       setting: 'specialisationList',
-      defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics'],
+      defaults: ['Marketing', 'Finance', 'HR', 'Retail', 'Logistics',
+                 'Data Science', 'Cloud Computing', 'Cyber Security', 'AI & Machine Learning'],
       prompt: 'New specialisation (e.g. Business Analytics):',
       // fee heads can be set per specialisation, so one in use there counts too
       used: () => Store.all('students').map(s => s.specialisation)
         .concat(Store.all('fixedfees').map(f => f.branch)
-          .filter(v => String(v || '').trim().toUpperCase() !== 'MBA')),
+          .filter(v => !isProgramme(v))),
     },
     // People a faculty member reports to who are not faculty themselves — a
     // director, a registrar, the HR head. Faculty come from the faculty table
@@ -12720,6 +12724,12 @@
     return { marks, present, pct: marks ? Math.round(present / marks * 100) : null };
   }
 
+  /** true when a value names a programme (MBA, MCA, …) rather than a stream inside one */
+  function isProgramme(v) {
+    const u = String(v || '').trim().toUpperCase();
+    return !!u && (ACADEMIC_COURSES.includes(u) || BRANCHES.includes(u));
+  }
+
   /** the branch a department maps onto, so faculty and students can be joined */
   function branchOfDepartment(dept) {
     const d = String(dept || '').trim();
@@ -12728,6 +12738,7 @@
     const map = {
       'management': 'MBA', 'business administration': 'MBA',
       'master of business administration': 'MBA', 'mba': 'MBA',
+      'computer applications': 'MCA', 'master of computer applications': 'MCA', 'mca': 'MCA',
     };
     return map[d.toLowerCase()] || null;
   }

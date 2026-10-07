@@ -178,21 +178,31 @@
         <h3 class="sec">What you are studying</h3>
         <div class="grid">
           <div class="field"><label>Course</label>
-            <!-- one course, so there is nothing to leave blank -->
-            <select name="course"><option selected>MBA</option></select></div>
+            <!-- data-course on the options below ties each one to a programme;
+                 picking a course hides the ones that belong to the other -->
+            <select name="course"><option selected>MBA</option><option>MCA</option></select></div>
           <div class="field"><label>Branch <span class="req">*</span></label>
             <select name="branchName"><option value=""></option>
-              <option>General Management</option>
-              <option>Logistics and Supply Chain Management</option>
-              <option>Retail Management</option></select></div>
+              <option data-course="MBA">General Management</option>
+              <option data-course="MBA">Logistics and Supply Chain Management</option>
+              <option data-course="MBA">Retail Management</option>
+              <option data-course="MCA">Computer Applications</option></select></div>
           <div class="field"><label>Specialisation I</label>
             <select name="specialisation"><option value="">— None —</option>
-              <option>Marketing</option><option>Finance</option><option>HR</option>
-              <option>Retail</option><option>Logistics</option></select></div>
+              <option data-course="MBA">Marketing</option><option data-course="MBA">Finance</option>
+              <option data-course="MBA">HR</option><option data-course="MBA">Retail</option>
+              <option data-course="MBA">Logistics</option>
+              <option data-course="MCA">Data Science</option><option data-course="MCA">Cloud Computing</option>
+              <option data-course="MCA">Cyber Security</option>
+              <option data-course="MCA">AI &amp; Machine Learning</option></select></div>
           <div class="field"><label>Specialisation II</label>
             <select name="specialisation2"><option value="">— None —</option>
-              <option>Marketing</option><option>Finance</option><option>HR</option>
-              <option>Retail</option><option>Logistics</option></select></div>
+              <option data-course="MBA">Marketing</option><option data-course="MBA">Finance</option>
+              <option data-course="MBA">HR</option><option data-course="MBA">Retail</option>
+              <option data-course="MBA">Logistics</option>
+              <option data-course="MCA">Data Science</option><option data-course="MCA">Cloud Computing</option>
+              <option data-course="MCA">Cyber Security</option>
+              <option data-course="MCA">AI &amp; Machine Learning</option></select></div>
           <div class="field"><label>Semester <span class="req">*</span></label>
             <select name="semester"><option value=""></option>
               <option>1</option><option>2</option><option>3</option><option>4</option></select></div>
@@ -363,7 +373,7 @@
      disabled. Left off the link, the field shows and the student fills it. */
   (function presetHide() {
     var params = new URLSearchParams(location.search);
-    ['batch', 'admissionDate'].forEach(function (name) {
+    ['course', 'batch', 'admissionDate'].forEach(function (name) {
       var v = params.get(name);
       if (v === null) return;
       v = v.trim();
@@ -375,6 +385,29 @@
       var field = el.closest('.field') || el.parentNode;
       field.style.display = 'none';
     });
+  })();
+
+  /* Branch and specialisations follow the course: an MCA applicant is never
+     offered Retail Management, nor an MBA one Cyber Security. A choice that no
+     longer fits the course is cleared rather than sent. */
+  (function courseFilter() {
+    var course = document.querySelector('[name="course"]');
+    function apply() {
+      var c = course.value;
+      ['branchName', 'specialisation', 'specialisation2'].forEach(function (name) {
+        var sel = document.querySelector('[name="' + name + '"]');
+        if (!sel) return;
+        Array.prototype.forEach.call(sel.options, function (o) {
+          var own = o.getAttribute('data-course');
+          var fits = !own || own === c;
+          o.hidden = !fits;
+          o.disabled = !fits;
+        });
+        if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) sel.value = '';
+      });
+    }
+    course.addEventListener('change', apply);
+    apply();
   })();
 
   /* The same nine the app keeps in QUAL_LEVELS, with the slug the field names

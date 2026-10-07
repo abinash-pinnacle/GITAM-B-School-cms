@@ -4,10 +4,10 @@
   "name": "GITAM B-School CMS",
   "launcherName": "GITAM B-School",
   "display": "standalone",
-  "themeColor": "#123F8C",
-  "themeColorDark": "#123F8C",
-  "navigationColor": "#123F8C",
-  "navigationColorDark": "#123F8C",
+  "themeColor": "#187350",
+  "themeColorDark": "#187350",
+  "navigationColor": "#187350",
+  "navigationColorDark": "#187350",
   "navigationDividerColor": "#000000",
   "navigationDividerColorDark": "#000000",
   "backgroundColor": "#FFFFFF",
@@ -20,8 +20,8 @@
     "path": "/work/android.keystore",
     "alias": "gitam"
   },
-  "appVersionName": "1.1.0",
-  "appVersionCode": 2,
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://cmsgitam.pintekdigital.com/manifest.webmanifest",
@@ -40,5 +40,5 @@
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.1.0"
+  "appVersion": "1.0.0"
 }

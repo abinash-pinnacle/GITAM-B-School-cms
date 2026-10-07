@@ -268,6 +268,7 @@ function init_db(): void
     drop_goods_requisitions();
     students_login_as_studentid();
     rename_accountant_designation();
+    add_mca_programme();
 
     /* The logins below belong to the demo set too: they exist so a database
        created before a role was invented still has one account to sign in
@@ -283,6 +284,61 @@ function init_db(): void
         meta_set('seeded', date('c'));
     }
     mark_schema_ready();
+}
+
+/**
+ * The MCA arrived after the first release, so a live database never re-runs
+ * the syllabus seed. Give it the MCA scheme and put MCA into every master list
+ * the admin has already saved — once: a subject or list entry the admin later
+ * removes stays removed.
+ */
+function add_mca_programme(): void
+{
+    if (meta_value('mca_programme') !== null) {
+        return;
+    }
+    $has = fetch_one('SELECT COUNT(*) AS c FROM ' . qi('syllabus') . ' WHERE ' . qi('branch') . " = 'MCA'");
+    if ((int) $has['c'] === 0) {
+        foreach (mca_curriculum() as $sem => $subjects) {
+            foreach ($subjects as [$code, $name]) {
+                run_sql('INSERT INTO ' . qi('syllabus') . ' (' . qi('id') . ', ' . qi('branch') . ', '
+                        . qi('semester') . ', ' . qi('code') . ', ' . qi('name') . ', ' . qi('type') . ', '
+                        . qi('credits') . ') VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        [next_id('syllabus'), 'MCA', $sem, $code, $name, syllabus_type($name), null]);
+            }
+        }
+    }
+
+    /* A list nobody has saved falls back to the app's defaults, which already
+       carry MCA; only a saved list needs the value written into it. */
+    $lists = [
+        'courseList' => ['MCA'],
+        'branchList' => ['MCA'],
+        'branchNameList' => ['Computer Applications'],
+        'specialisationList' => ['Data Science', 'Cloud Computing', 'Cyber Security',
+                                 'AI & Machine Learning'],
+        'departmentList' => ['MCA'],
+    ];
+    foreach ($lists as $name => $add) {
+        $row = fetch_one('SELECT * FROM ' . qi('settings') . ' WHERE ' . qi('name') . ' = ?', [$name]);
+        if (!$row || trim((string) $row['value']) === '') {
+            continue;
+        }
+        $vals = array_values(array_filter(array_map('trim', explode(',', (string) $row['value'])), 'strlen'));
+        $merged = array_values(array_unique(array_merge($vals, $add)));
+        if ($merged !== $vals) {
+            run_sql('UPDATE ' . qi('settings') . ' SET ' . qi('value') . ' = ? WHERE ' . qi('id') . ' = ?',
+                    [implode(',', $merged), $row['id']]);
+        }
+    }
+    // a saved student-id code map gets the MCA branch its own two digits
+    $codes = fetch_one('SELECT * FROM ' . qi('settings') . ' WHERE ' . qi('name') . " = 'branchCodes'");
+    if ($codes && trim((string) $codes['value']) !== ''
+        && stripos((string) $codes['value'], 'Computer Applications') === false) {
+        run_sql('UPDATE ' . qi('settings') . ' SET ' . qi('value') . ' = ? WHERE ' . qi('id') . ' = ?',
+                [rtrim((string) $codes['value'], ', ') . ',Computer Applications=04', $codes['id']]);
+    }
+    meta_set('mca_programme', date('c'));
 }
 
 /**
@@ -656,7 +712,7 @@ function rename_accountant_designation(): void
    signature means the signature also moves when db.php itself changes, so the
    new db.php always gets its one pass whichever file lands first. Bump it
    whenever a backfill is added or changed here. */
-const DB_MIGRATION_REV = '2026-09-19-accountant-is-finance';
+const DB_MIGRATION_REV = '2026-10-07-mca-programme';
 
 /**
  * Changes whenever the tables or the demo data change. SEED_REVISION is in it
