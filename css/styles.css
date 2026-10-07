@@ -109,13 +109,13 @@ button .ic,.btn-outline .ic,.btn-primary .ic,.btn-sm .ic,label .ic,a .ic,h1 .ic,
   background:linear-gradient(135deg,rgba(55,208,127,.55),rgba(0,152,153,.55));filter:blur(30px);
   opacity:.4;animation:glowBreathe 7s ease-in-out infinite}
 .login-split{position:relative;z-index:1;display:flex;width:100%;max-width:1060px;background:#fff;border-radius:18px;overflow:hidden}
-.login-hero{position:relative;flex:1;min-width:0;display:flex}
-.login-hero-img{width:100%;height:100%;object-fit:cover;display:block}
-/* Overlay upar halka, neeche gehra — campus photo dikhe aur neeche ka
-   logo/text bhi padha ja sake */
-.login-hero-overlay{position:absolute;inset:0;
-  background:linear-gradient(180deg,rgba(17,89,42,.18) 0%,rgba(17,89,42,.42) 45%,rgba(17,89,42,.86) 100%);
-  color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:34px}
+.login-hero{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;
+  background:linear-gradient(160deg,var(--primary) 0%,var(--primary-dark) 55%,#0a3d2a 100%)}
+/* campus photo poori dikhe — wide photo hai, isliye crop nahi, upar full width */
+.login-hero-img{width:100%;height:auto;aspect-ratio:1891/662;object-fit:contain;display:block}
+/* photo ke neeche green panel me logo + naam */
+.login-hero-overlay{position:relative;flex:1;
+  color:#fff;display:flex;flex-direction:column;justify-content:center;padding:30px 34px}
 .login-hero-overlay h2{font-size:24px;line-height:1.25;margin-bottom:6px}
 .login-hero-overlay p{font-size:14px;opacity:.9}
 .hero-logo{width:110px;height:90px;background:#fff;border-radius:14px;padding:6px;margin-bottom:18px;object-fit:contain}
