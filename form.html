@@ -312,8 +312,8 @@
       <div class="pane" data-pane="Health">
         <h3 class="sec">Health</h3>
         <div class="grid">
-          <div class="field"><label>Height (cm)</label><input name="height" inputmode="numeric" maxlength="5"></div>
-          <div class="field"><label>Weight (kg)</label><input name="weight" inputmode="numeric" maxlength="5"></div>
+          <div class="field"><label>Height (cm)</label><input name="height" inputmode="decimal" maxlength="5"></div>
+          <div class="field"><label>Weight (kg)</label><input name="weight" inputmode="decimal" maxlength="5"></div>
           <div class="field full"><label>Allergies</label><textarea name="allergies" maxlength="500"></textarea></div>
           <div class="field full"><label>Medical Conditions</label><textarea name="conditions" maxlength="500"></textarea></div>
           <div class="field full"><label>Regular Medication</label><textarea name="medication" maxlength="500"></textarea></div>
@@ -629,12 +629,22 @@
 
   $('#sameAddr').addEventListener('change', function () {
     if (!this.checked) return;
-    [['address', 'permAddress'], ['city', 'permCity'], ['state', 'permState'],
-     ['country', 'permCountry'], ['pincode', 'permPincode']].forEach(function (pair) {
-      var from = document.querySelector('[name="' + pair[0] + '"]');
-      var to = document.querySelector('[name="' + pair[1] + '"]');
-      if (from && to) to.value = from.value;
-    });
+    var get = function (n) { return document.querySelector('[name="' + n + '"]'); };
+    var copy = function (a, b) { var f = get(a), t = get(b); if (f && t) t.value = f.value; };
+    copy('address', 'permAddress');
+    copy('country', 'permCountry');
+    copy('pincode', 'permPincode');
+    /* The permanent District is a dropdown that only fills in when its State
+       changes. Setting the value by script does not fire that handler, so we
+       set the State and dispatch a change — which builds the district list (and
+       clears the city) — and only then copy the District and City across. */
+    var ps = get('permState'), cs = get('state');
+    if (ps && cs) {
+      ps.value = cs.value;
+      ps.dispatchEvent(new Event('change'));
+    }
+    copy('district', 'permDistrict');
+    copy('city', 'permCity');
   });
 
   var msg = $('#msg'), go = $('#submitBtn');
